@@ -19,10 +19,14 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const start = searchParams.get("start");
   const end = searchParams.get("end");
+  // Location switcher (topbar) scopes the calendar to one base.
+  const { cookies } = await import("next/headers");
+  const locationId = (await cookies()).get("aerops-location")?.value || undefined;
 
   const events = await db.scheduleEvent.findMany({
     where: {
       organizationId: session.organizationId,
+      ...(locationId ? { locationId } : {}),
       ...(start && end ? { start: { lt: new Date(end) }, end: { gt: new Date(start) } } : {}),
     },
     include: eventInclude,

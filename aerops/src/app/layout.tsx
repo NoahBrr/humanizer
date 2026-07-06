@@ -28,6 +28,9 @@ try {
   if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches)) {
     document.documentElement.classList.add("dark");
   }
+  if (localStorage.getItem("aerops-sidebar") === "collapsed") {
+    document.documentElement.dataset.sidebar = "collapsed";
+  }
 } catch {}
 if ("serviceWorker" in navigator) {
   addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));

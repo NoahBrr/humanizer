@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { canAccessSection, ROLE_LABELS } from "@/lib/rbac";
@@ -29,8 +30,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const { organizationId, userId } = session;
-  const [org, unreadCount, recent] = await Promise.all([
+  const locationCookie = (await cookies()).get("aerops-location")?.value ?? "";
+  const [org, locations, unreadCount, recent] = await Promise.all([
     db.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+    db.location.findMany({ where: { organizationId, isActive: true }, select: { id: true, name: true, icao: true }, orderBy: { name: "asc" } }),
     db.notification.count({ where: { organizationId, isRead: false, OR: [{ userId: null }, { userId }] } }),
     db.notification.findMany({
       where: { organizationId, OR: [{ userId: null }, { userId }] },
@@ -60,13 +63,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar allowedPaths={allowedPaths} orgName={org?.name ?? "AeroOps"} />
       <CommandPalette allowedPaths={allowedPaths} />
       <MobileNav allowedPaths={allowedPaths} />
-      <div className="lg:pl-56">
+      <div className="app-shell lg:pl-56">
         <Topbar
           firstName={session.firstName}
           lastName={session.lastName}
           roleLabel={ROLE_LABELS[session.role]}
           unreadCount={unreadCount}
           recent={recent.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
+          locations={locations}
+          currentLocationId={locations.some((l) => l.id === locationCookie) ? locationCookie : ""}
         />
         <main id="main-content" className="mx-auto max-w-7xl p-4 pb-24 lg:p-6 lg:pb-6">{children}</main>
       </div>

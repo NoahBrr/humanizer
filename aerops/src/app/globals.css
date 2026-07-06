@@ -117,3 +117,22 @@ body {
 .aerops-calendar .fc-col-header-cell { font-size: 0.75rem; font-weight: 500; color: var(--color-muted-foreground); }
 .aerops-calendar .fc-scrollgrid { border-radius: 0.625rem; overflow: hidden; }
 .aerops-calendar a { color: inherit; }
+
+/* ---------------------------------------------------------------------
+   Sidebar collapse — toggled via html[data-sidebar="collapsed"]
+--------------------------------------------------------------------- */
+@media (min-width: 64rem) {
+  html[data-sidebar="collapsed"] .app-sidebar { width: 4rem; }
+  html[data-sidebar="collapsed"] .app-sidebar .sidebar-label { display: none; }
+  html[data-sidebar="collapsed"] .app-shell { padding-left: 4rem; }
+}
+
+/* Reduced motion: honor the user preference everywhere */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

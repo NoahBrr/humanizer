@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -9,8 +9,10 @@ import interactionPlugin from "@fullcalendar/interaction";
 import resourceTimelinePlugin from "@fullcalendar/resource-timeline";
 import type { EventClickArg, EventDropArg, DateSelectArg, EventInput } from "@fullcalendar/core";
 import type { EventResizeDoneArg } from "@fullcalendar/interaction";
-import { X, AlertTriangle, CalendarPlus, Check, Loader2 } from "lucide-react";
+import { AlertTriangle, CalendarPlus, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Drawer } from "@/components/ui/drawer";
+import { statusHex } from "@/lib/status-colors";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/badge";
 import { formatDateTime, formatTime } from "@/lib/utils";
@@ -40,15 +42,38 @@ type Toast = { id: number; kind: "success" | "error"; message: string };
 
 const INACTIVE = ["CANCELLED", "WEATHER_CANCELLED", "NO_SHOW"];
 
+function useThemeMode() {
+  const [mode, setMode] = useState<"light" | "dark">("light");
+  useEffect(() => {
+    const el = document.documentElement;
+    const update = () => setMode(el.classList.contains("dark") ? "dark" : "light");
+    update();
+    const obs = new MutationObserver(update);
+    obs.observe(el, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  return mode;
+}
+
 export function ScheduleCalendar({
-  aircraft, instructors, students, lessonTypes, canEdit,
+  aircraft, instructors, students, lessonTypes, canEdit, openNew = false,
 }: {
-  aircraft: AircraftOpt[]; instructors: PersonOpt[]; students: PersonOpt[]; lessonTypes: LessonTypeOpt[]; canEdit: boolean;
+  aircraft: AircraftOpt[]; instructors: PersonOpt[]; students: PersonOpt[]; lessonTypes: LessonTypeOpt[]; canEdit: boolean; openNew?: boolean;
 }) {
   const calendarRef = useRef<FullCalendar>(null);
   const eventsCache = useRef<Map<string, ApiEvent>>(new Map());
+  const mode = useThemeMode();
   const [selected, setSelected] = useState<ApiEvent | null>(null);
   const [draft, setDraft] = useState<{ start: string; end: string } | null>(null);
+
+  // Quick Add (topbar "+") deep-links to /schedule?new=1
+  useEffect(() => {
+    if (openNew && canEdit) {
+      const s = new Date();
+      s.setHours(s.getHours() + 1, 0, 0, 0);
+      setDraft({ start: s.toISOString(), end: new Date(s.getTime() + 2 * 3600_000).toISOString() });
+    }
+  }, [openNew, canEdit]);
   const [filterAircraft, setFilterAircraft] = useState("");
   const [filterInstructor, setFilterInstructor] = useState("");
   const [search, setSearch] = useState("");
@@ -95,10 +120,11 @@ export function ScheduleCalendar({
               start: e.start,
               end: e.end,
               resourceId: e.aircraft?.id,
-              backgroundColor: inactive ? "#9ca3af" : e.lessonType?.color ?? "#2563eb",
+              // Color = status, everywhere, always (Section 3 canonical map).
+              backgroundColor: statusHex(e.status, mode),
               textColor: "#ffffff",
               editable: canEdit && !inactive && e.status === "SCHEDULED",
-              classNames: inactive ? ["opacity-50", "line-through"] : [],
+              classNames: inactive ? ["opacity-60", "line-through"] : [],
             };
           }),
         );
@@ -106,7 +132,7 @@ export function ScheduleCalendar({
         failure(e as Error);
       }
     },
-    [filterAircraft, filterInstructor, search, canEdit],
+    [filterAircraft, filterInstructor, search, canEdit, mode],
   );
 
   async function moveEvent(id: string, start: Date, end: Date, revert: () => void) {
@@ -166,8 +192,8 @@ export function ScheduleCalendar({
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin, resourceTimelinePlugin]}
           schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
-          initialView="timeGridWeek"
-          headerToolbar={{ left: "prev,next today", center: "title", right: "timeGridDay,timeGridWeek,dayGridMonth,resourceTimelineDay,listWeek" }}
+          initialView="resourceTimelineDay"
+          headerToolbar={{ left: "prev,next today", center: "title", right: "resourceTimelineDay,timeGridDay,timeGridWeek,dayGridMonth,listWeek" }}
           buttonText={{ today: "Today", day: "Day", week: "Week", month: "Month", list: "List", resourceTimelineDay: "Timeline" }}
           views={{ resourceTimelineDay: { slotMinTime: "06:00", slotMaxTime: "21:00" } }}
           resources={aircraft.map((a) => ({ id: a.id, title: `${a.tailNumber} · ${a.model}` }))}
@@ -232,18 +258,6 @@ export function ScheduleCalendar({
 
 // ---------------------------------------------------------------------------
 
-function PanelShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-y-0 right-0 z-40 w-full max-w-sm animate-fade-up border-l border-border bg-card shadow-2xl">
-      <div className="flex h-14 items-center justify-between border-b border-border px-4">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
-      </div>
-      <div className="h-[calc(100vh-3.5rem)] space-y-4 overflow-y-auto p-4">{children}</div>
-    </div>
-  );
-}
-
 function toLocalInput(iso: string) {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -301,7 +315,7 @@ function BookingPanel({
   }
 
   return (
-    <PanelShell title="New booking" onClose={onClose}>
+    <Drawer title="New booking" onClose={onClose}>
       <div className="space-y-1.5">
         <Label>Lesson type</Label>
         <Select value={lessonTypeId} onChange={(e) => setLessonTypeId(e.target.value)}>
@@ -386,7 +400,7 @@ function BookingPanel({
         </Button>
         <Button variant="outline" onClick={onClose}>Cancel</Button>
       </div>
-    </PanelShell>
+    </Drawer>
   );
 }
 
@@ -419,7 +433,7 @@ function DetailPanel({
   ];
 
   return (
-    <PanelShell title="Booking details" onClose={onClose}>
+    <Drawer title="Booking details" onClose={onClose}>
       <div className="space-y-2.5">
         {rows.map(([k, v]) => (
           <div key={k} className="flex items-center justify-between gap-4 text-sm">
@@ -448,6 +462,6 @@ function DetailPanel({
           </div>
         </div>
       )}
-    </PanelShell>
+    </Drawer>
   );
 }

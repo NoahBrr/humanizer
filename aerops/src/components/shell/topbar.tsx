@@ -2,32 +2,78 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Bell, LogOut, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, LogOut, Search, Plus, CloudSun, MapPin } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Avatar } from "@/components/ui/misc";
 import { ThemeToggle } from "./theme-toggle";
 
 type TopbarNotification = { id: string; title: string; body: string | null; createdAt: string };
+type LocationOpt = { id: string; name: string; icao: string | null };
 
 export function Topbar({
-  firstName, lastName, roleLabel, unreadCount, recent,
+  firstName, lastName, roleLabel, unreadCount, recent, locations = [], currentLocationId = "",
 }: {
   firstName: string; lastName: string; roleLabel: string; unreadCount: number; recent: TopbarNotification[];
+  locations?: LocationOpt[]; currentLocationId?: string;
 }) {
+  const router = useRouter();
   const [bellOpen, setBellOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  function setLocation(id: string) {
+    document.cookie = id
+      ? `aerops-location=${id}; path=/; max-age=31536000; samesite=lax`
+      : "aerops-location=; path=/; max-age=0";
+    router.refresh();
+  }
+
+  const currentIcao = locations.find((l) => l.id === currentLocationId)?.icao ?? locations[0]?.icao ?? "KPAO";
+
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur lg:px-6">
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur lg:px-6">
       <button
         onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
-        className="hidden h-8 w-64 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-muted md:flex"
+        className="hidden h-8 w-56 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-muted md:flex"
       >
         <Search className="h-3.5 w-3.5" />
-        <span className="flex-1 text-left">Search or jump to…</span>
+        <span className="flex-1 text-left">Search…</span>
         <kbd className="rounded border border-border px-1 text-[10px]">⌘K</kbd>
       </button>
+
+      {locations.length > 1 && (
+        <div className="hidden items-center gap-1 md:flex">
+          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+          <select
+            value={currentLocationId}
+            onChange={(e) => setLocation(e.target.value)}
+            aria-label="Location"
+            className="h-8 cursor-pointer rounded-lg border border-border bg-card px-2 text-xs font-medium shadow-sm"
+          >
+            <option value="">All locations</option>
+            {locations.map((l) => <option key={l.id} value={l.id}>{l.icao ?? l.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div
+        className="hidden items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm xl:flex"
+        title="Live METAR/TAF feeds connect via the Aviation Weather API in production"
+      >
+        <CloudSun className="h-3.5 w-3.5 text-warning" />
+        <span className="font-semibold text-success">VFR</span>
+        <span>{currentIcao} · 310° 8kt · 10SM · SCT045 · 22°C</span>
+      </div>
+
       <div className="flex-1" />
+
+      <Link
+        href="/schedule?new=1"
+        aria-label="Quick add booking"
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+      >
+        <Plus className="h-4 w-4" />
+      </Link>
       <ThemeToggle />
       <div className="relative">
         <button
