@@ -36,7 +36,7 @@ export default async function InstructorsPage() {
   return (
     <div className="animate-fade-up">
       <PageHeader title="Instructors" description={`${instructors.length} certified flight instructors`} />
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {instructors.map((i) => {
           const hoursTaught = i.dispatches.reduce((t, d) => t + Number(d.dualGiven ?? d.flightTime ?? 0), 0);
           const revenue = hoursTaught * Number(i.hourlyRate);

@@ -24,7 +24,7 @@ export default async function StudentsPage() {
   return (
     <div className="animate-fade-up">
       <PageHeader title="Students" description={`${students.length} enrolled students`} />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {students.map((s) => {
           const required = Number(s.enrollments[0]?.syllabus.requiredHours ?? 40);
           const progress = Math.min(100, Math.round((Number(s.totalHours) / required) * 100));

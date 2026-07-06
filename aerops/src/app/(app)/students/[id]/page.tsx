@@ -86,7 +86,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>{enrollment?.syllabus.name ?? "Syllabus"}</CardTitle>
@@ -177,7 +177,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Lesson History & Instructor Notes</CardTitle></CardHeader>
           <CardContent className="space-y-3">

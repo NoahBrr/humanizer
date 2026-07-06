@@ -26,7 +26,7 @@ export default async function AircraftPage() {
   return (
     <div className="animate-fade-up">
       <PageHeader title="Aircraft" description={`${aircraft.length} aircraft in the fleet`} />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {aircraft.map((a) => {
           const hobbs = Number(a.currentHobbs);
           const nextHours = a.components

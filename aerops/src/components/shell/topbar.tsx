@@ -61,7 +61,12 @@ export function Topbar({
         )}
       </div>
       <div className="relative">
-        <button onClick={() => { setMenuOpen(!menuOpen); setBellOpen(false); }} className="flex cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-muted">
+        <button
+          onClick={() => { setMenuOpen(!menuOpen); setBellOpen(false); }}
+          aria-label="Account menu"
+          aria-expanded={menuOpen}
+          className="flex cursor-pointer items-center gap-2 rounded-lg p-1 hover:bg-muted"
+        >
           <Avatar first={firstName} last={lastName} />
           <div className="hidden text-left leading-tight md:block">
             <p className="text-xs font-medium">{firstName} {lastName}</p>

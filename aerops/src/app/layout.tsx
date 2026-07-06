@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -7,6 +7,19 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: { default: "AeroOps", template: "%s · AeroOps" },
   description: "The operating system for flight schools and aviation academies.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "AeroOps", statusBarStyle: "black-translucent" },
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#2563eb" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1219" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 const themeInit = `
@@ -16,6 +29,9 @@ try {
     document.documentElement.classList.add("dark");
   }
 } catch {}
+if ("serviceWorker" in navigator) {
+  addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

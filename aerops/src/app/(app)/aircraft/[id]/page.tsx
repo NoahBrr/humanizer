@@ -72,7 +72,7 @@ export default async function AircraftDetailPage({ params }: { params: Promise<{
         <StatusBadge status={a.status} className="text-xs" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
           <CardContent className="space-y-2">
@@ -123,7 +123,7 @@ export default async function AircraftDetailPage({ params }: { params: Promise<{
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Squawks</CardTitle></CardHeader>
           <CardContent className="space-y-2.5">

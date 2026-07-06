@@ -24,7 +24,7 @@ export function DispatchBoard({ dispatches, canDispatch }: { dispatches: Dispatc
   const closed = dispatches.filter((d) => d.status === "CLOSED");
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Column
         title="Awaiting Release"
         description="Complete the pre-flight checklist to release"

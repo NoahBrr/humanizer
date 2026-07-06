@@ -83,7 +83,7 @@ export function ReportsClient({
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <div>
@@ -137,7 +137,7 @@ export function ReportsClient({
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <RankTable title="Revenue per Aircraft" rows={byAircraft} filename="revenue-by-aircraft.csv" color={c.blue} grid={c.grid} text={c.text} isDark={isDark} />
         <RankTable title="Revenue per Instructor" rows={byInstructor} filename="revenue-by-instructor.csv" color={c.blue} grid={c.grid} text={c.text} isDark={isDark} />
         <Card>

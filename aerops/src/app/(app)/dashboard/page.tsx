@@ -133,7 +133,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between">
             <div>
@@ -205,7 +205,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Open Squawks</CardTitle>
@@ -280,7 +280,7 @@ async function UtilizationRows({ organizationId, monthStart }: { organizationId:
     orderBy: { tailNumber: "asc" },
   });
   return (
-    <div className="grid gap-x-8 gap-y-3 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
       {aircraft.map((a) => {
         const hours = a.dispatches.reduce((t, d) => t + Number(d.flightTime ?? 0), 0);
         const pct = Math.min(100, (hours / 60) * 100);

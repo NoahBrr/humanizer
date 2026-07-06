@@ -5,6 +5,7 @@ import { canAccess, ROLE_LABELS } from "@/lib/rbac";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { CommandPalette } from "@/components/shell/command-palette";
+import { MobileNav } from "@/components/shell/mobile-nav";
 import { NAV_ITEMS } from "@/components/shell/nav-config";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -27,8 +28,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-3 focus:py-2 focus:text-xs focus:font-medium focus:text-primary-foreground"
+      >
+        Skip to content
+      </a>
       <Sidebar allowedPaths={allowedPaths} orgName={org?.name ?? "AeroOps"} />
       <CommandPalette allowedPaths={allowedPaths} />
+      <MobileNav allowedPaths={allowedPaths} />
       <div className="lg:pl-56">
         <Topbar
           firstName={firstName}
@@ -37,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           unreadCount={unreadCount}
           recent={recent.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
         />
-        <main className="mx-auto max-w-7xl p-4 lg:p-6">{children}</main>
+        <main id="main-content" className="mx-auto max-w-7xl p-4 pb-24 lg:p-6 lg:pb-6">{children}</main>
       </div>
     </div>
   );

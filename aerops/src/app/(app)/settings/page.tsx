@@ -27,7 +27,7 @@ export default async function SettingsPage() {
     <div className="animate-fade-up space-y-4">
       <PageHeader title="Settings" description="School configuration, branding, users, and integrations" />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-1.5"><Palette className="h-4 w-4" /> School Branding</CardTitle>
@@ -106,7 +106,7 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-1.5"><Bell className="h-4 w-4" /> Notification Channels</CardTitle>
