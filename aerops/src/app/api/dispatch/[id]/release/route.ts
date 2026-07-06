@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
+import { airworthinessOf } from "@/lib/airworthiness";
 
 const releaseSchema = z.object({
   fuelQty: z.string().min(1),
@@ -20,12 +21,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const dispatch = await db.dispatch.findFirst({
     where: { id, aircraft: { organizationId: session.organizationId } },
-    include: { aircraft: true },
+    include: { aircraft: { include: { components: true } } },
   });
   if (!dispatch) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (dispatch.status !== "PENDING") return NextResponse.json({ error: "Dispatch is not pending release" }, { status: 400 });
-  if (dispatch.aircraft.status === "GROUNDED" || dispatch.aircraft.status === "IN_MAINTENANCE") {
-    return NextResponse.json({ error: `${dispatch.aircraft.tailNumber} is not airworthy (${dispatch.aircraft.status.replaceAll("_", " ").toLowerCase()}).` }, { status: 409 });
+  const airworthiness = airworthinessOf(dispatch.aircraft, dispatch.aircraft.components);
+  if (!airworthiness.canDispatch) {
+    return NextResponse.json({ error: `${dispatch.aircraft.tailNumber} is not airworthy: ${airworthiness.detail}` }, { status: 409 });
   }
 
   const body = releaseSchema.safeParse(await req.json());

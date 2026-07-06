@@ -352,6 +352,14 @@ enum AircraftStatus {
   RETIRED
 }
 
+enum OwnershipType {
+  SCHOOL_OWNED
+  LEASEBACK
+  RENTAL
+  PARTNER_OWNED
+  PRIVATE_OWNER
+}
+
 model AircraftType {
   id           String  @id @default(cuid())
   manufacturer String
@@ -370,7 +378,23 @@ model Aircraft {
   locationId             String?
   aircraftTypeId         String
   tailNumber             String         @unique
+  nickname               String?
+  serialNumber           String?
   year                   Int?
+  ownershipType          OwnershipType  @default(SCHOOL_OWNED)
+  ownerName              String?
+  engineModel            String?
+  engineSerial           String?
+  propManufacturer       String?
+  propSerial             String?
+  emptyWeightLbs         Int?
+  maxGrossWeightLbs      Int?
+  fuelCapacityGal        Int?
+  cruiseSpeedKts         Int?
+  fuelSurchargePerHr     Decimal?       @db.Decimal(6, 2)
+  insuranceCostMonthly   Decimal?       @db.Decimal(8, 2)
+  /// Direct operating cost basis for profitability estimates.
+  estimatedHourlyCost    Decimal?       @db.Decimal(8, 2)
   hourlyRateWet          Decimal        @db.Decimal(8, 2)
   hourlyRateDry          Decimal?       @db.Decimal(8, 2)
   fuelType               String         @default("100LL")
@@ -421,8 +445,12 @@ model AircraftComponent {
 
 enum SquawkStatus {
   OPEN
+  ASSIGNED
+  WAITING_PARTS
   IN_PROGRESS
+  TESTING
   RESOLVED
+  CLOSED
   DEFERRED
 }
 
@@ -438,6 +466,8 @@ model Squawk {
   reportedById String?
   title       String
   description String?
+  category    String? // Airframe, Engine, Avionics, Interior, ...
+  assignedTo  String?
   severity    SquawkSeverity @default(MINOR)
   status      SquawkStatus   @default(OPEN)
   createdAt   DateTime       @default(now())

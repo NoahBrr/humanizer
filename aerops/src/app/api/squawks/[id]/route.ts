@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 
 const patchSchema = z.object({
-  status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "DEFERRED"]),
+  status: z.enum(["OPEN", "ASSIGNED", "WAITING_PARTS", "IN_PROGRESS", "TESTING", "RESOLVED", "CLOSED", "DEFERRED"]),
+  assignedTo: z.string().max(80).nullish(),
   resolution: z.string().nullish(),
 });
 
@@ -23,8 +24,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     where: { id },
     data: {
       status: body.data.status,
+      assignedTo: body.data.assignedTo !== undefined ? body.data.assignedTo : squawk.assignedTo,
       resolution: body.data.resolution ?? squawk.resolution,
-      resolvedAt: body.data.status === "RESOLVED" ? new Date() : null,
+      resolvedAt: ["RESOLVED", "CLOSED"].includes(body.data.status) ? new Date() : null,
     },
   });
 

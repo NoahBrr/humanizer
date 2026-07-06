@@ -150,6 +150,16 @@ async function main() {
     const a = await db.aircraft.create({
       data: {
         organizationId: org.id, locationId: f.loc, aircraftTypeId: f.type, tailNumber: f.tail,
+        nickname: f.sim ? "The Box" : undefined,
+        serialNumber: `17S${Math.floor(10000 + Math.random() * 89999)}`,
+        ownershipType: f.tail === "N88AR" ? "LEASEBACK" : "SCHOOL_OWNED",
+        ownerName: f.tail === "N88AR" ? "Archer Partners LLC" : undefined,
+        engineModel: f.sim ? undefined : "Lycoming IO-360-L2A", engineSerial: f.sim ? undefined : `L-${Math.floor(10000 + Math.random() * 89999)}-51E`,
+        propManufacturer: f.sim ? undefined : "McCauley", propSerial: f.sim ? undefined : `MC${Math.floor(100000 + Math.random() * 899999)}`,
+        emptyWeightLbs: f.sim ? undefined : 1680, maxGrossWeightLbs: f.sim ? undefined : 2558,
+        fuelCapacityGal: f.sim ? undefined : 53, cruiseSpeedKts: f.sim ? undefined : 122,
+        fuelSurchargePerHr: f.sim ? undefined : 8, insuranceCostMonthly: f.sim ? 150 : 620,
+        estimatedHourlyCost: f.sim ? 25 : 92,
         year: f.year, hourlyRateWet: f.wet, hourlyRateDry: f.dry, status: f.status,
         currentHobbs: f.hobbs, currentTach: f.tach, engineTimeSmoh: f.hobbs * 0.4, propTimeSpoh: f.hobbs * 0.3,
         usefulLoadLbs: f.sim ? null : 878, fuelType: f.sim ? "N/A" : "100LL", isSimulator: !!f.sim,
@@ -164,7 +174,7 @@ async function main() {
   await db.squawk.createMany({
     data: [
       { aircraftId: fleet[4].id, title: "Right magneto drop 300 RPM", description: "Excessive mag drop on runup, aborted flight.", severity: SquawkSeverity.GROUNDING, status: SquawkStatus.IN_PROGRESS, createdAt: day(-2, 10) },
-      { aircraftId: fleet[3].id, title: "G1000 MFD intermittent blank", description: "MFD flickers off in cruise, returns after ~10s.", severity: SquawkSeverity.MAJOR, status: SquawkStatus.OPEN, createdAt: day(-1, 15) },
+      { aircraftId: fleet[3].id, title: "G1000 MFD intermittent blank", description: "MFD flickers off in cruise, returns after ~10s.", category: "Avionics", assignedTo: "Miguel Ortiz", severity: SquawkSeverity.MAJOR, status: SquawkStatus.WAITING_PARTS, createdAt: day(-1, 15) },
       { aircraftId: fleet[0].id, title: "Pilot-side sun visor loose", severity: SquawkSeverity.MINOR, status: SquawkStatus.OPEN, createdAt: day(-3, 12) },
       { aircraftId: fleet[1].id, title: "Nose strut low", description: "Serviced with nitrogen, monitoring.", severity: SquawkSeverity.MINOR, status: SquawkStatus.RESOLVED, createdAt: day(-9, 9), resolvedAt: day(-7, 14), resolution: "Strut serviced, leak check OK." },
       { aircraftId: fleet[2].id, title: "Comm 2 static on transmit", severity: SquawkSeverity.MINOR, status: SquawkStatus.OPEN, createdAt: day(-1, 8) },
