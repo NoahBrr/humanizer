@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { StatusBadge } from "@/components/ui/badge";
 import { formatDate, daysUntil } from "@/lib/utils";
 import { FleetStatusGrid, SquawkList } from "./maintenance-actions";
+import { WorkOrderBoard } from "./work-order-board";
+import { Card as MetricCard } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Maintenance" };
@@ -43,8 +46,17 @@ export default async function MaintenancePage() {
     .filter((i) => (i.hoursLeft !== null && i.hoursLeft < 40) || (i.daysLeft !== null && i.daysLeft < 45))
     .sort((a, b) => (a.hoursLeft ?? a.daysLeft ?? 0) - (b.hoursLeft ?? b.daysLeft ?? 0));
 
-  const queue = orders.filter((o) => o.status === "SCHEDULED" || o.status === "IN_PROGRESS");
-  const history = orders.filter((o) => o.status === "COMPLETED").slice(0, 8);
+  const ACTIVE = ["DRAFT", "OPEN", "SCHEDULED", "ASSIGNED", "WAITING_PARTS", "IN_PROGRESS", "AWAITING_INSPECTION", "APPROVED", "RETURN_TO_SERVICE"];
+  const queue = orders.filter((o) => ACTIVE.includes(o.status));
+  const history = orders.filter((o) => ["COMPLETED", "CLOSED"].includes(o.status)).slice(0, 8);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const costMtd = orders
+    .filter((o) => o.endDate && o.endDate >= monthStart)
+    .reduce((t, o) => t + Number(o.costParts ?? 0) + Number(o.costLabor ?? 0), 0);
+  const backlog = queue.length;
+  const inShop = aircraft.filter((a) => ["GROUNDED", "IN_MAINTENANCE"].includes(a.status)).length;
+  const avgDailyRevenue = 350; // conservative per-aircraft baseline for lost-revenue estimate
+  const revenueLostEstimate = inShop * avgDailyRevenue;
 
   return (
     <div className="animate-fade-up space-y-4">
@@ -53,6 +65,30 @@ export default async function MaintenancePage() {
       <FleetStatusGrid
         aircraft={aircraft.map((a) => ({
           id: a.id, tailNumber: a.tailNumber, model: a.aircraftType.model, status: a.status, hobbs: Number(a.currentHobbs),
+        }))}
+      />
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { label: "Work-order backlog", value: String(backlog) },
+          { label: "Aircraft in shop", value: String(inShop), alert: inShop > 0 },
+          { label: "Maintenance cost (MTD)", value: formatCurrency(costMtd) },
+          { label: "Est. revenue lost / day", value: formatCurrency(revenueLostEstimate), alert: revenueLostEstimate > 0 },
+        ].map((m) => (
+          <MetricCard key={m.label}>
+            <div className="p-4">
+              <p className="text-[11px] text-muted-foreground">{m.label}</p>
+              <p className={`mt-1 text-lg font-semibold ${m.alert ? "text-destructive" : ""}`}>{m.value}</p>
+            </div>
+          </MetricCard>
+        ))}
+      </div>
+
+      <WorkOrderBoard
+        canManage={session!.permissions.has("maintenance.manage") && !session!.impersonation?.readOnly}
+        orders={queue.map((o) => ({
+          id: o.id, number: o.number, tail: o.aircraft.tailNumber, title: o.title, category: o.category,
+          priority: o.priority, status: o.status, assignedTo: o.assignedTo, approvedBy: o.approvedBy,
         }))}
       />
 
@@ -65,28 +101,6 @@ export default async function MaintenancePage() {
         />
 
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Maintenance Queue</CardTitle>
-              <CardDescription>Scheduled and in-progress work orders</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2.5">
-              {queue.length === 0 && <p className="text-xs text-muted-foreground">Queue is clear.</p>}
-              {queue.map((o) => (
-                <div key={o.id} className="flex items-start justify-between gap-2 rounded-lg border border-border p-2.5">
-                  <div>
-                    <p className="text-xs font-semibold">{o.aircraft.tailNumber} — {o.title}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {formatDate(o.startDate)}{o.endDate ? ` → ${formatDate(o.endDate)}` : ""}{o.assignedTo ? ` · ${o.assignedTo}` : ""}
-                    </p>
-                    {o.description && <p className="mt-1 text-[11px] text-muted-foreground">{o.description}</p>}
-                  </div>
-                  <StatusBadge status={o.status} />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle>Upcoming Inspections</CardTitle>

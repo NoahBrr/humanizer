@@ -189,8 +189,8 @@ async function main() {
 
   await db.maintenanceOrder.createMany({
     data: [
-      { aircraftId: fleet[3].id, title: "100-hour inspection", description: "Routine 100-hour with oil change and compression check.", status: MaintenanceStatus.IN_PROGRESS, assignedTo: "Miguel Ortiz", startDate: day(-1, 8), endDate: day(1, 17) },
-      { aircraftId: fleet[4].id, title: "Magneto replacement", description: "Replace right magneto, timing check both.", status: MaintenanceStatus.IN_PROGRESS, assignedTo: "Miguel Ortiz", startDate: day(-2, 13), endDate: day(2, 12), costParts: 1450, costLabor: 680 },
+      { aircraftId: fleet[3].id, number: "WO-100481", title: "100-hour inspection", description: "Routine 100-hour with oil change and compression check.", category: "Routine Inspection", priority: "HIGH", status: MaintenanceStatus.IN_PROGRESS, assignedTo: "Miguel Ortiz", startDate: day(-1, 8), estimatedCompletion: day(1, 17) },
+      { aircraftId: fleet[4].id, number: "WO-100482", title: "Magneto replacement", description: "Replace right magneto, timing check both.", category: "Engine", priority: "AOG", status: MaintenanceStatus.AWAITING_INSPECTION, assignedTo: "Miguel Ortiz", startDate: day(-2, 13), estimatedCompletion: day(1, 12), costParts: 1450, costLabor: 680, laborHours: 6.5 },
       { aircraftId: fleet[0].id, title: "Oil change", status: MaintenanceStatus.SCHEDULED, startDate: day(6, 8), endDate: day(6, 12) },
       { aircraftId: fleet[1].id, title: "Annual inspection", status: MaintenanceStatus.SCHEDULED, startDate: day(18, 8), endDate: day(22, 17) },
       { aircraftId: fleet[1].id, title: "Nose strut service", status: MaintenanceStatus.COMPLETED, startDate: day(-8, 9), endDate: day(-7, 14), costParts: 40, costLabor: 190 },

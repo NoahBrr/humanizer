@@ -503,21 +503,47 @@ model Squawk {
 }
 
 enum MaintenanceStatus {
+  DRAFT
+  OPEN
   SCHEDULED
+  ASSIGNED
+  WAITING_PARTS
   IN_PROGRESS
+  AWAITING_INSPECTION
+  APPROVED
+  RETURN_TO_SERVICE
   COMPLETED
+  CLOSED
   CANCELLED
+}
+
+enum WorkOrderPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+  AOG // aircraft on ground
+  EMERGENCY
 }
 
 model MaintenanceOrder {
   id          String            @id @default(cuid())
+  number      String? // WO-xxxx, assigned on open
   aircraftId  String
   title       String
   description String?
+  category    String? // Engine, Avionics, Routine Inspection, ...
+  priority    WorkOrderPriority @default(NORMAL)
   status      MaintenanceStatus @default(SCHEDULED)
   assignedTo  String?
+  correctiveAction String?
+  laborHours  Decimal?          @db.Decimal(6, 1)
+  /// Return-to-service approval (electronic signature)
+  approvedBy  String?
+  approvedAt  DateTime?
   startDate   DateTime
   endDate     DateTime?
+  estimatedCompletion DateTime?
   costParts   Decimal?          @db.Decimal(10, 2)
   costLabor   Decimal?          @db.Decimal(10, 2)
   loggedAt    DateTime          @default(now())
