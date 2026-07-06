@@ -300,6 +300,8 @@ model Student {
   ratings            StudentRating[]
   checkrides         Checkride[]
   lessonRecords      LessonRecord[]
+  lessonRequests     LessonRequest[]
+  waitlistEntries    WaitlistEntry[]
 
   @@index([assignedInstructorId])
 }
@@ -323,6 +325,7 @@ model Instructor {
   endorsements   Endorsement[]
   lessonRecords  LessonRecord[]
   checkrides     Checkride[]
+  lessonRequests LessonRequest[]
 }
 
 model InstructorAvailability {
@@ -507,6 +510,7 @@ model LessonType {
 
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   scheduleEvents ScheduleEvent[]
+  lessonRequests LessonRequest[]
 
   @@index([organizationId])
 }
@@ -514,6 +518,8 @@ model LessonType {
 model ScheduleEvent {
   id             String      @id @default(cuid())
   organizationId String
+  /// Groups occurrences of a recurring series.
+  seriesId       String?
   locationId     String?
   type           EventType   @default(FLIGHT_LESSON)
   status         EventStatus @default(SCHEDULED)
@@ -540,6 +546,7 @@ model ScheduleEvent {
   dispatch       Dispatch?
 
   @@index([organizationId, start, end])
+  @@index([seriesId])
   @@index([aircraftId, start])
   @@index([instructorId, start])
   @@index([studentId, start])
@@ -894,4 +901,50 @@ model LoginEvent {
 
   @@index([organizationId, createdAt])
   @@index([email, createdAt])
+}
+
+enum LessonRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_CHANGES
+  SCHEDULED
+  CANCELLED
+}
+
+/// Student-initiated scheduling: request → staff review → booking.
+model LessonRequest {
+  id             String              @id @default(cuid())
+  organizationId String
+  studentId      String
+  preferredStart DateTime
+  durationMin    Int                 @default(120)
+  lessonTypeId   String?
+  instructorId   String?
+  notes          String?
+  status         LessonRequestStatus @default(PENDING)
+  staffNote      String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lessonType LessonType? @relation(fields: [lessonTypeId], references: [id])
+  instructor Instructor? @relation(fields: [instructorId], references: [id])
+
+  @@index([organizationId, status])
+}
+
+/// Students waiting for an opening on a given day; notified on cancellations.
+model WaitlistEntry {
+  id             String   @id @default(cuid())
+  organizationId String
+  studentId      String
+  date           DateTime // the day they want to fly
+  notes          String?
+  notifiedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, date])
 }

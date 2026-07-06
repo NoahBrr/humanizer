@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { statusToneOf, type StatusTone } from "@/lib/status-colors";
 
-type Tone = "default" | "blue" | "green" | "amber" | "red" | "violet" | "purple" | "cyan" | "gray" | "orange" | "darkred";
+type Tone = "default" | "blue" | "green" | "amber" | "red" | "violet" | "purple" | "cyan" | "gray" | "orange" | "darkred" | "black";
 
 const tones: Record<Tone, string> = {
   default: "bg-muted text-muted-foreground",
@@ -16,6 +16,7 @@ const tones: Record<Tone, string> = {
   violet: "bg-violet-500/12 text-violet-600 dark:text-violet-400",
   purple: "bg-violet-500/12 text-violet-700 dark:text-violet-400",
   cyan: "bg-cyan-500/12 text-cyan-700 dark:text-cyan-400",
+  black: "bg-gray-800/90 text-white dark:bg-gray-700",
 };
 
 export function Badge({ tone = "default", className, ...props }: React.HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {

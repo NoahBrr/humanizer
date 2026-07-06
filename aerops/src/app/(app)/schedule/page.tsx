@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/misc";
 import { ScheduleCalendar } from "./schedule-calendar";
+import { RequestsPanel, StudentRequestForm } from "./requests-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Schedule" };
@@ -32,6 +33,21 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   ]);
 
   const canEdit = session!.permissions.has("schedule.create");
+  const isStudentUser = session!.role === "STUDENT";
+  const requests = await db.lessonRequest.findMany({
+    where: {
+      organizationId,
+      status: { in: ["PENDING", "APPROVED", "NEEDS_CHANGES"] },
+      ...(isStudentUser ? { student: { userId: session!.userId } } : {}),
+    },
+    include: {
+      student: { include: { user: { select: { firstName: true, lastName: true } } } },
+      lessonType: { select: { name: true } },
+      instructor: { include: { user: { select: { firstName: true, lastName: true } } } },
+    },
+    orderBy: { preferredStart: "asc" },
+    take: 12,
+  });
 
   return (
     <div className="animate-fade-up">
@@ -47,6 +63,25 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         canEdit={canEdit}
         openNew={openNew === "1"}
       />
+      <RequestsPanel
+        canReview={canEdit && !session!.impersonation?.readOnly}
+        requests={requests.map((r) => ({
+          id: r.id,
+          student: `${r.student.user.firstName} ${r.student.user.lastName}`,
+          preferredStart: r.preferredStart.toISOString(),
+          durationMin: r.durationMin,
+          lessonType: r.lessonType?.name ?? null,
+          instructor: r.instructor ? `${r.instructor.user.firstName} ${r.instructor.user.lastName}` : null,
+          notes: r.notes,
+          status: r.status,
+        }))}
+      />
+      {isStudentUser && (
+        <StudentRequestForm
+          lessonTypes={lessonTypes.map((l) => ({ id: l.id, name: l.name }))}
+          instructors={instructors.map((i) => ({ id: i.id, name: `${i.user.firstName} ${i.user.lastName}` }))}
+        />
+      )}
     </div>
   );
 }

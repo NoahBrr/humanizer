@@ -23,6 +23,7 @@ type LessonTypeOpt = { id: string; name: string; color: string; durationMin: num
 
 type ApiEvent = {
   id: string;
+  seriesId?: string | null;
   start: string;
   end: string;
   type: string;
@@ -37,6 +38,7 @@ type ApiEvent = {
 
 type Conflict = { kind: string; message: string };
 type Suggestion = { start: string; end: string };
+type ResourceSuggestion = { kind: "AIRCRAFT" | "INSTRUCTOR"; id: string; label: string };
 
 type Toast = { id: number; kind: "success" | "error"; message: string };
 
@@ -63,6 +65,7 @@ export function ScheduleCalendar({
   const calendarRef = useRef<FullCalendar>(null);
   const eventsCache = useRef<Map<string, ApiEvent>>(new Map());
   const mode = useThemeMode();
+  const [dimension, setDimension] = useState<"aircraft" | "instructor">("aircraft");
   const [selected, setSelected] = useState<ApiEvent | null>(null);
   const [draft, setDraft] = useState<{ start: string; end: string } | null>(null);
 
@@ -119,7 +122,7 @@ export function ScheduleCalendar({
               title: `${e.aircraft ? e.aircraft.tailNumber + " · " : ""}${who}`,
               start: e.start,
               end: e.end,
-              resourceId: e.aircraft?.id,
+              resourceId: dimension === "aircraft" ? e.aircraft?.id : e.instructor?.id,
               // Color = status, everywhere, always (Section 3 canonical map).
               backgroundColor: statusHex(e.status, mode),
               textColor: "#ffffff",
@@ -132,7 +135,7 @@ export function ScheduleCalendar({
         failure(e as Error);
       }
     },
-    [filterAircraft, filterInstructor, search, canEdit, mode],
+    [filterAircraft, filterInstructor, search, canEdit, mode, dimension],
   );
 
   async function moveEvent(id: string, start: Date, end: Date, revert: () => void) {
@@ -179,6 +182,20 @@ export function ScheduleCalendar({
           {instructors.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
         </Select>
         <Button variant="outline" size="sm" onClick={refetch}>Apply filters</Button>
+        <div className="flex overflow-hidden rounded-lg border border-border text-xs font-medium" role="group" aria-label="Timeline dimension">
+          <button
+            onClick={() => setDimension("aircraft")}
+            className={`cursor-pointer px-2.5 py-1.5 ${dimension === "aircraft" ? "bg-accent text-accent-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}
+          >
+            By aircraft
+          </button>
+          <button
+            onClick={() => setDimension("instructor")}
+            className={`cursor-pointer px-2.5 py-1.5 ${dimension === "instructor" ? "bg-accent text-accent-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}
+          >
+            By instructor
+          </button>
+        </div>
         <div className="flex-1" />
         {canEdit && (
           <Button size="sm" onClick={() => { const s = new Date(); s.setHours(s.getHours() + 1, 0, 0, 0); const e = new Date(s.getTime() + 2 * 3600_000); setDraft({ start: s.toISOString(), end: e.toISOString() }); }}>
@@ -196,8 +213,23 @@ export function ScheduleCalendar({
           headerToolbar={{ left: "prev,next today", center: "title", right: "resourceTimelineDay,timeGridDay,timeGridWeek,dayGridMonth,listWeek" }}
           buttonText={{ today: "Today", day: "Day", week: "Week", month: "Month", list: "List", resourceTimelineDay: "Timeline" }}
           views={{ resourceTimelineDay: { slotMinTime: "06:00", slotMaxTime: "21:00" } }}
-          resources={aircraft.map((a) => ({ id: a.id, title: `${a.tailNumber} · ${a.model}` }))}
-          resourceAreaHeaderContent="Aircraft"
+          resources={
+            dimension === "aircraft"
+              ? aircraft.map((a) => ({ id: a.id, title: `${a.tailNumber} · ${a.model}` }))
+              : instructors.map((i) => ({ id: i.id, title: i.name }))
+          }
+          resourceAreaHeaderContent={dimension === "aircraft" ? "Aircraft" : "Instructors"}
+          eventDidMount={(info) => {
+            const e = eventsCache.current.get(info.event.id);
+            if (e) {
+              info.el.title = [
+                `${e.student ? `${e.student.user.firstName} ${e.student.user.lastName}` : "—"}${e.instructor ? ` with ${e.instructor.user.firstName} ${e.instructor.user.lastName}` : " (solo)"}`,
+                `${e.lessonType?.name ?? e.type} · ${e.status.replaceAll("_", " ").toLowerCase()}`,
+                e.aircraft ? `Aircraft: ${e.aircraft.tailNumber}` : "",
+                e.notes ? `Notes: ${e.notes}` : "",
+              ].filter(Boolean).join("\n");
+            }
+          }}
           resourceAreaWidth="180px"
           events={fetchEvents}
           selectable={canEdit}
@@ -280,6 +312,9 @@ function BookingPanel({
   const [notes, setNotes] = useState("");
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [resources, setResources] = useState<ResourceSuggestion[]>([]);
+  const [recurFreq, setRecurFreq] = useState("");
+  const [recurCount, setRecurCount] = useState("4");
   const [saving, setSaving] = useState(false);
 
   const lt = useMemo(() => lessonTypes.find((l) => l.id === lessonTypeId), [lessonTypeId, lessonTypes]);
@@ -302,13 +337,15 @@ function BookingPanel({
         lessonTypeId: lessonTypeId || null,
         notes: notes || null,
         force,
+        recurrence: recurFreq ? { freq: recurFreq, count: Number(recurCount) } : null,
       }),
     });
     setSaving(false);
     if (res.status === 409) {
-      const data = (await res.json()) as { conflicts: Conflict[]; suggestions: Suggestion[] };
+      const data = (await res.json()) as { conflicts: Conflict[]; suggestions: Suggestion[]; resources?: ResourceSuggestion[] };
       setConflicts(data.conflicts);
       setSuggestions(data.suggestions);
+      setResources(data.resources ?? []);
     } else if (res.ok) {
       onBooked();
     }
@@ -365,6 +402,22 @@ function BookingPanel({
         <Label>Notes</Label>
         <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional briefing notes…" />
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <Label>Repeats</Label>
+          <Select value={recurFreq} onChange={(e) => setRecurFreq(e.target.value)}>
+            <option value="">Does not repeat</option>
+            <option value="WEEKLY">Weekly</option>
+            <option value="BIWEEKLY">Every 2 weeks</option>
+          </Select>
+        </div>
+        {recurFreq && (
+          <div className="space-y-1.5">
+            <Label>Occurrences</Label>
+            <Input type="number" min={2} max={26} value={recurCount} onChange={(e) => setRecurCount(e.target.value)} />
+          </div>
+        )}
+      </div>
 
       {conflicts.length > 0 && (
         <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
@@ -374,6 +427,26 @@ function BookingPanel({
           <ul className="space-y-1 text-xs text-destructive/90">
             {conflicts.map((c, i) => <li key={i}>• {c.message}</li>)}
           </ul>
+          {resources.length > 0 && (
+            <div className="pt-1">
+              <p className="mb-1 text-[11px] font-medium text-muted-foreground">Available instead:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {resources.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => {
+                      if (r.kind === "AIRCRAFT") setAircraftId(r.id);
+                      else setInstructorId(r.id);
+                      setConflicts([]); setSuggestions([]); setResources([]);
+                    }}
+                    className="cursor-pointer rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium hover:border-primary/50"
+                  >
+                    {r.kind === "AIRCRAFT" ? "✈ " : "👤 "}{r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {suggestions.length > 0 && (
             <div className="pt-1">
               <p className="mb-1 text-[11px] font-medium text-muted-foreground">Suggested open slots:</p>
@@ -411,12 +484,12 @@ function DetailPanel({
 }) {
   const [busy, setBusy] = useState(false);
 
-  async function setStatus(status: string, cancellationReason?: string) {
+  async function setStatus(status: string, cancellationReason?: string, scope: "single" | "series" = "single") {
     setBusy(true);
     const res = await fetch(`/api/schedule/events/${event.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, cancellationReason }),
+      body: JSON.stringify({ status, cancellationReason, scope }),
     });
     setBusy(false);
     if (res.ok) onChanged(status === "CANCELLED" ? "Booking cancelled." : status === "WEATHER_CANCELLED" ? "Weather cancellation recorded." : "Status updated.");
@@ -459,6 +532,11 @@ function DetailPanel({
             <Button variant="destructive" size="sm" className="col-span-2" disabled={busy} onClick={() => setStatus("CANCELLED", "Cancelled by staff")}>
               Cancel booking
             </Button>
+            {event.seriesId && (
+              <Button variant="outline" size="sm" className="col-span-2" disabled={busy} onClick={() => setStatus("CANCELLED", "Series cancelled", "series")}>
+                Cancel this & all future in series
+              </Button>
+            )}
           </div>
         </div>
       )}

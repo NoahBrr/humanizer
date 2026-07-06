@@ -378,6 +378,20 @@ async function main() {
     },
   });
 
+  // --- Lesson requests & waitlist ------------------------------------------
+  await db.lessonRequest.create({
+    data: {
+      organizationId: org.id, studentId: students[1].id, preferredStart: day(3, 15), durationMin: 120,
+      lessonTypeId: ltFlight.id, instructorId: instructors[0].id, notes: "Would love pattern work before my stage check.",
+    },
+  });
+  await db.lessonRequest.create({
+    data: { organizationId: org.id, studentId: students[3].id, preferredStart: day(5, 9), durationMin: 90, lessonTypeId: ltGround.id },
+  });
+  await db.waitlistEntry.create({
+    data: { organizationId: org.id, studentId: students[5].id, date: day(1, 0), notes: "Any aircraft, any CFI." },
+  });
+
   // --- Notifications ------------------------------------------------------
   await db.notification.createMany({
     data: [

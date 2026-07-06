@@ -11,7 +11,14 @@ export type ConflictInput = {
 };
 
 export type Conflict = {
-  kind: "AIRCRAFT_DOUBLE_BOOKED" | "INSTRUCTOR_DOUBLE_BOOKED" | "STUDENT_DOUBLE_BOOKED" | "MAINTENANCE_CONFLICT" | "AIRCRAFT_GROUNDED";
+  kind:
+    | "AIRCRAFT_DOUBLE_BOOKED"
+    | "INSTRUCTOR_DOUBLE_BOOKED"
+    | "STUDENT_DOUBLE_BOOKED"
+    | "MAINTENANCE_CONFLICT"
+    | "AIRCRAFT_GROUNDED"
+    | "MEDICAL_EXPIRED"
+    | "INSTRUCTOR_UNAVAILABLE";
   message: string;
 };
 
@@ -33,7 +40,7 @@ export async function detectConflicts(input: ConflictInput): Promise<Conflict[]>
     end: { gt: start },
   };
 
-  const [events, aircraft, maintenance] = await Promise.all([
+  const [events, aircraft, maintenance, student, instructor] = await Promise.all([
     db.scheduleEvent.findMany({
       where: {
         ...overlap,
@@ -60,6 +67,15 @@ export async function detectConflicts(input: ConflictInput): Promise<Conflict[]>
           },
         })
       : null,
+    studentId
+      ? db.student.findUnique({ where: { id: studentId }, select: { medicalExpiration: true, user: { select: { firstName: true, lastName: true } } } })
+      : null,
+    instructorId
+      ? db.instructor.findUnique({
+          where: { id: instructorId },
+          select: { availability: true, user: { select: { firstName: true, lastName: true } } },
+        })
+      : null,
   ]);
 
   for (const e of events) {
@@ -82,7 +98,73 @@ export async function detectConflicts(input: ConflictInput): Promise<Conflict[]>
     conflicts.push({ kind: "MAINTENANCE_CONFLICT", message: `Maintenance "${maintenance.title}" overlaps this window.` });
   }
 
+  // Expired medical: solo/dual flight with a lapsed medical certificate.
+  if (student?.medicalExpiration && student.medicalExpiration < start) {
+    conflicts.push({
+      kind: "MEDICAL_EXPIRED",
+      message: `${student.user.firstName} ${student.user.lastName}'s medical certificate expired ${student.medicalExpiration.toLocaleDateString("en-US")}.`,
+    });
+  }
+
+  // Instructor availability windows (day-of-week + HH:MM ranges).
+  if (instructor && instructor.availability.length > 0) {
+    const day = start.getDay();
+    const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const within = instructor.availability.some(
+      (w) => w.dayOfWeek === day && w.startTime <= hhmm(start) && w.endTime >= hhmm(end),
+    );
+    if (!within) {
+      conflicts.push({
+        kind: "INSTRUCTOR_UNAVAILABLE",
+        message: `${instructor.user.firstName} ${instructor.user.lastName} is outside their availability window at that time.`,
+      });
+    }
+  }
+
   return conflicts;
+}
+
+export type ResourceSuggestion = { kind: "AIRCRAFT" | "INSTRUCTOR"; id: string; label: string };
+
+/**
+ * Conflict resolution beyond "try another time": which comparable aircraft
+ * or instructors ARE free for the requested window right now?
+ */
+export async function suggestResources(input: ConflictInput, limit = 3): Promise<ResourceSuggestion[]> {
+  const { organizationId, start, end, aircraftId, instructorId, excludeEventId } = input;
+  const suggestions: ResourceSuggestion[] = [];
+
+  const busy = await db.scheduleEvent.findMany({
+    where: {
+      organizationId,
+      id: excludeEventId ? { not: excludeEventId } : undefined,
+      status: { in: [...ACTIVE_STATUSES] },
+      start: { lt: end },
+      end: { gt: start },
+    },
+    select: { aircraftId: true, instructorId: true },
+  });
+  const busyAircraft = new Set(busy.map((b) => b.aircraftId).filter(Boolean));
+  const busyInstructors = new Set(busy.map((b) => b.instructorId).filter(Boolean));
+
+  if (aircraftId) {
+    const alternatives = await db.aircraft.findMany({
+      where: { organizationId, status: "AVAILABLE", id: { notIn: [aircraftId, ...([...busyAircraft] as string[])] } },
+      select: { id: true, tailNumber: true, aircraftType: { select: { model: true } } },
+      take: limit,
+      orderBy: { tailNumber: "asc" },
+    });
+    suggestions.push(...alternatives.map((a) => ({ kind: "AIRCRAFT" as const, id: a.id, label: `${a.tailNumber} · ${a.aircraftType.model}` })));
+  }
+  if (instructorId) {
+    const alternatives = await db.instructor.findMany({
+      where: { user: { organizationId, isActive: true }, id: { notIn: [instructorId, ...([...busyInstructors] as string[])] } },
+      select: { id: true, user: { select: { firstName: true, lastName: true } } },
+      take: limit,
+    });
+    suggestions.push(...alternatives.map((i) => ({ kind: "INSTRUCTOR" as const, id: i.id, label: `${i.user.firstName} ${i.user.lastName}` })));
+  }
+  return suggestions;
 }
 
 /**

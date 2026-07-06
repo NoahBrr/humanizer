@@ -3,7 +3,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
-import { detectConflicts, suggestAlternatives } from "@/lib/scheduling";
+import { detectConflicts, suggestAlternatives, suggestResources } from "@/lib/scheduling";
+import { randomUUID } from "crypto";
 
 const eventInclude = {
   aircraft: { select: { id: true, tailNumber: true } },
@@ -47,6 +48,7 @@ const createSchema = z.object({
   lessonTypeId: z.string().nullish(),
   notes: z.string().nullish(),
   force: z.boolean().default(false),
+  recurrence: z.object({ freq: z.enum(["WEEKLY", "BIWEEKLY"]), count: z.number().int().min(2).max(26) }).nullish(),
 });
 
 export async function POST(req: Request) {
@@ -66,28 +68,72 @@ export async function POST(req: Request) {
   const conflicts = await detectConflicts(conflictInput);
   if (conflicts.length > 0) {
     if (!data.force) {
-      const suggestions = await suggestAlternatives(conflictInput);
-      return NextResponse.json({ conflicts, suggestions }, { status: 409 });
+      const [suggestions, resources] = await Promise.all([suggestAlternatives(conflictInput), suggestResources(conflictInput)]);
+      return NextResponse.json({ conflicts, suggestions, resources }, { status: 409 });
     }
     if (!session.permissions.has("schedule.override_conflicts")) {
       return NextResponse.json({ error: "You don't have permission to override scheduling conflicts." }, { status: 403 });
     }
   }
 
-  const event = await db.scheduleEvent.create({
-    data: {
-      organizationId,
-      type: data.type,
-      start,
-      end,
-      aircraftId: data.aircraftId || null,
-      instructorId: data.instructorId || null,
-      studentId: data.studentId || null,
-      lessonTypeId: data.lessonTypeId || null,
-      notes: data.notes || null,
-    },
-    include: eventInclude,
-  });
+  // Recurring series: create each future occurrence that is conflict-free;
+  // report the ones that were skipped so nothing fails silently.
+  const seriesId = data.recurrence ? randomUUID() : null;
+  const stepDays = data.recurrence?.freq === "BIWEEKLY" ? 14 : 7;
+  const occurrences: { start: Date; end: Date }[] = [{ start, end }];
+  if (data.recurrence) {
+    for (let i = 1; i < data.recurrence.count; i++) {
+      occurrences.push({
+        start: new Date(start.getTime() + i * stepDays * 86_400_000),
+        end: new Date(end.getTime() + i * stepDays * 86_400_000),
+      });
+    }
+  }
+
+  const skipped: string[] = [];
+  type CreatedEvent = Awaited<ReturnType<typeof createOccurrence>>;
+  let event: CreatedEvent | null = null;
+  const createOccurrence = (occ: { start: Date; end: Date }) =>
+    db.scheduleEvent.create({
+      data: {
+        organizationId,
+        seriesId,
+        type: data.type,
+        start: occ.start,
+        end: occ.end,
+        aircraftId: data.aircraftId || null,
+        instructorId: data.instructorId || null,
+        studentId: data.studentId || null,
+        lessonTypeId: data.lessonTypeId || null,
+        notes: data.notes || null,
+      },
+      include: eventInclude,
+    });
+  for (const [i, occ] of occurrences.entries()) {
+    if (i > 0) {
+      const occConflicts = await detectConflicts({ ...conflictInput, start: occ.start, end: occ.end });
+      if (occConflicts.length > 0 && !data.force) {
+        skipped.push(occ.start.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+        continue;
+      }
+    }
+    const created = await createOccurrence(occ);
+    if (i === 0) event = created;
+  }
+  if (!event) return NextResponse.json({ error: "Booking could not be created." }, { status: 500 });
+
+  // Notify the student's account about the new booking(s).
+  if (event?.student) {
+    await db.notification.create({
+      data: {
+        organizationId,
+        userId: (await db.student.findUnique({ where: { id: event.student.id }, select: { userId: true } }))?.userId,
+        kind: "UPCOMING_FLIGHT",
+        title: seriesId ? `Recurring lessons booked (${occurrences.length - skipped.length}×)` : "New lesson booked",
+        body: `${start.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${event.aircraft ? ` · ${event.aircraft.tailNumber}` : ""}`,
+      },
+    });
+  }
 
   await recordAudit({
     organizationId,
@@ -99,5 +145,5 @@ export async function POST(req: Request) {
     newValue: { start, end, aircraftId: event.aircraftId, instructorId: event.instructorId, studentId: event.studentId },
   });
 
-  return NextResponse.json({ event }, { status: 201 });
+  return NextResponse.json({ event, skipped: skipped.length ? skipped : undefined }, { status: 201 });
 }

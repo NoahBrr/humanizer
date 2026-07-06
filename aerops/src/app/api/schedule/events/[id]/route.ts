@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
-import { detectConflicts, suggestAlternatives } from "@/lib/scheduling";
+import { detectConflicts, suggestAlternatives, suggestResources } from "@/lib/scheduling";
 
 const patchSchema = z.object({
   start: z.string().datetime().optional(),
@@ -12,6 +12,8 @@ const patchSchema = z.object({
   cancellationReason: z.string().nullish(),
   notes: z.string().nullish(),
   force: z.boolean().default(false),
+  /// "series" applies a cancellation to this and all future events in the series.
+  scope: z.enum(["single", "series"]).default("single"),
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -44,8 +46,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const conflicts = await detectConflicts(conflictInput);
     if (conflicts.length > 0) {
       if (!data.force) {
-        const suggestions = await suggestAlternatives(conflictInput);
-        return NextResponse.json({ conflicts, suggestions }, { status: 409 });
+        const [suggestions, resources] = await Promise.all([suggestAlternatives(conflictInput), suggestResources(conflictInput)]);
+        return NextResponse.json({ conflicts, suggestions, resources }, { status: 409 });
       }
       if (!session.permissions.has("schedule.override_conflicts")) {
         return NextResponse.json({ error: "You don't have permission to override scheduling conflicts." }, { status: 403 });
@@ -63,6 +65,50 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(data.notes !== undefined ? { notes: data.notes } : {}),
     },
   });
+
+  // Series-wide cancellation: apply to every future occurrence too.
+  if (data.scope === "series" && existing.seriesId && data.status && ["CANCELLED", "WEATHER_CANCELLED"].includes(data.status)) {
+    await db.scheduleEvent.updateMany({
+      where: { seriesId: existing.seriesId, organizationId: existing.organizationId, start: { gt: existing.start }, status: "SCHEDULED" },
+      data: { status: data.status, cancellationReason: data.cancellationReason ?? "Series cancelled" },
+    });
+  }
+
+  // Cancellations free a slot: tell the student, then invite the waitlist.
+  const cancelled = ["CANCELLED", "WEATHER_CANCELLED"].includes(data.status ?? "") && existing.status !== data.status;
+  if (cancelled) {
+    if (existing.studentId) {
+      const st = await db.student.findUnique({ where: { id: existing.studentId }, select: { userId: true } });
+      await db.notification.create({
+        data: {
+          organizationId: existing.organizationId,
+          userId: st?.userId,
+          kind: data.status === "WEATHER_CANCELLED" ? "WEATHER_CANCELLATION" : "SCHEDULE_CHANGE",
+          title: data.status === "WEATHER_CANCELLED" ? "Lesson cancelled for weather" : "Lesson cancelled",
+          body: `${existing.start.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${data.cancellationReason ? ` — ${data.cancellationReason}` : ""}`,
+        },
+      });
+    }
+    const dayStart = new Date(existing.start); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+    const waitlisted = await db.waitlistEntry.findMany({
+      where: { organizationId: existing.organizationId, date: { gte: dayStart, lt: dayEnd }, notifiedAt: null },
+      include: { student: { select: { userId: true, user: { select: { firstName: true } } } } },
+      take: 5,
+    });
+    for (const w of waitlisted) {
+      await db.notification.create({
+        data: {
+          organizationId: existing.organizationId,
+          userId: w.student.userId,
+          kind: "SCHEDULE_CHANGE",
+          title: "A slot just opened up",
+          body: `${existing.start.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} became available — you're on the waitlist for that day. Request it before it's gone.`,
+        },
+      });
+      await db.waitlistEntry.update({ where: { id: w.id }, data: { notifiedAt: new Date() } });
+    }
+  }
 
   await recordAudit({
     organizationId: existing.organizationId,

@@ -11,7 +11,7 @@
  * CSS classes can't reach. Both light- and dark-mode hexes keep ≥3:1 contrast
  * against their surface.
  */
-export type StatusTone = "blue" | "purple" | "green" | "gray" | "red" | "darkred" | "orange" | "amber" | "cyan";
+export type StatusTone = "blue" | "purple" | "green" | "gray" | "red" | "darkred" | "orange" | "amber" | "cyan" | "black";
 
 const STATUS_TONE: Record<string, StatusTone> = {
   // Scheduling / dispatch lifecycle
@@ -23,8 +23,8 @@ const STATUS_TONE: Record<string, StatusTone> = {
   COMPLETED: "gray",
   CLOSED: "gray",
   CANCELLED: "red",
-  NO_SHOW: "red",
-  WEATHER_CANCELLED: "red",
+  NO_SHOW: "black",
+  WEATHER_CANCELLED: "cyan",
   // Aircraft
   AVAILABLE: "green",
   RESERVED: "amber",
@@ -73,6 +73,7 @@ export const STATUS_HEX: Record<StatusTone, { light: string; dark: string }> = {
   orange: { light: "#ea580c", dark: "#f97316" },
   amber: { light: "#d97706", dark: "#f59e0b" },
   cyan: { light: "#0891b2", dark: "#06b6d4" },
+  black: { light: "#1f2937", dark: "#111827" },
 };
 
 export function statusHex(status: string, mode: "light" | "dark" = "light") {
