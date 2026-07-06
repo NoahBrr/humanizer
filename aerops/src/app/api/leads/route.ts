@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { emitWebhook } from "@/lib/webhooks";
+import { emitDomainEvent } from "@/lib/events";
 
 const publicSchema = z.object({
   org: z.string().min(2), // organization slug — forms are embeddable per-org
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       body: `${lead.interest ?? "General inquiry"} · via ${lead.source} — follow up within 24h.`,
     },
   });
-  await emitWebhook(org.id, "lead.created", { leadId: lead.id, name: lead.name, source: lead.source, interest: lead.interest });
+  await emitDomainEvent(org.id, "lead.created", { leadId: lead.id, name: lead.name, source: lead.source, interest: lead.interest });
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 

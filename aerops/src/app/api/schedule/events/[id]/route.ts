@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
+import { emitDomainEvent } from "@/lib/events";
 import { detectConflicts, suggestAlternatives, suggestResources } from "@/lib/scheduling";
 
 const patchSchema = z.object({
@@ -108,6 +109,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
       await db.waitlistEntry.update({ where: { id: w.id }, data: { notifiedAt: new Date() } });
     }
+    await emitDomainEvent(existing.organizationId, "schedule.cancelled", {
+      eventId: existing.id, start: existing.start.toISOString(), reason: data.cancellationReason ?? null, weather: data.status === "WEATHER_CANCELLED",
+    });
   }
 
   await recordAudit({

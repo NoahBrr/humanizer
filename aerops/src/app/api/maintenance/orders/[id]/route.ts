@@ -3,19 +3,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
-import { emitWebhook } from "@/lib/webhooks";
-
-const TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ["OPEN", "CANCELLED"],
-  OPEN: ["ASSIGNED", "CANCELLED"],
-  SCHEDULED: ["ASSIGNED", "IN_PROGRESS", "CANCELLED"],
-  ASSIGNED: ["WAITING_PARTS", "IN_PROGRESS", "CANCELLED"],
-  WAITING_PARTS: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["WAITING_PARTS", "AWAITING_INSPECTION", "CANCELLED"],
-  AWAITING_INSPECTION: ["APPROVED", "IN_PROGRESS"],
-  APPROVED: ["RETURN_TO_SERVICE"],
-  RETURN_TO_SERVICE: ["CLOSED"],
-};
+import { emitDomainEvent } from "@/lib/events";
+import { WO_TRANSITIONS } from "@/lib/work-orders";
 
 const patchSchema = z.object({
   status: z.enum(["OPEN", "ASSIGNED", "WAITING_PARTS", "IN_PROGRESS", "AWAITING_INSPECTION", "APPROVED", "RETURN_TO_SERVICE", "CLOSED", "CANCELLED"]).optional(),
@@ -48,7 +37,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const data = body.data;
 
   if (data.status) {
-    const allowed = TRANSITIONS[order.status] ?? [];
+    const allowed = WO_TRANSITIONS[order.status] ?? [];
     if (!allowed.includes(data.status)) {
       return NextResponse.json(
         { error: `A ${order.status.replaceAll("_", " ").toLowerCase()} work order can only move to: ${allowed.map((s) => s.replaceAll("_", " ").toLowerCase()).join(", ") || "nowhere (terminal)"}.` },
@@ -97,7 +86,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     newValue: { status: updated.status, approvedBy: updated.approvedBy ?? undefined },
   });
   if (data.status === "CLOSED") {
-    await emitWebhook(session.organizationId, "maintenance.completed", {
+    await emitDomainEvent(session.organizationId, "maintenance.completed", {
       workOrderId: id, number: updated.number, tailNumber: order.aircraft.tailNumber,
     });
   }

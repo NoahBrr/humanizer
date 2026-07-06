@@ -5,8 +5,7 @@ import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import { computeFlightCharges, flightTimeFromHobbs } from "@/lib/billing";
-import { runMaintenanceForecast } from "@/lib/automations";
-import { emitWebhook } from "@/lib/webhooks";
+import { emitDomainEvent } from "@/lib/events";
 
 const closeSchema = z.object({
   hobbsIn: z.number().positive(),
@@ -156,10 +155,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
     logger.info("flight closed", { dispatchId: id, flightTime, billed: charges.total });
 
-    // Workflow automation: flight.closed → maintenance forecast.
-    await runMaintenanceForecast(session.organizationId, dispatch.aircraftId);
-    await emitWebhook(session.organizationId, "flight.closed", {
-      dispatchId: id, tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: charges.total,
+    // One emission; the event bus fans out to webhooks, automations, and
+    // any future consumer — this route doesn't know who is listening.
+    await emitDomainEvent(session.organizationId, "flight.closed", {
+      dispatchId: id, aircraftId: dispatch.aircraftId, tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: charges.total,
     });
 
     return NextResponse.json({ dispatch: closed, flightTime, total: charges.total });
