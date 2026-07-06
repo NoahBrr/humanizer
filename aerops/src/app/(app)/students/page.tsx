@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Students" };
 
 export default async function StudentsPage() {
-  const session = await auth();
+  const session = await getSession();
   const students = await db.student.findMany({
-    where: { user: { organizationId: session!.user.organizationId } },
+    where: { user: { organizationId: session!.organizationId } },
     include: {
       user: true,
       assignedInstructor: { include: { user: { select: { firstName: true, lastName: true } } } },

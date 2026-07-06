@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Plane, ArrowLeft } from "lucide-react";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -12,10 +12,10 @@ import { formatCurrency, formatDate, daysUntil, fullName } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function AircraftDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
+  const session = await getSession();
   const { id } = await params;
   const a = await db.aircraft.findFirst({
-    where: { id, organizationId: session!.user.organizationId },
+    where: { id, organizationId: session!.organizationId },
     include: {
       aircraftType: true,
       location: true,

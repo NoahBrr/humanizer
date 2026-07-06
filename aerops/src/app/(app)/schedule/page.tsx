@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/misc";
 import { ScheduleCalendar } from "./schedule-calendar";
@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Schedule" };
 
 export default async function SchedulePage() {
-  const session = await auth();
-  const organizationId = session!.user.organizationId;
+  const session = await getSession();
+  const organizationId = session!.organizationId;
 
   const [aircraft, instructors, students, lessonTypes] = await Promise.all([
     db.aircraft.findMany({
@@ -27,7 +27,7 @@ export default async function SchedulePage() {
     db.lessonType.findMany({ where: { organizationId }, orderBy: { name: "asc" } }),
   ]);
 
-  const canEdit = ["SUPER_ADMIN", "SCHOOL_ADMIN", "DISPATCHER", "INSTRUCTOR"].includes(session!.user.role);
+  const canEdit = session!.permissions.has("schedule.create");
 
   return (
     <div className="animate-fade-up">

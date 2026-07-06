@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/misc";
 import { ReportsClient } from "./reports-client";
@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Reports" };
 
 export default async function ReportsPage() {
-  const session = await auth();
-  const organizationId = session!.user.organizationId;
+  const session = await getSession();
+  const organizationId = session!.organizationId;
   const since = new Date();
   since.setDate(since.getDate() - 30);
   since.setHours(0, 0, 0, 0);

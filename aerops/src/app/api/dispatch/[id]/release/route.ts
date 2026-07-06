@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { authorize } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 
 const releaseSchema = z.object({
   fuelQty: z.string().min(1),
@@ -13,15 +14,12 @@ const releaseSchema = z.object({
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!["SUPER_ADMIN", "SCHOOL_ADMIN", "DISPATCHER", "INSTRUCTOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { session, error } = await authorize("dispatch.release", { mutating: true });
+  if (error) return error;
 
   const { id } = await params;
   const dispatch = await db.dispatch.findFirst({
-    where: { id, aircraft: { organizationId: session.user.organizationId } },
+    where: { id, aircraft: { organizationId: session.organizationId } },
     include: { aircraft: true },
   });
   if (!dispatch) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -39,11 +37,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ...body.data,
       status: "RELEASED",
       releasedAt: new Date(),
-      releasedBy: `${session.user.firstName} ${session.user.lastName}`,
+      releasedBy: `${session.firstName} ${session.lastName}`,
       hobbsOut: dispatch.aircraft.currentHobbs,
       tachOut: dispatch.aircraft.currentTach,
       scheduleEvent: { update: { status: "DISPATCHED" } },
     },
+  });
+
+  await recordAudit({
+    organizationId: session.organizationId,
+    actorUserId: session.userId,
+    actorLabel: `${session.firstName} ${session.lastName}`,
+    action: "dispatch.release",
+    entityType: "Dispatch",
+    entityId: id,
+    newValue: { tailNumber: dispatch.aircraft.tailNumber, fuelQty: body.data.fuelQty, oilQty: body.data.oilQty },
   });
 
   return NextResponse.json({ dispatch: updated });

@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/misc";
 import { DispatchBoard } from "./dispatch-board";
@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Dispatch" };
 
 export default async function DispatchPage() {
-  const session = await auth();
-  const organizationId = session!.user.organizationId;
+  const session = await getSession();
+  const organizationId = session!.organizationId;
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(dayStart.getTime() + 86_400_000);
@@ -53,7 +53,7 @@ export default async function DispatchPage() {
     landings: d.landings,
   }));
 
-  const canDispatch = ["SUPER_ADMIN", "SCHOOL_ADMIN", "DISPATCHER", "INSTRUCTOR"].includes(session!.user.role);
+  const canDispatch = session!.permissions.has("dispatch.release") && !session!.impersonation?.readOnly;
 
   return (
     <div className="animate-fade-up">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plane } from "lucide-react";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Aircraft" };
 
 export default async function AircraftPage() {
-  const session = await auth();
+  const session = await getSession();
   const aircraft = await db.aircraft.findMany({
-    where: { organizationId: session!.user.organizationId },
+    where: { organizationId: session!.organizationId },
     include: {
       aircraftType: true,
       location: { select: { icao: true } },

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { authorize } from "@/lib/session";
 
 const patchSchema = z.object({
   status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED", "DEFERRED"]),
@@ -9,14 +9,11 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!["SUPER_ADMIN", "SCHOOL_ADMIN", "MAINTENANCE", "DISPATCHER"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { session, error } = await authorize("maintenance.manage", { mutating: true });
+  if (error) return error;
 
   const { id } = await params;
-  const squawk = await db.squawk.findFirst({ where: { id, aircraft: { organizationId: session.user.organizationId } } });
+  const squawk = await db.squawk.findFirst({ where: { id, aircraft: { organizationId: session.organizationId } } });
   if (!squawk) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = patchSchema.safeParse(await req.json());

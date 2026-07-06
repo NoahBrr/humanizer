@@ -1,30 +1,46 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { canAccess, ROLE_LABELS } from "@/lib/rbac";
+import { canAccessSection, ROLE_LABELS } from "@/lib/rbac";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { MobileNav } from "@/components/shell/mobile-nav";
+import { ImpersonationBanner } from "@/components/shell/impersonation-banner";
 import { NAV_ITEMS } from "@/components/shell/nav-config";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  if (!session?.user) redirect("/sign-in");
-  const { role, organizationId, firstName, lastName, id } = session.user;
+  const session = await getSession();
+  if (!session) redirect("/sign-in");
+  // Platform staff without an active impersonation belong in /platform.
+  if (session.platformRole && !session.impersonation) redirect("/platform");
 
+  if (session.orgStatus !== "ACTIVE") {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
+          <h1 className="text-lg font-semibold">This organization is {session.orgStatus === "SUSPENDED" ? "suspended" : "deactivated"}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Access is temporarily disabled. Your data is safe. Please contact your administrator or AeroOps support to restore access.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const { organizationId, userId } = session;
   const [org, unreadCount, recent] = await Promise.all([
     db.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
-    db.notification.count({ where: { organizationId, isRead: false, OR: [{ userId: null }, { userId: id }] } }),
+    db.notification.count({ where: { organizationId, isRead: false, OR: [{ userId: null }, { userId }] } }),
     db.notification.findMany({
-      where: { organizationId, OR: [{ userId: null }, { userId: id }] },
+      where: { organizationId, OR: [{ userId: null }, { userId }] },
       orderBy: { createdAt: "desc" },
       take: 6,
       select: { id: true, title: true, body: true, createdAt: true },
     }),
   ]);
 
-  const allowedPaths = NAV_ITEMS.filter((i) => canAccess(role, i.href)).map((i) => i.href);
+  const allowedPaths = NAV_ITEMS.filter((i) => canAccessSection(session.permissions, session.modules, i.href)).map((i) => i.href);
 
   return (
     <div className="min-h-screen">
@@ -34,14 +50,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         Skip to content
       </a>
+      {session.impersonation && (
+        <ImpersonationBanner
+          orgName={org?.name ?? ""}
+          targetName={`${session.firstName} ${session.lastName}`}
+          readOnly={session.impersonation.readOnly}
+        />
+      )}
       <Sidebar allowedPaths={allowedPaths} orgName={org?.name ?? "AeroOps"} />
       <CommandPalette allowedPaths={allowedPaths} />
       <MobileNav allowedPaths={allowedPaths} />
       <div className="lg:pl-56">
         <Topbar
-          firstName={firstName}
-          lastName={lastName}
-          roleLabel={ROLE_LABELS[role]}
+          firstName={session.firstName}
+          lastName={session.lastName}
+          roleLabel={ROLE_LABELS[session.role]}
           unreadCount={unreadCount}
           recent={recent.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
         />

@@ -42,7 +42,7 @@ function downloadCsv(filename: string, headers: string[], rows: (string | number
   URL.revokeObjectURL(a.href);
 }
 
-const tooltipStyle = (_dark: boolean) => ({
+const tooltipStyle = () => ({
   borderRadius: 10,
   border: "1px solid var(--color-border)",
   background: "var(--color-card)",
@@ -60,7 +60,6 @@ export function ReportsClient({
   cancellations: { reason: string; count: number }[];
 }) {
   const c = useMode();
-  const isDark = c === COLORS.dark;
 
   const stats = [
     { label: "Revenue (30d)", value: formatCurrency(summary.revenue) },
@@ -106,7 +105,7 @@ export function ReportsClient({
                 <CartesianGrid stroke={c.grid} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: c.text }} tickLine={false} axisLine={false} interval={6} />
                 <YAxis tick={{ fontSize: 10, fill: c.text }} tickLine={false} axisLine={false} width={44} tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`} />
-                <Tooltip contentStyle={tooltipStyle(isDark)} formatter={(v) => [formatCurrency(Number(v)), "Revenue"]} />
+                <Tooltip contentStyle={tooltipStyle()} formatter={(v) => [formatCurrency(Number(v)), "Revenue"]} />
                 <Area type="monotone" dataKey="revenue" stroke={c.blue} strokeWidth={2} fill="url(#rev)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -129,7 +128,7 @@ export function ReportsClient({
                 <CartesianGrid stroke={c.grid} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: c.text }} tickLine={false} axisLine={false} interval={6} />
                 <YAxis tick={{ fontSize: 10, fill: c.text }} tickLine={false} axisLine={false} width={28} allowDecimals={false} />
-                <Tooltip contentStyle={tooltipStyle(isDark)} formatter={(v) => [v, "Flights"]} cursor={{ fill: "transparent" }} />
+                <Tooltip contentStyle={tooltipStyle()} formatter={(v) => [v, "Flights"]} cursor={{ fill: "transparent" }} />
                 <Bar dataKey="flights" fill={c.aqua} radius={[4, 4, 0, 0]} maxBarSize={14} />
               </BarChart>
             </ResponsiveContainer>
@@ -138,8 +137,8 @@ export function ReportsClient({
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <RankTable title="Revenue per Aircraft" rows={byAircraft} filename="revenue-by-aircraft.csv" color={c.blue} grid={c.grid} text={c.text} isDark={isDark} />
-        <RankTable title="Revenue per Instructor" rows={byInstructor} filename="revenue-by-instructor.csv" color={c.blue} grid={c.grid} text={c.text} isDark={isDark} />
+        <RankTable title="Revenue per Aircraft" rows={byAircraft} filename="revenue-by-aircraft.csv" color={c.blue} grid={c.grid} text={c.text} />
+        <RankTable title="Revenue per Instructor" rows={byInstructor} filename="revenue-by-instructor.csv" color={c.blue} grid={c.grid} text={c.text} />
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <div>
@@ -202,9 +201,9 @@ export function ReportsClient({
 }
 
 function RankTable({
-  title, rows, filename, color, grid, text, isDark,
+  title, rows, filename, color, grid, text,
 }: {
-  title: string; rows: Row[]; filename: string; color: string; grid: string; text: string; isDark: boolean;
+  title: string; rows: Row[]; filename: string; color: string; grid: string; text: string;
 }) {
   return (
     <Card>
@@ -223,7 +222,7 @@ function RankTable({
             <CartesianGrid stroke={grid} strokeDasharray="3 3" horizontal={false} />
             <XAxis type="number" hide />
             <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: text }} tickLine={false} axisLine={false} width={92} />
-            <Tooltip contentStyle={tooltipStyle(isDark)} formatter={(v) => [formatCurrency(Number(v)), "Revenue"]} cursor={{ fill: "transparent" }} />
+            <Tooltip contentStyle={tooltipStyle()} formatter={(v) => [formatCurrency(Number(v)), "Revenue"]} cursor={{ fill: "transparent" }} />
             <Bar dataKey="revenue" radius={[0, 4, 4, 0]} maxBarSize={16} label={{ position: "right", fontSize: 10, fill: text, formatter: (v) => { const n = Number(v); return `$${n >= 1000 ? `${(n / 1000).toFixed(1)}k` : n}`; } }}>
               {rows.map((r) => <Cell key={r.name} fill={color} />)}
             </Bar>

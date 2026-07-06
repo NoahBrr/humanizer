@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Award, FileSignature, ShieldCheck } from "lucide-react";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -11,10 +11,10 @@ import { formatCurrency, formatDate, formatDateTime, formatHours, fullName, days
 export const dynamic = "force-dynamic";
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
+  const session = await getSession();
   const { id } = await params;
   const s = await db.student.findFirst({
-    where: { id, user: { organizationId: session!.user.organizationId } },
+    where: { id, user: { organizationId: session!.organizationId } },
     include: {
       user: true,
       assignedInstructor: { include: { user: { select: { firstName: true, lastName: true } } } },

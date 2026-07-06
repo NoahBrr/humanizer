@@ -3,7 +3,7 @@ import {
   Plane, Wrench, Users, GraduationCap, DollarSign, TrendingUp, AlertTriangle,
   CalendarCheck, Gauge, CloudSun, Award,
 } from "lucide-react";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -21,8 +21,8 @@ function startOfDay(offset = 0) {
 }
 
 export default async function DashboardPage() {
-  const session = await auth();
-  const organizationId = session!.user.organizationId;
+  const session = await getSession();
+  const organizationId = session!.organizationId;
   const todayStart = startOfDay();
   const todayEnd = startOfDay(1);
   const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
-            Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {session!.user.firstName}
+            Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {session!.firstName}
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} · Here&apos;s today&apos;s operating picture.

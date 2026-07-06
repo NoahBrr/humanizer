@@ -5,8 +5,9 @@
  *
  * All demo logins use the password `demo1234`.
  */
-import { PrismaClient, Role, EventType, EventStatus, SquawkSeverity, SquawkStatus, MaintenanceStatus, DispatchStatus, InvoiceStatus, LineItemKind, PaymentMethod, NotificationKind, CertificateType, TrainingPart, CheckrideStatus, LessonGrade, DocumentKind, AircraftStatus } from "@prisma/client";
+import { PrismaClient, Role, EventType, EventStatus, SquawkSeverity, SquawkStatus, MaintenanceStatus, DispatchStatus, InvoiceStatus, LineItemKind, PaymentMethod, NotificationKind, CertificateType, TrainingPart, CheckrideStatus, LessonGrade, DocumentKind, AircraftStatus, PlatformRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { DEFAULT_ROLE_PERMISSIONS } from "../src/lib/permissions";
 
 const db = new PrismaClient();
 
@@ -20,10 +21,32 @@ const months = (n: number) => day(Math.round(n * 30.44));
 
 async function main() {
   console.log("Seeding AeroOps demo data...");
-  await db.organization.deleteMany();
-  await db.aircraftType.deleteMany();
+  // TRUNCATE ... CASCADE clears every dependent table regardless of FK order.
+  await db.$executeRawUnsafe('TRUNCATE TABLE "Organization", "AircraftType", "PlatformUser", "SubscriptionPlan", "AuditLog" CASCADE');
 
   const password = await bcrypt.hash("demo1234", 10);
+
+  // --- Subscription plans -------------------------------------------------
+  const allModules = ["scheduling", "dispatch", "maintenance", "billing", "reports", "documents", "weather"];
+  const [starter, professional] = await Promise.all([
+    db.subscriptionPlan.create({ data: { name: "Starter", priceMonthly: 149, maxUsers: 25, maxAircraft: 5, maxLocations: 1, storageGb: 10, supportTier: "Standard", modules: ["scheduling", "dispatch", "billing", "documents"] } }),
+    db.subscriptionPlan.create({ data: { name: "Professional", priceMonthly: 399, maxUsers: 150, maxAircraft: 25, maxLocations: 5, storageGb: 100, supportTier: "Priority", modules: allModules } }),
+  ]);
+  await db.subscriptionPlan.create({ data: { name: "Enterprise", priceMonthly: 999, maxUsers: 1000, maxAircraft: 200, maxLocations: 25, storageGb: 1000, supportTier: "Dedicated", modules: [...allModules, "ai_copilot", "inventory", "flight_following"] } });
+  await db.subscriptionPlan.create({ data: { name: "University", priceMonthly: 1499, maxUsers: 2500, maxAircraft: 300, maxLocations: 10, storageGb: 2000, supportTier: "Dedicated", modules: [...allModules, "ai_copilot", "inventory", "flight_following"] } });
+
+  // --- Platform staff (AeroOps employees — separate identity space) --------
+  await db.platformUser.createMany({
+    data: [
+      { email: "founder@aerops.io", passwordHash: password, firstName: "Jordan", lastName: "Hale", role: PlatformRole.FOUNDER },
+      { email: "support@aerops.io", passwordHash: password, firstName: "Riley", lastName: "Kim", role: PlatformRole.SUPPORT_ENGINEER },
+      { email: "auditor@aerops.io", passwordHash: password, firstName: "Sam", lastName: "Osei", role: PlatformRole.AUDITOR },
+    ],
+  });
+
+  const systemRoles = Object.entries(DEFAULT_ROLE_PERMISSIONS)
+    .filter(([name]) => name !== "SUPER_ADMIN")
+    .map(([name, permissions]) => ({ name, permissions: [...permissions], isSystem: true }));
 
   const org = await db.organization.create({
     data: {
@@ -31,6 +54,14 @@ async function main() {
       slug: "golden-gate",
       brandColor: "#2563eb",
       timeZone: "America/Los_Angeles",
+      planId: professional.id,
+      orgRoles: {
+        create: [
+          ...systemRoles,
+          { name: "Front Desk", description: "Custom role: scheduling and payments only", permissions: ["schedule.view", "schedule.create", "schedule.edit", "billing.record_payments", "notifications.view", "documents.view", "students.view"] },
+        ],
+      },
+      departments: { create: [{ name: "Dispatch" }, { name: "Maintenance" }, { name: "Training" }, { name: "Administration" }] },
     },
   });
 
@@ -368,7 +399,50 @@ async function main() {
     ],
   });
 
+  // --- Second organization: proves tenant isolation end to end -------------
+  const blueRidge = await db.organization.create({
+    data: {
+      name: "Blue Ridge Flying Club",
+      slug: "blue-ridge",
+      brandColor: "#0891b2",
+      timeZone: "America/New_York",
+      planId: starter.id,
+      orgRoles: { create: systemRoles },
+      locations: { create: { name: "Asheville Regional", icao: "KAVL", timeZone: "America/New_York" } },
+    },
+    include: { locations: true },
+  });
+  const brAdmin = await db.user.create({
+    data: { organizationId: blueRidge.id, email: "admin@blueridge.demo", passwordHash: password, firstName: "Casey", lastName: "Turner", role: Role.SCHOOL_ADMIN },
+  });
+  const brCfiUser = await db.user.create({
+    data: { organizationId: blueRidge.id, email: "cfi@blueridge.demo", passwordHash: password, firstName: "Morgan", lastName: "Lee", role: Role.INSTRUCTOR },
+  });
+  await db.instructor.create({ data: { userId: brCfiUser.id, certificates: "CFI", hourlyRate: 60 } });
+  const c152 = await db.aircraftType.create({ data: { manufacturer: "Cessna", model: "152", seats: 2 } });
+  await db.aircraft.create({
+    data: {
+      organizationId: blueRidge.id, locationId: blueRidge.locations[0].id, aircraftTypeId: c152.id,
+      tailNumber: "N67235", year: 1979, hourlyRateWet: 119, status: AircraftStatus.AVAILABLE,
+      currentHobbs: 9182.4, currentTach: 8990.1,
+    },
+  });
+  await db.invitation.create({
+    data: {
+      organizationId: blueRidge.id, email: "newmember@blueridge.demo", role: Role.STUDENT,
+      token: "demo-invite-blueridge", invitedBy: "Casey Turner", expiresAt: day(14),
+    },
+  });
+  await db.auditLog.createMany({
+    data: [
+      { organizationId: blueRidge.id, actorUserId: brAdmin.id, actorLabel: "Casey Turner", action: "users.invite", entityType: "Invitation", newValue: { email: "newmember@blueridge.demo", role: "STUDENT" }, createdAt: day(-1, 10) },
+      { organizationId: org.id, actorLabel: "System", action: "org.plan_assigned", entityType: "Organization", entityId: org.id, newValue: { plan: "Professional" }, createdAt: day(-30, 9) },
+    ],
+  });
+
   console.log("Seed complete.");
+  console.log("Platform staff (password: demo1234): founder@aerops.io · support@aerops.io · auditor@aerops.io");
+  console.log("Second tenant: admin@blueridge.demo / demo1234");
   console.log("Logins (password: demo1234):");
   console.log("  admin@aerops.demo (School Admin)  dispatch@aerops.demo (Dispatcher)");
   console.log("  sarah.cfi@aerops.demo (Instructor)  student@aerops.demo (Student)");

@@ -1,5 +1,5 @@
 import { Bell, Wrench, CloudRain, DollarSign, CalendarClock, FileWarning, PlaneLanding, AlertTriangle } from "lucide-react";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/misc";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,9 +24,9 @@ const KIND_META: Record<NotificationKind, { icon: React.ElementType; color: stri
 };
 
 export default async function NotificationsPage() {
-  const session = await auth();
+  const session = await getSession();
   const notifications = await db.notification.findMany({
-    where: { organizationId: session!.user.organizationId, OR: [{ userId: null }, { userId: session!.user.id }] },
+    where: { organizationId: session!.organizationId, OR: [{ userId: null }, { userId: session!.userId }] },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

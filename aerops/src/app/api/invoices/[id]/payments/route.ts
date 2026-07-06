@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { authorize } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 
 const paymentSchema = z.object({
   amount: z.number().positive(),
@@ -10,15 +11,12 @@ const paymentSchema = z.object({
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!["SUPER_ADMIN", "SCHOOL_ADMIN", "ACCOUNTANT", "DISPATCHER"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { session, error } = await authorize("billing.record_payments", { mutating: true });
+  if (error) return error;
 
   const { id } = await params;
   const invoice = await db.invoice.findFirst({
-    where: { id, organizationId: session.user.organizationId },
+    where: { id, organizationId: session.organizationId },
     include: { lines: true, payments: true },
   });
   if (!invoice) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -43,6 +41,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ? [db.student.update({ where: { id: invoice.studentId }, data: { accountBalance: { increment: body.data.amount } } })]
       : []),
   ]);
+
+  await recordAudit({
+    organizationId: session.organizationId,
+    actorUserId: session.userId,
+    actorLabel: `${session.firstName} ${session.lastName}`,
+    action: "billing.payment_recorded",
+    entityType: "Invoice",
+    entityId: id,
+    newValue: { amount: body.data.amount, method: body.data.method, status: nextStatus },
+  });
 
   return NextResponse.json({ payment, status: nextStatus }, { status: 201 });
 }

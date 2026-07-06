@@ -1,0 +1,140 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { db } from "@/lib/db";
+import { getSession } from "@/lib/session";
+import { MODULES, CORE_MODULES, type ModuleKey } from "@/lib/features";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { StatusBadge, Badge } from "@/components/ui/badge";
+import { Avatar, Progress } from "@/components/ui/misc";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { ROLE_LABELS } from "@/lib/rbac";
+import { OrgActions, ImpersonateButton, ModuleToggles } from "./org-actions";
+
+export const dynamic = "force-dynamic";
+
+export default async function OrganizationDetail({ params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  const { id } = await params;
+  const org = await db.organization.findUnique({
+    where: { id },
+    include: {
+      plan: true,
+      locations: true,
+      users: { where: { deletedAt: null }, orderBy: [{ role: "asc" }, { lastName: "asc" }] },
+      invitations: { where: { acceptedAt: null, expiresAt: { gt: new Date() } } },
+      auditLogs: { orderBy: { createdAt: "desc" }, take: 8 },
+      _count: { select: { aircraft: true, scheduleEvents: true, invoices: true } },
+    },
+  });
+  if (!org) notFound();
+  const plans = await db.subscriptionPlan.findMany({ orderBy: { priceMonthly: "asc" } });
+
+  const canImpersonate = ["FOUNDER", "PLATFORM_ADMIN", "CUSTOMER_SUCCESS", "SUPPORT_ENGINEER"].includes(session?.platformRole ?? "");
+  const canManage = ["FOUNDER", "PLATFORM_ADMIN", "BILLING_ADMIN"].includes(session?.platformRole ?? "");
+
+  const usage = [
+    { label: "Users", used: org.users.length, max: org.plan?.maxUsers },
+    { label: "Aircraft", used: org._count.aircraft, max: org.plan?.maxAircraft },
+    { label: "Locations", used: org.locations.length, max: org.plan?.maxLocations },
+  ];
+
+  return (
+    <div className="animate-fade-up space-y-4">
+      <Link href="/platform/organizations" className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-3.5 w-3.5" /> All organizations
+      </Link>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{org.name}</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            <span className="font-mono text-xs">{org.slug}</span> · created {formatDate(org.createdAt)} · {org.timeZone}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={org.status} />
+          <Badge tone="violet">{org.plan?.name ?? "No plan"} · {formatCurrency(org.plan?.priceMonthly ?? 0)}/mo</Badge>
+        </div>
+      </div>
+
+      {canManage && <OrgActions orgId={org.id} status={org.status} planId={org.planId} plans={plans.map((p) => ({ id: p.id, name: p.name, price: Number(p.priceMonthly) }))} />}
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Usage vs Plan Limits</CardTitle>
+            <CardDescription>{org._count.scheduleEvents} bookings · {org._count.invoices} invoices lifetime</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {usage.map((u) => (
+              <div key={u.label}>
+                <div className="mb-1 flex justify-between text-xs">
+                  <span className="font-medium">{u.label}</span>
+                  <span className="text-muted-foreground tabular-nums">{u.used}{u.max ? ` / ${u.max}` : ""}</span>
+                </div>
+                <Progress value={u.max ? (u.used / u.max) * 100 : 0} tone={u.max && u.used / u.max > 0.85 ? "warning" : "primary"} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Feature Modules</CardTitle>
+            <CardDescription>Plan grants availability; toggles disable per-org</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ModuleToggles
+              orgId={org.id}
+              disabled={!canManage}
+              modules={Object.entries(MODULES).map(([key, label]) => ({
+                key,
+                label,
+                core: CORE_MODULES.includes(key as ModuleKey),
+                inPlan: (org.plan?.modules ?? []).includes(key) || CORE_MODULES.includes(key as ModuleKey),
+                enabled: !org.disabledModules.includes(key),
+              }))}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Recent Audit Activity</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-xs">
+            {org.auditLogs.length === 0 && <p className="text-muted-foreground">No activity recorded.</p>}
+            {org.auditLogs.map((a) => (
+              <div key={a.id}>
+                <p><span className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">{a.action}</span> {a.actorLabel}</p>
+                <p className="text-[10px] text-muted-foreground">{formatDateTime(a.createdAt)}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Users</CardTitle>
+          <CardDescription>
+            {org.users.length} active · {org.invitations.length} pending invitation{org.invitations.length === 1 ? "" : "s"}
+            {canImpersonate && " · impersonation sessions are audited and reported to the organization"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {org.users.map((u) => (
+            <div key={u.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted/50">
+              <Avatar first={u.firstName} last={u.lastName} className="h-7 w-7 text-[10px]" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{u.firstName} {u.lastName}</p>
+                <p className="truncate text-[11px] text-muted-foreground">{u.email}</p>
+              </div>
+              <Badge tone="blue">{ROLE_LABELS[u.role]}</Badge>
+              {canImpersonate && org.status === "ACTIVE" && <ImpersonateButton userId={u.id} name={`${u.firstName} ${u.lastName}`} />}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Maintenance" };
 
 export default async function MaintenancePage() {
-  const session = await auth();
-  const organizationId = session!.user.organizationId;
+  const session = await getSession();
+  const organizationId = session!.organizationId;
 
   const [aircraft, squawks, orders] = await Promise.all([
     db.aircraft.findMany({

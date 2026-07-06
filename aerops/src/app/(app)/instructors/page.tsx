@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Instructors" };
 
 export default async function InstructorsPage() {
-  const session = await auth();
+  const session = await getSession();
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
   const instructors = await db.instructor.findMany({
-    where: { user: { organizationId: session!.user.organizationId } },
+    where: { user: { organizationId: session!.organizationId } },
     include: {
       user: true,
       students: { include: { user: { select: { firstName: true, lastName: true } } } },

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { authorize } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 import { detectConflicts, suggestAlternatives } from "@/lib/scheduling";
 
 const patchSchema = z.object({
@@ -14,11 +15,11 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error } = await authorize("schedule.edit", { mutating: true });
+  if (error) return error;
 
   const { id } = await params;
-  const existing = await db.scheduleEvent.findFirst({ where: { id, organizationId: session.user.organizationId } });
+  const existing = await db.scheduleEvent.findFirst({ where: { id, organizationId: session.organizationId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = patchSchema.safeParse(await req.json());
@@ -41,9 +42,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       excludeEventId: existing.id,
     };
     const conflicts = await detectConflicts(conflictInput);
-    if (conflicts.length > 0 && !data.force) {
-      const suggestions = await suggestAlternatives(conflictInput);
-      return NextResponse.json({ conflicts, suggestions }, { status: 409 });
+    if (conflicts.length > 0) {
+      if (!data.force) {
+        const suggestions = await suggestAlternatives(conflictInput);
+        return NextResponse.json({ conflicts, suggestions }, { status: 409 });
+      }
+      if (!session.permissions.has("schedule.override_conflicts")) {
+        return NextResponse.json({ error: "You don't have permission to override scheduling conflicts." }, { status: 403 });
+      }
     }
   }
 
@@ -58,17 +64,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
   });
 
+  await recordAudit({
+    organizationId: existing.organizationId,
+    actorUserId: session.userId,
+    actorLabel: `${session.firstName} ${session.lastName}`,
+    action: "schedule.update",
+    entityType: "ScheduleEvent",
+    entityId: id,
+    oldValue: { start: existing.start, end: existing.end, status: existing.status },
+    newValue: { start: event.start, end: event.end, status: event.status },
+  });
+
   return NextResponse.json({ event });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error } = await authorize("schedule.delete", { mutating: true });
+  if (error) return error;
 
   const { id } = await params;
-  const existing = await db.scheduleEvent.findFirst({ where: { id, organizationId: session.user.organizationId } });
+  const existing = await db.scheduleEvent.findFirst({ where: { id, organizationId: session.organizationId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await db.scheduleEvent.delete({ where: { id } });
+  await recordAudit({
+    organizationId: existing.organizationId,
+    actorUserId: session.userId,
+    actorLabel: `${session.firstName} ${session.lastName}`,
+    action: "schedule.delete",
+    entityType: "ScheduleEvent",
+    entityId: id,
+    oldValue: { start: existing.start, end: existing.end, status: existing.status },
+  });
   return NextResponse.json({ ok: true });
 }

@@ -18,22 +18,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
+        const email = parsed.data.email.toLowerCase();
 
-        const user = await db.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
-        if (!user || !user.isActive) return null;
+        const user = await db.user.findUnique({ where: { email } });
+        if (user) {
+          if (!user.isActive || user.deletedAt) return null;
+          if (!(await bcrypt.compare(parsed.data.password, user.passwordHash))) return null;
+          return {
+            id: user.id,
+            email: user.email,
+            name: `${user.firstName} ${user.lastName}`,
+            role: user.role,
+            organizationId: user.organizationId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          };
+        }
 
-        const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
-        if (!valid) return null;
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          role: user.role,
-          organizationId: user.organizationId,
-          firstName: user.firstName,
-          lastName: user.lastName,
-        };
+        // AeroOps staff sign in through the same form but live in a separate
+        // identity table — they are never members of customer organizations.
+        const platformUser = await db.platformUser.findUnique({ where: { email } });
+        if (platformUser && platformUser.isActive && (await bcrypt.compare(parsed.data.password, platformUser.passwordHash))) {
+          return {
+            id: platformUser.id,
+            email: platformUser.email,
+            name: `${platformUser.firstName} ${platformUser.lastName}`,
+            role: "SUPER_ADMIN",
+            organizationId: "",
+            platformRole: platformUser.role,
+            firstName: platformUser.firstName,
+            lastName: platformUser.lastName,
+          };
+        }
+        return null;
       },
     }),
   ],

@@ -1,27 +1,34 @@
 import { redirect } from "next/navigation";
-import { Palette, Clock, KeyRound, Bell, CreditCard, Users } from "lucide-react";
-import { auth } from "@/auth";
+import { Palette, Clock, KeyRound, Bell, CreditCard, Users, ShieldCheck, MailPlus } from "lucide-react";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { isAdmin, ROLE_LABELS } from "@/lib/rbac";
+import { ROLE_LABELS } from "@/lib/rbac";
+import { PERMISSIONS, type Permission } from "@/lib/permissions";
 import { PageHeader, Avatar } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { formatDate } from "@/lib/utils";
+import { InviteUserForm } from "./invite-form";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const session = await auth();
-  if (!isAdmin(session!.user.role)) redirect("/dashboard");
-  const organizationId = session!.user.organizationId;
+  const session = await getSession();
+  if (!session!.permissions.has("settings.manage")) redirect("/dashboard");
+  const organizationId = session!.organizationId;
 
-  const [org, users, lessonTypes, locations] = await Promise.all([
-    db.organization.findUnique({ where: { id: organizationId } }),
-    db.user.findMany({ where: { organizationId }, orderBy: [{ role: "asc" }, { lastName: "asc" }] }),
+  const [org, users, lessonTypes, locations, orgRoles, invitations, departments] = await Promise.all([
+    db.organization.findUnique({ where: { id: organizationId }, include: { plan: true } }),
+    db.user.findMany({ where: { organizationId, deletedAt: null }, orderBy: [{ role: "asc" }, { lastName: "asc" }] }),
     db.lessonType.findMany({ where: { organizationId }, orderBy: { name: "asc" } }),
     db.location.findMany({ where: { organizationId } }),
+    db.orgRole.findMany({ where: { organizationId }, orderBy: [{ isSystem: "desc" }, { name: "asc" }] }),
+    db.invitation.findMany({ where: { organizationId, acceptedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" } }),
+    db.department.findMany({ where: { organizationId }, include: { _count: { select: { users: true } } } }),
   ]);
+  const canInvite = session!.permissions.has("users.manage") && !session!.impersonation?.readOnly;
 
   return (
     <div className="animate-fade-up space-y-4">
@@ -81,7 +88,9 @@ export default async function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-1.5"><Users className="h-4 w-4" /> Users & Permissions</CardTitle>
-          <CardDescription>Role-based access controls what each user can see and do</CardDescription>
+          <CardDescription>
+            {users.length} of {org?.plan?.maxUsers ?? "∞"} seats used on the {org?.plan?.name ?? "current"} plan
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-2">
           <Table>
@@ -103,6 +112,66 @@ export default async function SettingsPage() {
               ))}
             </TBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {canInvite && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-1.5"><MailPlus className="h-4 w-4" /> Invite Users</CardTitle>
+            <CardDescription>Invitations expire after 14 days. In production the link is emailed automatically.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <InviteUserForm />
+            {invitations.length > 0 && (
+              <div className="space-y-1.5 border-t border-border pt-3">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pending invitations</p>
+                {invitations.map((inv) => (
+                  <div key={inv.id} className="flex items-center justify-between text-xs">
+                    <span className="font-medium">{inv.email}</span>
+                    <span className="text-muted-foreground">{ROLE_LABELS[inv.role]} · expires {formatDate(inv.expiresAt)} · invited by {inv.invitedBy ?? "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" /> Roles & Permissions</CardTitle>
+          <CardDescription>
+            Roles are bundles of modular permissions. System roles ship with AeroOps; custom roles can be created for your organization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {orgRoles.length === 0 && <p className="text-xs text-muted-foreground">This organization uses the built-in role defaults.</p>}
+          {orgRoles.map((r) => (
+            <div key={r.id} className="rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold">
+                  {ROLE_LABELS[r.name as keyof typeof ROLE_LABELS] ?? r.name}
+                  {r.isSystem ? <Badge tone="gray" className="ml-2">System</Badge> : <Badge tone="violet" className="ml-2">Custom</Badge>}
+                </p>
+                <p className="text-[11px] text-muted-foreground">{r.permissions.length} permissions</p>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {(r.permissions as Permission[]).slice(0, 12).map((perm) => (
+                  <span key={perm} title={PERMISSIONS[perm]} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">{perm}</span>
+                ))}
+                {r.permissions.length > 12 && <span className="text-[9px] text-muted-foreground">+{r.permissions.length - 12} more</span>}
+              </div>
+            </div>
+          ))}
+          {departments.length > 0 && (
+            <div className="border-t border-border pt-3">
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Departments</p>
+              <div className="flex flex-wrap gap-1.5">
+                {departments.map((d) => <Badge key={d.id} tone="blue">{d.name} · {d._count.users}</Badge>)}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

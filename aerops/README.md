@@ -24,6 +24,9 @@ npm run dev                   # http://localhost:3000
 
 | Role | Email |
 |---|---|
+| **Platform: Founder** | `founder@aerops.io` |
+| **Platform: Support** | `support@aerops.io` |
+| **2nd tenant admin** | `admin@blueridge.demo` |
 | School Administrator | `admin@aerops.demo` |
 | Dispatcher | `dispatch@aerops.demo` |
 | Instructor (CFI) | `sarah.cfi@aerops.demo` |
@@ -93,6 +96,38 @@ and in every API route).
   (medicals, IDs, insurance, maintenance logs); students see only their own.
 - **Settings** — branding, time zone, locations, lesson types & rates,
   user/role/MFA table, notification channels, integrations, API keys.
+
+## Platform layer (multi-tenant SaaS)
+
+AeroOps operates like Shopify/Salesforce: one deployment, many isolated
+organizations, plus a separate internal backend for AeroOps staff.
+
+- **`/platform` admin console** — platform staff (Founder, Support, Auditor…)
+  live in a separate identity table and never belong to customer orgs.
+  Dashboard (org counts, MRR, system health), organization management
+  (create via wizard, suspend/reactivate/soft-delete, plan changes), audit
+  log viewer, staff directory.
+- **Subscription plans** — Starter/Professional/Enterprise/University with
+  user/aircraft/location/storage limits and per-plan module lists. Seat
+  limits are enforced at invitation time.
+- **Feature flags** — plan grants module availability; per-org overrides
+  disable modules; navigation and section access respect both.
+- **Data-driven permissions** — a cataloged permission set
+  (`lib/permissions.ts`); roles are bundles stored per-org (`OrgRole`),
+  system roles seeded from defaults, custom roles supported. Every API
+  route authorizes through one `authorize(permission)` gate.
+- **Session layer** — `getSession()` resolves org users, platform staff,
+  and impersonation from one place; org suspension locks pages and APIs.
+- **Impersonation** — platform staff can view a workspace as any user
+  (read-only or full) via a signed, expiring cookie. A persistent banner is
+  shown, start/end are audit-logged, mutations are blocked in read-only
+  mode, and the organization is notified when the session ends.
+- **Invitations** — admins invite by email + role; recipients accept at
+  `/invite/<token>`, set a password, and land in the org. Expiring tokens,
+  seat-limit checks, duplicate protection.
+- **Audit trail** — immutable `AuditLog` (actor, org, action, old/new
+  values, IP, user agent) written by every important mutation: scheduling,
+  dispatch, payments, grounding, invitations, platform actions.
 
 ## Architecture
 

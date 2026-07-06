@@ -12,8 +12,81 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
+// Platform administration (AeroOps staff — never members of customer orgs)
+// ---------------------------------------------------------------------------
+
+enum PlatformRole {
+  FOUNDER
+  SOFTWARE_ENGINEER
+  PLATFORM_ADMIN
+  CUSTOMER_SUCCESS
+  SUPPORT_ENGINEER
+  BILLING_ADMIN
+  AUDITOR
+}
+
+model PlatformUser {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         PlatformRole
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+model SubscriptionPlan {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  priceMonthly      Decimal  @default(0) @db.Decimal(8, 2)
+  maxUsers          Int
+  maxAircraft       Int
+  maxLocations      Int
+  storageGb         Int      @default(10)
+  apiRequestsPerDay Int      @default(10000)
+  supportTier       String   @default("Standard")
+  /// Module keys available on this plan (see lib/features.ts MODULES)
+  modules           String[]
+
+  organizations Organization[]
+}
+
+/// Immutable trail of every important action, tenant and platform alike.
+model AuditLog {
+  id                  String   @id @default(cuid())
+  organizationId      String?
+  actorUserId         String?
+  actorPlatformUserId String?
+  actorLabel          String
+  action              String
+  entityType          String?
+  entityId            String?
+  oldValue            Json?
+  newValue            Json?
+  ip                  String?
+  userAgent           String?
+  createdAt           DateTime @default(now())
+
+  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actorPlatformUser PlatformUser? @relation(fields: [actorPlatformUserId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([action, createdAt])
+}
+
+// ---------------------------------------------------------------------------
 // Tenancy & identity
 // ---------------------------------------------------------------------------
+
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
 
 model Organization {
   id        String   @id @default(cuid())
@@ -22,11 +95,22 @@ model Organization {
   logoUrl   String?
   brandColor String  @default("#2563eb")
   timeZone  String   @default("America/New_York")
+  status    OrgStatus @default(ACTIVE)
+  planId    String?
+  /// Module keys switched off for this org (overrides plan availability)
+  disabledModules String[] @default([])
+  suspendedAt DateTime?
+  deletedAt   DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  plan           SubscriptionPlan? @relation(fields: [planId], references: [id])
   users          User[]
   locations      Location[]
+  departments    Department[]
+  orgRoles       OrgRole[]
+  invitations    Invitation[]
+  auditLogs      AuditLog[]
   aircraft       Aircraft[]
   lessonTypes    LessonType[]
   scheduleEvents ScheduleEvent[]
@@ -34,6 +118,58 @@ model Organization {
   notifications  Notification[]
   documents      Document[]
   syllabi        Syllabus[]
+
+  @@index([status])
+}
+
+/// Data-driven role: a named bundle of permission keys. System roles are
+/// seeded per-org from the built-in defaults; organizations may add custom
+/// roles freely. Permission keys are cataloged in lib/permissions.ts.
+model OrgRole {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  permissions    String[]
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        User[]
+  invitations  Invitation[]
+
+  @@unique([organizationId, name])
+}
+
+model Department {
+  id             String  @id @default(cuid())
+  organizationId String
+  locationId     String?
+  name           String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id])
+  users        User[]
+
+  @@unique([organizationId, name])
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  role           Role      @default(STUDENT)
+  customRoleId   String?
+  token          String    @unique
+  invitedBy      String?
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customRole   OrgRole?     @relation(fields: [customRoleId], references: [id])
+
+  @@index([organizationId])
 }
 
 enum Role {
@@ -55,13 +191,21 @@ model User {
   lastName       String
   phone          String?
   avatarUrl      String?
+  /// Built-in role (drives default permissions). A customRole overrides it.
   role           Role
+  customRoleId   String?
+  primaryLocationId String?
+  departmentId   String?
   isActive       Boolean  @default(true)
   mfaEnabled     Boolean  @default(false)
+  deletedAt      DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customRole        OrgRole?        @relation(fields: [customRoleId], references: [id])
+  primaryLocation   Location?       @relation("PrimaryLocationUsers", fields: [primaryLocationId], references: [id])
+  department        Department?     @relation(fields: [departmentId], references: [id])
   studentProfile    Student?
   instructorProfile Instructor?
   notifications     Notification[]
@@ -75,11 +219,22 @@ model Location {
   organizationId String
   name           String
   icao           String? // e.g. KPAO
+  iata           String?
   address        String?
+  phone          String?
+  email          String?
+  operatingHours String? // e.g. "Mon–Sun 07:00–20:00"
+  fuelProvider   String?
+  weatherStation String? // METAR source, e.g. KPAO
+  runwayNotes    String?
+  patternNotes   String?
+  emergencyNotes String?
   timeZone       String  @default("America/New_York")
   isActive       Boolean @default(true)
 
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departments    Department[]
+  primaryUsers   User[]          @relation("PrimaryLocationUsers")
   aircraft       Aircraft[]
   scheduleEvents ScheduleEvent[]
 

@@ -1,5 +1,5 @@
 import { FileText, ShieldCheck } from "lucide-react";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -22,12 +22,12 @@ const KIND_LABELS: Record<DocumentKind, string> = {
 };
 
 export default async function DocumentsPage() {
-  const session = await auth();
-  const isStudent = session!.user.role === "STUDENT";
+  const session = await getSession();
+  const isStudent = session!.role === "STUDENT";
   const documents = await db.document.findMany({
     where: {
-      organizationId: session!.user.organizationId,
-      ...(isStudent ? { ownerId: session!.user.id } : {}),
+      organizationId: session!.organizationId,
+      ...(isStudent ? { ownerId: session!.userId } : {}),
     },
     include: {
       owner: { select: { firstName: true, lastName: true } },

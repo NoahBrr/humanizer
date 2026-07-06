@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { authorize } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 import { detectConflicts, suggestAlternatives } from "@/lib/scheduling";
 
 const eventInclude = {
@@ -12,8 +13,8 @@ const eventInclude = {
 } as const;
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { session, error } = await authorize("schedule.view");
+  if (error) return error;
 
   const { searchParams } = new URL(req.url);
   const start = searchParams.get("start");
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
 
   const events = await db.scheduleEvent.findMany({
     where: {
-      organizationId: session.user.organizationId,
+      organizationId: session.organizationId,
       ...(start && end ? { start: { lt: new Date(end) }, end: { gt: new Date(start) } } : {}),
     },
     include: eventInclude,
@@ -45,16 +46,13 @@ const createSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role === "STUDENT" || session.user.role === "MAINTENANCE" || session.user.role === "ACCOUNTANT") {
-    return NextResponse.json({ error: "Your role cannot create bookings" }, { status: 403 });
-  }
+  const { session, error } = await authorize("schedule.create", { mutating: true });
+  if (error) return error;
 
   const body = createSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
   const data = body.data;
-  const organizationId = session.user.organizationId;
+  const organizationId = session.organizationId;
   const start = new Date(data.start);
   const end = new Date(data.end);
 
@@ -62,9 +60,14 @@ export async function POST(req: Request) {
 
   const conflictInput = { organizationId, start, end, aircraftId: data.aircraftId, instructorId: data.instructorId, studentId: data.studentId };
   const conflicts = await detectConflicts(conflictInput);
-  if (conflicts.length > 0 && !data.force) {
-    const suggestions = await suggestAlternatives(conflictInput);
-    return NextResponse.json({ conflicts, suggestions }, { status: 409 });
+  if (conflicts.length > 0) {
+    if (!data.force) {
+      const suggestions = await suggestAlternatives(conflictInput);
+      return NextResponse.json({ conflicts, suggestions }, { status: 409 });
+    }
+    if (!session.permissions.has("schedule.override_conflicts")) {
+      return NextResponse.json({ error: "You don't have permission to override scheduling conflicts." }, { status: 403 });
+    }
   }
 
   const event = await db.scheduleEvent.create({
@@ -80,6 +83,16 @@ export async function POST(req: Request) {
       notes: data.notes || null,
     },
     include: eventInclude,
+  });
+
+  await recordAudit({
+    organizationId,
+    actorUserId: session.userId,
+    actorLabel: `${session.firstName} ${session.lastName}`,
+    action: data.force && conflicts.length > 0 ? "schedule.create_override" : "schedule.create",
+    entityType: "ScheduleEvent",
+    entityId: event.id,
+    newValue: { start, end, aircraftId: event.aircraftId, instructorId: event.instructorId, studentId: event.studentId },
   });
 
   return NextResponse.json({ event }, { status: 201 });

@@ -1,35 +1,41 @@
-import type { Role } from "@prisma/client";
+import type { PlatformRole, Role } from "@prisma/client";
+import type { Permission } from "@/lib/permissions";
+import { SECTION_MODULES, type ModuleKey } from "@/lib/features";
 
 /**
- * Route-level access control. Each app section lists the roles allowed in.
- * SUPER_ADMIN and SCHOOL_ADMIN are implicitly allowed everywhere.
+ * Section-level access: each app section is gated by one permission key and
+ * (optionally) a feature module. Both are data-driven — permissions come from
+ * the user's role bundle, modules from the org's plan and overrides.
  */
-const SECTION_ACCESS: Record<string, Role[]> = {
-  "/dashboard": ["DISPATCHER", "INSTRUCTOR", "STUDENT", "MAINTENANCE", "ACCOUNTANT"],
-  "/schedule": ["DISPATCHER", "INSTRUCTOR", "STUDENT"],
-  "/dispatch": ["DISPATCHER", "INSTRUCTOR"],
-  "/aircraft": ["DISPATCHER", "INSTRUCTOR", "MAINTENANCE"],
-  "/students": ["DISPATCHER", "INSTRUCTOR"],
-  "/instructors": ["DISPATCHER"],
-  "/maintenance": ["MAINTENANCE", "DISPATCHER"],
-  "/billing": ["ACCOUNTANT"],
-  "/reports": ["ACCOUNTANT", "DISPATCHER"],
-  "/notifications": ["DISPATCHER", "INSTRUCTOR", "STUDENT", "MAINTENANCE", "ACCOUNTANT"],
-  "/documents": ["DISPATCHER", "INSTRUCTOR", "STUDENT", "MAINTENANCE", "ACCOUNTANT"],
-  "/settings": [],
+export const SECTION_PERMISSIONS: Record<string, Permission> = {
+  "/dashboard": "notifications.view", // everyone in the org
+  "/schedule": "schedule.view",
+  "/dispatch": "dispatch.release",
+  "/aircraft": "aircraft.view",
+  "/students": "students.view",
+  "/instructors": "instructors.view",
+  "/maintenance": "maintenance.view",
+  "/billing": "billing.view",
+  "/reports": "reports.view",
+  "/notifications": "notifications.view",
+  "/documents": "documents.view",
+  "/settings": "settings.manage",
 };
 
-const ADMIN_ROLES: Role[] = ["SUPER_ADMIN", "SCHOOL_ADMIN"];
-
-export function canAccess(role: Role, pathname: string): boolean {
-  if (ADMIN_ROLES.includes(role)) return true;
-  const section = Object.keys(SECTION_ACCESS).find((s) => pathname === s || pathname.startsWith(s + "/"));
-  if (!section) return true;
-  return SECTION_ACCESS[section].includes(role);
+export function canAccessSection(
+  permissions: ReadonlySet<Permission>,
+  modules: Set<ModuleKey>,
+  sectionHref: string,
+): boolean {
+  const perm = SECTION_PERMISSIONS[sectionHref];
+  if (perm && !permissions.has(perm)) return false;
+  const mod = SECTION_MODULES[sectionHref];
+  if (mod && !modules.has(mod)) return false;
+  return true;
 }
 
 export function isAdmin(role: Role) {
-  return ADMIN_ROLES.includes(role);
+  return role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -40,4 +46,14 @@ export const ROLE_LABELS: Record<Role, string> = {
   STUDENT: "Student",
   MAINTENANCE: "Maintenance",
   ACCOUNTANT: "Accountant",
+};
+
+export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
+  FOUNDER: "Founder",
+  SOFTWARE_ENGINEER: "Software Engineer",
+  PLATFORM_ADMIN: "Platform Administrator",
+  CUSTOMER_SUCCESS: "Customer Success",
+  SUPPORT_ENGINEER: "Support Engineer",
+  BILLING_ADMIN: "Billing Administrator",
+  AUDITOR: "Read-Only Auditor",
 };

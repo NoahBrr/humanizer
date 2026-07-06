@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { authorize } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
+import { logger } from "@/lib/logger";
+import { computeFlightCharges, flightTimeFromHobbs } from "@/lib/billing";
 
 const closeSchema = z.object({
   hobbsIn: z.number().positive(),
@@ -19,15 +22,12 @@ const closeSchema = z.object({
  * student's balance — one transaction.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!["SUPER_ADMIN", "SCHOOL_ADMIN", "DISPATCHER", "INSTRUCTOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { session, error } = await authorize("dispatch.close", { mutating: true });
+  if (error) return error;
 
   const { id } = await params;
   const dispatch = await db.dispatch.findFirst({
-    where: { id, aircraft: { organizationId: session.user.organizationId } },
+    where: { id, aircraft: { organizationId: session.organizationId } },
     include: { aircraft: true, instructor: true, student: true, scheduleEvent: true },
   });
   if (!dispatch) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -38,94 +38,125 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const data = body.data;
 
   const hobbsOut = Number(dispatch.hobbsOut ?? dispatch.aircraft.currentHobbs);
-  if (data.hobbsIn <= hobbsOut) {
-    return NextResponse.json({ error: `Hobbs in (${data.hobbsIn.toFixed(1)}) must exceed hobbs out (${hobbsOut.toFixed(1)})` }, { status: 400 });
+  let flightTime: number;
+  try {
+    flightTime = flightTimeFromHobbs(hobbsOut, data.hobbsIn);
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
-  const flightTime = Math.round((data.hobbsIn - hobbsOut) * 10) / 10;
+
   const isDual = !!dispatch.instructorId;
-  const cfiRate = dispatch.instructor ? Number(dispatch.instructor.hourlyRate) : 0;
-  const acRate = Number(dispatch.aircraft.hourlyRateWet);
-  const acCharge = Math.round(flightTime * acRate * 100) / 100;
-  const cfiHours = isDual ? Math.round((flightTime + 0.5) * 10) / 10 : 0; // brief/debrief padding
-  const cfiCharge = Math.round(cfiHours * cfiRate * 100) / 100;
-  const total = acCharge + cfiCharge;
+  const charges = computeFlightCharges({
+    flightTime,
+    aircraftHourlyRate: Number(dispatch.aircraft.hourlyRateWet),
+    instructorHourlyRate: dispatch.instructor ? Number(dispatch.instructor.hourlyRate) : 0,
+    isDual,
+  });
 
   const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
 
-  const [closed] = await db.$transaction([
-    db.dispatch.update({
-      where: { id },
-      data: {
-        status: "CLOSED",
-        closedAt: new Date(),
-        hobbsIn: data.hobbsIn,
-        tachIn: data.tachIn,
-        flightTime,
-        landings: data.landings,
-        nightTime: data.nightTime,
-        instrumentTime: data.instrumentTime,
-        fuelAddedGal: data.fuelAddedGal,
-        dualReceived: isDual ? flightTime : null,
-        dualGiven: isDual ? flightTime : null,
-        picTime: isDual ? null : flightTime,
-        scheduleEvent: { update: { status: "COMPLETED" } },
-      },
-    }),
-    db.aircraft.update({
-      where: { id: dispatch.aircraftId },
-      data: {
-        currentHobbs: data.hobbsIn,
-        currentTach: data.tachIn,
-        engineTimeSmoh: { increment: flightTime },
-        propTimeSpoh: { increment: flightTime },
-      },
-    }),
-    ...(dispatch.studentId
-      ? [
-          db.student.update({
-            where: { id: dispatch.studentId },
-            data: {
-              totalHours: { increment: flightTime },
-              ...(isDual ? {} : { soloHours: { increment: flightTime } }),
-              accountBalance: { decrement: total },
-            },
-          }),
-          db.invoice.create({
-            data: {
-              organizationId: session.user.organizationId,
-              studentId: dispatch.studentId,
-              number: invoiceNumber,
-              status: "OPEN",
-              dueAt: new Date(Date.now() + 14 * 86_400_000),
-              lines: {
-                create: [
-                  { kind: "AIRCRAFT_RENTAL", description: `${dispatch.aircraft.tailNumber} rental (wet) — ${flightTime.toFixed(1)} hrs`, quantity: flightTime, unitPrice: acRate },
-                  ...(isDual ? [{ kind: "INSTRUCTOR_TIME" as const, description: `Flight instruction — ${cfiHours.toFixed(1)} hrs`, quantity: cfiHours, unitPrice: cfiRate }] : []),
-                ],
+  try {
+    const [closed] = await db.$transaction([
+      db.dispatch.update({
+        where: { id },
+        data: {
+          status: "CLOSED",
+          closedAt: new Date(),
+          hobbsIn: data.hobbsIn,
+          tachIn: data.tachIn,
+          flightTime,
+          landings: data.landings,
+          nightTime: data.nightTime,
+          instrumentTime: data.instrumentTime,
+          fuelAddedGal: data.fuelAddedGal,
+          dualReceived: isDual ? flightTime : null,
+          dualGiven: isDual ? flightTime : null,
+          picTime: isDual ? null : flightTime,
+          scheduleEvent: { update: { status: "COMPLETED" } },
+        },
+      }),
+      db.aircraft.update({
+        where: { id: dispatch.aircraftId },
+        data: {
+          currentHobbs: data.hobbsIn,
+          currentTach: data.tachIn,
+          engineTimeSmoh: { increment: flightTime },
+          propTimeSpoh: { increment: flightTime },
+        },
+      }),
+      ...(dispatch.studentId
+        ? [
+            db.student.update({
+              where: { id: dispatch.studentId },
+              data: {
+                totalHours: { increment: flightTime },
+                ...(isDual ? {} : { soloHours: { increment: flightTime } }),
+                accountBalance: { decrement: charges.total },
               },
-            },
-          }),
-        ]
-      : []),
-    ...(data.squawk
-      ? [
-          db.squawk.create({
-            data: { aircraftId: dispatch.aircraftId, title: data.squawk.title, description: data.squawk.description, severity: data.squawk.severity },
-          }),
-          db.notification.create({
-            data: {
-              organizationId: session.user.organizationId,
-              kind: "SQUAWK_REPORTED",
-              title: `New squawk on ${dispatch.aircraft.tailNumber}`,
-              body: data.squawk.title,
-            },
-          }),
-          ...(data.squawk.severity === "GROUNDING"
-            ? [db.aircraft.update({ where: { id: dispatch.aircraftId }, data: { status: "GROUNDED" } })]
-            : []),
-        ]
-      : []),
-  ]);
+            }),
+            db.invoice.create({
+              data: {
+                organizationId: session.organizationId,
+                studentId: dispatch.studentId,
+                number: invoiceNumber,
+                status: "OPEN",
+                dueAt: new Date(Date.now() + 14 * 86_400_000),
+                lines: {
+                  create: [
+                    {
+                      kind: "AIRCRAFT_RENTAL",
+                      description: `${dispatch.aircraft.tailNumber} rental (wet) — ${flightTime.toFixed(1)} hrs`,
+                      quantity: flightTime,
+                      unitPrice: dispatch.aircraft.hourlyRateWet,
+                    },
+                    ...(isDual
+                      ? [{
+                          kind: "INSTRUCTOR_TIME" as const,
+                          description: `Flight instruction — ${charges.instructorHours.toFixed(1)} hrs`,
+                          quantity: charges.instructorHours,
+                          unitPrice: dispatch.instructor!.hourlyRate,
+                        }]
+                      : []),
+                  ],
+                },
+              },
+            }),
+          ]
+        : []),
+      ...(data.squawk
+        ? [
+            db.squawk.create({
+              data: { aircraftId: dispatch.aircraftId, title: data.squawk.title, description: data.squawk.description, severity: data.squawk.severity },
+            }),
+            db.notification.create({
+              data: {
+                organizationId: session.organizationId,
+                kind: "SQUAWK_REPORTED",
+                title: `New squawk on ${dispatch.aircraft.tailNumber}`,
+                body: data.squawk.title,
+              },
+            }),
+            ...(data.squawk.severity === "GROUNDING"
+              ? [db.aircraft.update({ where: { id: dispatch.aircraftId }, data: { status: "GROUNDED" } })]
+              : []),
+          ]
+        : []),
+    ]);
 
-  return NextResponse.json({ dispatch: closed, flightTime, total });
+    await recordAudit({
+      organizationId: session.organizationId,
+      actorUserId: session.userId,
+      actorLabel: `${session.firstName} ${session.lastName}`,
+      action: "dispatch.close",
+      entityType: "Dispatch",
+      entityId: id,
+      newValue: { tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: charges.total, landings: data.landings, squawk: data.squawk?.title },
+    });
+    logger.info("flight closed", { dispatchId: id, flightTime, billed: charges.total });
+
+    return NextResponse.json({ dispatch: closed, flightTime, total: charges.total });
+  } catch (e) {
+    logger.error("dispatch close failed", { dispatchId: id, error: String(e) });
+    return NextResponse.json({ error: "The closeout could not be saved. Nothing was billed — please try again." }, { status: 500 });
+  }
 }

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Receipt } from "lucide-react";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
@@ -12,10 +12,10 @@ import { PaymentForm } from "./payment-form";
 export const dynamic = "force-dynamic";
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
+  const session = await getSession();
   const { id } = await params;
   const inv = await db.invoice.findFirst({
-    where: { id, organizationId: session!.user.organizationId },
+    where: { id, organizationId: session!.organizationId },
     include: {
       organization: { select: { name: true } },
       student: { include: { user: true } },
@@ -28,7 +28,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const total = inv.lines.reduce((t, l) => t + Number(l.quantity) * Number(l.unitPrice), 0);
   const paid = inv.payments.reduce((t, p) => t + Number(p.amount), 0);
   const due = Math.max(0, total - paid);
-  const canPay = ["SUPER_ADMIN", "SCHOOL_ADMIN", "ACCOUNTANT", "DISPATCHER"].includes(session!.user.role);
+  const canPay = session!.permissions.has("billing.record_payments") && !session!.impersonation?.readOnly;
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-4">
