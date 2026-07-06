@@ -18,7 +18,8 @@ export type Conflict = {
     | "MAINTENANCE_CONFLICT"
     | "AIRCRAFT_GROUNDED"
     | "MEDICAL_EXPIRED"
-    | "INSTRUCTOR_UNAVAILABLE";
+    | "INSTRUCTOR_UNAVAILABLE"
+    | "INSTRUCTOR_CREDENTIALS_EXPIRED";
   message: string;
 };
 
@@ -73,7 +74,7 @@ export async function detectConflicts(input: ConflictInput): Promise<Conflict[]>
     instructorId
       ? db.instructor.findUnique({
           where: { id: instructorId },
-          select: { availability: true, user: { select: { firstName: true, lastName: true } } },
+          select: { availability: true, cfiExpiration: true, medicalExpiration: true, user: { select: { firstName: true, lastName: true } } },
         })
       : null,
   ]);
@@ -104,6 +105,17 @@ export async function detectConflicts(input: ConflictInput): Promise<Conflict[]>
       kind: "MEDICAL_EXPIRED",
       message: `${student.user.firstName} ${student.user.lastName}'s medical certificate expired ${student.medicalExpiration.toLocaleDateString("en-US")}.`,
     });
+  }
+
+  // Expired instructor credentials: CFI certificate or medical lapsed at flight time.
+  if (instructor) {
+    const name = `${instructor.user.firstName} ${instructor.user.lastName}`;
+    if (instructor.cfiExpiration && instructor.cfiExpiration < start) {
+      conflicts.push({ kind: "INSTRUCTOR_CREDENTIALS_EXPIRED", message: `${name}'s CFI certificate expires before this flight (${instructor.cfiExpiration.toLocaleDateString("en-US")}).` });
+    }
+    if (instructor.medicalExpiration && instructor.medicalExpiration < start) {
+      conflicts.push({ kind: "INSTRUCTOR_CREDENTIALS_EXPIRED", message: `${name}'s medical expires before this flight (${instructor.medicalExpiration.toLocaleDateString("en-US")}).` });
+    }
   }
 
   // Instructor availability windows (day-of-week + HH:MM ranges).

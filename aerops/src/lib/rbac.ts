@@ -12,6 +12,7 @@ export const SECTION_PERMISSIONS: Record<string, Permission> = {
   "/schedule": "schedule.view",
   "/dispatch": "dispatch.release",
   "/aircraft": "aircraft.view",
+  "/training": "students.manage",
   "/students": "students.view",
   "/instructors": "instructors.view",
   "/maintenance": "maintenance.view",

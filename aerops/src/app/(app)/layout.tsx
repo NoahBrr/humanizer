@@ -43,7 +43,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }),
   ]);
 
-  const allowedPaths = NAV_ITEMS.filter((i) => canAccessSection(session.permissions, session.modules, i.href)).map((i) => i.href);
+  const TRAINING_PROFILES = ["part_61", "part_141", "university"];
+  const hasTraining =
+    session.businessProfiles.length === 0 || session.businessProfiles.some((p) => TRAINING_PROFILES.includes(p));
+  const allowedPaths = NAV_ITEMS.filter(
+    (i) => canAccessSection(session.permissions, session.modules, i.href) && (i.href !== "/training" || hasTraining),
+  ).map((i) => i.href);
 
   return (
     <div className="min-h-screen">

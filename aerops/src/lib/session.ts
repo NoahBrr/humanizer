@@ -31,6 +31,7 @@ export type AppSession = {
   permissions: ReadonlySet<Permission>;
   orgStatus: OrgStatus;
   modules: Set<ModuleKey>;
+  businessProfiles: string[];
   /** Platform-staff fields */
   platformRole?: PlatformRole;
   impersonation?: { platformUserId: string; platformLabel: string; readOnly: boolean };
@@ -90,6 +91,7 @@ async function orgSessionFor(userId: string, tokenSessionVersion?: number): Prom
     role: user.role,
     permissions,
     orgStatus: user.organization.status,
+    businessProfiles: user.organization.businessProfiles,
     modules: enabledModules(
       user.organization.plan?.modules,
       user.organization.disabledModules,
@@ -134,6 +136,7 @@ export async function getSession(): Promise<AppSession | null> {
       permissions: new Set(),
       orgStatus: "ACTIVE",
       modules: new Set(),
+      businessProfiles: [],
       platformRole: raw.user.platformRole,
     };
   }
