@@ -5,11 +5,13 @@ import type { ModuleKey } from "@/lib/features";
 import type { MaintenanceStatus } from "@prisma/client";
 
 /**
- * Mission Control snapshot (Section 16A). One server-side pass over the
+ * Mission Control snapshot (Sections 16A/16B). One server-side pass over the
  * operational picture, shaped for a room-readable wall display and streamed
- * to clients over SSE. Sections are business-profile / module / permission
- * aware: a gated section comes back null and simply doesn't render, so a
- * flying club, an FBO, and a Part 141 school each see their own wall.
+ * to clients over SSE. Every widget renders from this single snapshot — no
+ * widget polls the database independently (the Section 16B contract).
+ * Sections are business-profile / module / permission aware: a gated section
+ * comes back null and simply doesn't render, so a flying club, an FBO, and a
+ * Part 141 school each see their own wall.
  */
 export type MissionControlSnapshot = {
   at: string;
@@ -22,18 +24,63 @@ export type MissionControlSnapshot = {
     flightsToday: number;
     unreadAlerts: number;
   };
+  kpi: {
+    flightsToday: number;
+    completedToday: number;
+    enrolledStudents: number;
+    airworthy: number;
+    totalAircraft: number;
+    openSquawks: number;
+    newLeads7d: number;
+    /** null when the viewer lacks billing.view */
+    revenueToday: number | null;
+    revenueMtd: number | null;
+  };
   ops: {
     active: OpsFlight[];
     upcoming: OpsFlight[];
     completed: number;
     cancelled: number;
   } | null;
-  fleet: { tail: string; model: string; status: string; score: number; rating: string; hobbs: number }[];
+  fleet: FleetCard[];
+  weather: AirportWeather[];
   maintenance: { backlog: number; inShop: number; lowStock: { partNumber: string; quantity: number; minQuantity: number }[]; awaitingInspection: number } | null;
   training: { enrolled: number; checkrides: { student: string; rating: string; date: string; status: string }[] } | null;
-  finance: { overdueTotal: number; paymentsMtd: number; openInvoices: number } | null;
+  cfi: { instructors: { name: string; cfiDays: number | null; medicalDays: number | null; hours7d: number }[] } | null;
+  crm: { newLeads7d: number; followUpsDue: number; pipelineValue: number; openLeads: number } | null;
+  finance: { overdueTotal: number; paymentsMtd: number; paymentsToday: number; openInvoices: number } | null;
   alerts: { id: string; title: string; body: string | null; kind: string; createdAt: string; critical: boolean; unread: boolean }[];
   insights: Insight[];
+};
+
+export type FleetCard = {
+  tail: string;
+  model: string;
+  status: string;
+  score: number;
+  rating: string;
+  hobbs: number;
+  tach: number;
+  openSquawks: number;
+  /** hours until the tightest hour-based inspection, null if none tracked */
+  hoursToInspection: number | null;
+  /** next SCHEDULED flight today, e.g. "14:00 · T. Nguyen" */
+  nextFlight: string | null;
+  todayFlights: number;
+};
+
+export type AirportWeather = {
+  icao: string;
+  name: string;
+  category: "VFR" | "MVFR" | "IFR";
+  windDir: number;
+  windKt: number;
+  gustKt: number | null;
+  visibilitySm: number;
+  ceilingFt: number | null;
+  tempC: number;
+  densityAltFt: number;
+  risks: string[];
 };
 
 export type OpsFlight = {
@@ -50,22 +97,27 @@ export type OpsFlight = {
 const CRITICAL_KINDS = new Set(["AIRCRAFT_GROUNDED", "WEATHER_CANCELLATION", "MAINTENANCE_DUE"]);
 const ACTIVE_WO: MaintenanceStatus[] = ["OPEN", "SCHEDULED", "ASSIGNED", "WAITING_PARTS", "IN_PROGRESS", "AWAITING_INSPECTION", "APPROVED", "RETURN_TO_SERVICE"];
 
-export async function buildMissionControlSnapshot(opts: {
+export type SnapshotOptions = {
   organizationId: string;
   modules: Set<ModuleKey>;
   businessProfiles: string[];
   canSeeFinance: boolean;
-}): Promise<MissionControlSnapshot> {
+  canSeeCrm: boolean;
+  canSeeCfi: boolean;
+};
+
+export async function buildMissionControlSnapshot(opts: SnapshotOptions): Promise<MissionControlSnapshot> {
   const { organizationId } = opts;
   const now = new Date();
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(now); dayEnd.setHours(23, 59, 59, 999);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
   const isTrainingOrg = opts.businessProfiles.some((p) => p === "part_61" || p === "part_141");
   const hasMaintenance = opts.modules.has("maintenance");
   const hasBilling = opts.modules.has("billing");
 
-  const [org, aircraft, events, notifications, insights] = await Promise.all([
+  const [org, aircraft, events, notifications, insights, locations, enrolledStudents, leadStats] = await Promise.all([
     db.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
     db.aircraft.findMany({
       where: { organizationId, isSimulator: false, status: { not: "RETIRED" } },
@@ -93,18 +145,20 @@ export async function buildMissionControlSnapshot(opts: {
       take: 12,
     }),
     generateInsights(organizationId),
+    db.location.findMany({ where: { organizationId, isActive: true }, select: { icao: true, name: true }, orderBy: { name: "asc" } }),
+    db.student.count({ where: { user: { organizationId, isActive: true }, status: "ENROLLED" } }),
+    db.lead.findMany({
+      where: { organizationId, status: { notIn: ["ENROLLED", "LOST"] } },
+      select: { estValue: true, nextFollowUp: true, createdAt: true },
+    }),
   ]);
 
-  const [maintenance, training, finance] = await Promise.all([
+  const [maintenance, training, finance, cfi] = await Promise.all([
     hasMaintenance ? maintenanceSection(organizationId) : Promise.resolve(null),
     isTrainingOrg ? trainingSection(organizationId, now) : Promise.resolve(null),
-    opts.canSeeFinance && hasBilling ? financeSection(organizationId, monthStart) : Promise.resolve(null),
+    opts.canSeeFinance && hasBilling ? financeSection(organizationId, monthStart, dayStart) : Promise.resolve(null),
+    opts.canSeeCfi && isTrainingOrg ? cfiSection(organizationId, now) : Promise.resolve(null),
   ]);
-
-  const fleet = aircraft.map((a) => {
-    const health = fleetHealthOf(a, a.components, a.squawks, a.maintenance);
-    return { tail: a.tailNumber, model: a.aircraftType.model, status: a.status, score: health.score, rating: health.rating, hobbs: Number(a.currentHobbs) };
-  });
 
   const toOps = (e: (typeof events)[number]): OpsFlight => ({
     id: e.id,
@@ -120,6 +174,34 @@ export async function buildMissionControlSnapshot(opts: {
   const active = events.filter((e) => ["DISPATCHED", "IN_FLIGHT"].includes(e.status)).map(toOps);
   const upcoming = events.filter((e) => e.status === "SCHEDULED" && e.end >= now).map(toOps).slice(0, 8);
 
+  const fleet: FleetCard[] = aircraft.map((a) => {
+    const health = fleetHealthOf(a, a.components, a.squawks, a.maintenance);
+    const hobbs = Number(a.currentHobbs);
+    const hourMargins = a.components
+      .filter((c) => c.dueAtHours !== null && c.dueAtHours !== undefined)
+      .map((c) => Number(c.dueAtHours) - hobbs);
+    const todays = events.filter((e) => e.aircraft?.tailNumber === a.tailNumber && !["CANCELLED", "WEATHER_CANCELLED", "NO_SHOW"].includes(e.status));
+    const next = todays.find((e) => e.status === "SCHEDULED" && e.end >= now);
+    return {
+      tail: a.tailNumber,
+      model: a.aircraftType.model,
+      status: a.status,
+      score: health.score,
+      rating: health.rating,
+      hobbs,
+      tach: Number(a.currentTach),
+      openSquawks: a.squawks.length,
+      hoursToInspection: hourMargins.length ? Math.min(...hourMargins) : null,
+      nextFlight: next
+        ? `${next.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${next.student ? `${next.student.user.firstName[0]}. ${next.student.user.lastName}` : "Open"}`
+        : null,
+      todayFlights: todays.length,
+    };
+  });
+
+  const flightsToday = events.filter((e) => !["CANCELLED", "WEATHER_CANCELLED", "NO_SHOW"].includes(e.status)).length;
+  const completedToday = events.filter((e) => e.status === "COMPLETED").length;
+
   return {
     at: now.toISOString(),
     organization: org?.name ?? "",
@@ -128,20 +210,41 @@ export async function buildMissionControlSnapshot(opts: {
       aircraftAvailable: aircraft.filter((a) => a.status === "AVAILABLE").length,
       aircraftFlying: active.length,
       aircraftGrounded: aircraft.filter((a) => ["GROUNDED", "IN_MAINTENANCE"].includes(a.status)).length,
-      flightsToday: events.filter((e) => !["CANCELLED", "WEATHER_CANCELLED", "NO_SHOW"].includes(e.status)).length,
+      flightsToday,
       unreadAlerts: notifications.filter((n) => !n.isRead).length,
+    },
+    kpi: {
+      flightsToday,
+      completedToday,
+      enrolledStudents,
+      airworthy: fleet.filter((f) => !["GROUNDED", "IN_MAINTENANCE", "RETIRED"].includes(f.status)).length,
+      totalAircraft: fleet.length,
+      openSquawks: fleet.reduce((t, f) => t + f.openSquawks, 0),
+      newLeads7d: leadStats.filter((l) => l.createdAt >= weekAgo).length,
+      revenueToday: finance ? finance.paymentsToday : null,
+      revenueMtd: finance ? finance.paymentsMtd : null,
     },
     ops: opts.modules.has("scheduling")
       ? {
           active,
           upcoming,
-          completed: events.filter((e) => e.status === "COMPLETED").length,
+          completed: completedToday,
           cancelled: events.filter((e) => ["CANCELLED", "WEATHER_CANCELLED", "NO_SHOW"].includes(e.status)).length,
         }
       : null,
     fleet,
+    weather: locations.map((l) => airportWeather(l.icao ?? l.name.slice(0, 4).toUpperCase(), l.name, now)),
     maintenance,
     training,
+    cfi,
+    crm: opts.canSeeCrm
+      ? {
+          newLeads7d: leadStats.filter((l) => l.createdAt >= weekAgo).length,
+          followUpsDue: leadStats.filter((l) => l.nextFollowUp && l.nextFollowUp <= now).length,
+          pipelineValue: leadStats.reduce((t, l) => t + Number(l.estValue ?? 0), 0),
+          openLeads: leadStats.length,
+        }
+      : null,
     finance,
     alerts: notifications.map((n) => ({
       id: n.id,
@@ -154,6 +257,40 @@ export async function buildMissionControlSnapshot(opts: {
     })),
     insights: insights.slice(0, 4),
   };
+}
+
+/**
+ * Deterministic demo weather, stable per airport per hour. This is the seam
+ * where live METAR/TAF feeds (Aviation Weather API) connect in production —
+ * the shape and risk flags are what Mission Control consumes either way.
+ */
+function airportWeather(icao: string, name: string, now: Date): AirportWeather {
+  let h = 0;
+  const seedStr = `${icao}-${now.getUTCHours()}`;
+  for (const c of seedStr) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const pick = (mod: number, off = 0) => ((h = (h * 1103515245 + 12345) >>> 0) % mod) + off;
+
+  const windDir = pick(36) * 10;
+  const windKt = pick(18, 3);
+  const gustKt = windKt > 14 ? windKt + pick(8, 4) : null;
+  const ceilingRoll = pick(10);
+  const ceilingFt = ceilingRoll < 2 ? 800 + pick(4) * 100 : ceilingRoll < 4 ? 1500 + pick(15) * 100 : ceilingRoll < 7 ? 4500 + pick(50) * 100 : null;
+  const visibilitySm = ceilingFt && ceilingFt < 1000 ? pick(3, 1) : 10;
+  const tempC = pick(14, 12);
+  const densityAltFt = Math.round(tempC * 120 + pick(400));
+
+  const category: AirportWeather["category"] =
+    (ceilingFt !== null && ceilingFt < 1000) || visibilitySm < 3 ? "IFR"
+    : (ceilingFt !== null && ceilingFt < 3000) || visibilitySm < 5 ? "MVFR"
+    : "VFR";
+
+  const risks: string[] = [];
+  if (category === "IFR") risks.push("Below VFR minimums — student solos blocked");
+  else if (category === "MVFR") risks.push("Marginal VFR — review student cross-countries");
+  if (windKt >= 15) risks.push(`Strong winds ${windKt}${gustKt ? `G${gustKt}` : ""} kt — check student crosswind limits`);
+  if (densityAltFt > 2500) risks.push(`Density altitude ${densityAltFt.toLocaleString()} ft — expect degraded climb`);
+
+  return { icao, name, category, windDir, windKt, gustKt, visibilitySm, ceilingFt, tempC, densityAltFt, risks };
 }
 
 async function maintenanceSection(organizationId: string) {
@@ -191,13 +328,35 @@ async function trainingSection(organizationId: string, now: Date) {
   };
 }
 
-async function financeSection(organizationId: string, monthStart: Date) {
+async function cfiSection(organizationId: string, now: Date) {
+  const instructors = await db.instructor.findMany({
+    where: { user: { organizationId, isActive: true } },
+    include: {
+      user: { select: { firstName: true, lastName: true } },
+      scheduleEvents: {
+        where: { start: { gte: now, lte: new Date(now.getTime() + 7 * 86_400_000) }, status: "SCHEDULED" },
+        select: { start: true, end: true },
+      },
+    },
+  });
+  const days = (d: Date | null) => (d ? Math.ceil((d.getTime() - now.getTime()) / 86_400_000) : null);
+  return {
+    instructors: instructors.map((i) => ({
+      name: `${i.user.firstName} ${i.user.lastName}`,
+      cfiDays: days(i.cfiExpiration),
+      medicalDays: days(i.medicalExpiration),
+      hours7d: i.scheduleEvents.reduce((t, e) => t + (e.end.getTime() - e.start.getTime()) / 3_600_000, 0),
+    })),
+  };
+}
+
+async function financeSection(organizationId: string, monthStart: Date, dayStart: Date) {
   const [invoices, payments] = await Promise.all([
     db.invoice.findMany({
       where: { organizationId, status: { in: ["OPEN", "PARTIALLY_PAID", "OVERDUE"] } },
       include: { lines: true, payments: true },
     }),
-    db.payment.findMany({ where: { invoice: { organizationId }, paidAt: { gte: monthStart } }, select: { amount: true } }),
+    db.payment.findMany({ where: { invoice: { organizationId }, paidAt: { gte: monthStart } }, select: { amount: true, paidAt: true } }),
   ]);
   const now = Date.now();
   const overdueTotal = invoices
@@ -210,6 +369,7 @@ async function financeSection(organizationId: string, monthStart: Date) {
   return {
     overdueTotal,
     paymentsMtd: payments.reduce((t, p) => t + Number(p.amount), 0),
+    paymentsToday: payments.filter((p) => p.paidAt >= dayStart).reduce((t, p) => t + Number(p.amount), 0),
     openInvoices: invoices.length,
   };
 }

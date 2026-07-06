@@ -21,6 +21,8 @@ export async function GET(req: Request) {
     modules: session.modules,
     businessProfiles: session.businessProfiles,
     canSeeFinance: session.permissions.has("billing.view"),
+    canSeeCrm: session.permissions.has("students.manage"),
+    canSeeCfi: session.permissions.has("instructors.view"),
   };
 
   const encoder = new TextEncoder();
