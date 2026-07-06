@@ -13,7 +13,7 @@ export const authConfig = {
       const isAuthed = !!auth?.user;
       const { pathname } = request.nextUrl;
       const isPublic =
-        pathname === "/sign-in" || pathname === "/" || pathname.startsWith("/invite/") || pathname === "/api/invitations/accept";
+        pathname === "/sign-in" || pathname === "/" || pathname.startsWith("/invite/") || pathname === "/api/invitations/accept" || pathname === "/request-flight" || (pathname === "/api/leads" && request.method === "POST");
       if (isPublic) return true;
       return isAuthed;
     },

@@ -404,6 +404,17 @@ async function main() {
     },
   });
 
+  // --- CRM leads --------------------------------------------------------------
+  await db.lead.createMany({
+    data: [
+      { organizationId: org.id, name: "Chris Alvarez", email: "chris.a@example.com", phone: "650-555-0142", source: "website", interest: "Private Pilot", status: "NEW", estValue: 14000, priority: 2, nextFollowUp: day(0, 12) },
+      { organizationId: org.id, name: "Dana Whitmore", email: "dana.w@example.com", source: "google", interest: "Discovery flight", status: "CONTACTED", estValue: 250, priority: 3, nextFollowUp: day(1, 10) },
+      { organizationId: org.id, name: "Pat Okafor", email: "pat.o@example.com", source: "referral", interest: "Instrument Rating", status: "DISCOVERY_SCHEDULED", estValue: 9000, priority: 1, nextFollowUp: day(2, 9) },
+      { organizationId: org.id, name: "Kim Nakamura", email: "kim.n@example.com", source: "airshow", interest: "Private Pilot", status: "DISCOVERY_COMPLETED", estValue: 14000, priority: 1, notes: "Loved the flight — ready to enroll, asked about financing.", nextFollowUp: day(-1, 15) },
+      { organizationId: org.id, name: "Lee Fontaine", email: "lee.f@example.com", source: "facebook", interest: "Discovery flight", status: "LOST", priority: 4 },
+    ],
+  });
+
   // --- Lesson requests & waitlist ------------------------------------------
   await db.lessonRequest.create({
     data: {

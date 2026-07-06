@@ -1001,3 +1001,36 @@ model WaitlistEntry {
 
   @@index([organizationId, date])
 }
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  DISCOVERY_SCHEDULED
+  DISCOVERY_COMPLETED
+  APPLICATION
+  ENROLLED
+  LOST
+}
+
+/// CRM lead — every prospective customer, from web form to enrollment.
+model Lead {
+  id             String     @id @default(cuid())
+  organizationId String
+  name           String
+  email          String
+  phone          String?
+  source         String     @default("website")
+  interest       String? // Private Pilot, membership, rental...
+  status         LeadStatus @default(NEW)
+  estValue       Decimal?   @db.Decimal(10, 2)
+  priority       Int        @default(3) // 1 high … 5 low
+  assignedTo     String?
+  notes          String?
+  nextFollowUp   DateTime?
+  convertedAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, nextFollowUp])
+}
