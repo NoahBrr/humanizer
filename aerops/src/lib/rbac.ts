@@ -9,6 +9,7 @@ import { SECTION_MODULES, type ModuleKey } from "@/lib/features";
  */
 export const SECTION_PERMISSIONS: Record<string, Permission> = {
   "/dashboard": "notifications.view", // everyone in the org
+  "/intelligence": "students.view",
   "/schedule": "schedule.view",
   "/operations": "dispatch.release",
   "/dispatch": "dispatch.release",
