@@ -5,6 +5,7 @@ import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import { computeFlightCharges, flightTimeFromHobbs } from "@/lib/billing";
+import { runMaintenanceForecast } from "@/lib/automations";
 
 const closeSchema = z.object({
   hobbsIn: z.number().positive(),
@@ -153,6 +154,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       newValue: { tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: charges.total, landings: data.landings, squawk: data.squawk?.title },
     });
     logger.info("flight closed", { dispatchId: id, flightTime, billed: charges.total });
+
+    // Workflow automation: flight.closed → maintenance forecast.
+    await runMaintenanceForecast(session.organizationId, dispatch.aircraftId);
 
     return NextResponse.json({ dispatch: closed, flightTime, total: charges.total });
   } catch (e) {

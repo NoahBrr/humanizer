@@ -55,6 +55,7 @@ async function main() {
       brandColor: "#2563eb",
       timeZone: "America/Los_Angeles",
       planId: professional.id,
+      businessProfiles: ["part_141", "part_61", "aircraft_rental", "discovery_flights"],
       orgRoles: {
         create: [
           ...systemRoles,
@@ -447,6 +448,7 @@ async function main() {
       brandColor: "#0891b2",
       timeZone: "America/New_York",
       planId: starter.id,
+      businessProfiles: ["flying_club", "aircraft_rental"],
       orgRoles: { create: systemRoles },
       locations: { create: { name: "Asheville Regional", icao: "KAVL", timeZone: "America/New_York" } },
     },

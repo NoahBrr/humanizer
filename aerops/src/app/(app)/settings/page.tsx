@@ -10,6 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
 import { InviteUserForm } from "./invite-form";
+import { ModuleManager } from "./module-manager";
+import { BUSINESS_PROFILES } from "@/lib/business-profiles";
+import { AUTOMATIONS } from "@/lib/automations";
+import { MODULES, CORE_MODULES } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings" };
@@ -118,6 +122,26 @@ export default async function SettingsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <ModuleManager
+        readOnly={!!session!.impersonation?.readOnly}
+        enabledModules={[...session!.modules]}
+        moduleLabels={MODULES}
+        profiles={Object.entries(BUSINESS_PROFILES).map(([key, p]) => ({
+          key,
+          label: p.label,
+          modules: [...p.modules],
+          active: (org?.businessProfiles ?? []).includes(key),
+          inPlan: p.modules.every((m) => (org?.plan?.modules ?? []).includes(m) || (CORE_MODULES as string[]).includes(m)),
+        }))}
+        automations={Object.entries(AUTOMATIONS).map(([key, a]) => ({
+          key,
+          label: a.label,
+          description: a.description,
+          trigger: a.trigger,
+          enabled: !(org?.disabledAutomations ?? []).includes(key),
+        }))}
+      />
 
       {canInvite && (
         <Card>

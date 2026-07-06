@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { permissionsForRole, type Permission } from "@/lib/permissions";
 import { enabledModules, type ModuleKey } from "@/lib/features";
+import { modulesForProfiles } from "@/lib/business-profiles";
 
 export const IMPERSONATION_COOKIE = "aerops-impersonation";
 const IMPERSONATION_TTL_MS = 60 * 60 * 1000;
@@ -71,7 +72,7 @@ async function orgSessionFor(userId: string, tokenSessionVersion?: number): Prom
     where: { id: userId },
     include: {
       customRole: { select: { permissions: true } },
-      organization: { select: { id: true, status: true, disabledModules: true, plan: { select: { modules: true } } } },
+      organization: { select: { id: true, status: true, disabledModules: true, businessProfiles: true, plan: { select: { modules: true } } } },
     },
   });
   if (!user || !user.isActive || user.deletedAt) return null;
@@ -89,7 +90,11 @@ async function orgSessionFor(userId: string, tokenSessionVersion?: number): Prom
     role: user.role,
     permissions,
     orgStatus: user.organization.status,
-    modules: enabledModules(user.organization.plan?.modules, user.organization.disabledModules),
+    modules: enabledModules(
+      user.organization.plan?.modules,
+      user.organization.disabledModules,
+      modulesForProfiles(user.organization.businessProfiles),
+    ),
   };
 }
 
@@ -161,6 +166,18 @@ export async function authorize(permission: Permission | null, opts: { mutating?
   }
   if (permission && !session.permissions.has(permission)) {
     return { error: NextResponse.json({ error: "You don't have permission for this action. Ask an administrator to grant it." }, { status: 403 }) };
+  }
+  // Module gating: the permission's namespace maps to a feature module; if
+  // the org hasn't installed it (plan/profile), the API is off too — module
+  // access is enforced here, not just hidden in navigation.
+  if (permission) {
+    const MODULE_BY_PREFIX: Record<string, ModuleKey> = {
+      billing: "billing", maintenance: "maintenance", reports: "reports", documents: "documents",
+    };
+    const mod = MODULE_BY_PREFIX[permission.split(".")[0]];
+    if (mod && !session.modules.has(mod)) {
+      return { error: NextResponse.json({ error: "This module isn't enabled for your organization. An owner can activate it in Settings → Business Profiles." }, { status: 403 }) };
+    }
   }
   return { session };
 }

@@ -21,8 +21,14 @@ export type ModuleKey = keyof typeof MODULES;
 
 export const CORE_MODULES: ModuleKey[] = ["scheduling", "dispatch"];
 
-export function enabledModules(planModules: string[] | undefined, disabledModules: string[]): Set<ModuleKey> {
+export function enabledModules(planModules: string[] | undefined, disabledModules: string[], profileModules?: Set<string> | null): Set<ModuleKey> {
   const available = new Set<string>([...CORE_MODULES, ...(planModules ?? Object.keys(MODULES))]);
+  // Business profiles narrow the plan to what the org actually does.
+  if (profileModules) {
+    for (const m of [...available]) {
+      if (!profileModules.has(m) && !CORE_MODULES.includes(m as ModuleKey)) available.delete(m);
+    }
+  }
   for (const d of disabledModules) {
     if (!CORE_MODULES.includes(d as ModuleKey)) available.delete(d);
   }

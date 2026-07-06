@@ -104,6 +104,10 @@ model Organization {
   planId    String?
   /// Module keys switched off for this org (overrides plan availability)
   disabledModules String[] @default([])
+  /// Activated business activities (see lib/business-profiles.ts). Empty = all plan modules.
+  businessProfiles String[] @default([])
+  /// Built-in automation keys the org has switched off (see lib/automations.ts)
+  disabledAutomations String[] @default([])
   suspendedAt DateTime?
   deletedAt   DateTime?
   createdAt DateTime @default(now())
