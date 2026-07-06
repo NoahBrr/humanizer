@@ -74,7 +74,8 @@ async function main() {
   const mkUser = (email: string, first: string, last: string, role: Role, phone?: string) =>
     db.user.create({ data: { organizationId: org.id, email, passwordHash: password, firstName: first, lastName: last, role, phone } });
 
-  await mkUser("admin@aerops.demo", "Alex", "Morgan", Role.SCHOOL_ADMIN, "650-555-0100");
+  const ggAdmin = await mkUser("admin@aerops.demo", "Alex", "Morgan", Role.SCHOOL_ADMIN, "650-555-0100");
+  await db.organization.update({ where: { id: org.id }, data: { ownerId: ggAdmin.id } });
   await mkUser("dispatch@aerops.demo", "Dana", "Reyes", Role.DISPATCHER, "650-555-0101");
   await mkUser("maintenance@aerops.demo", "Miguel", "Ortiz", Role.MAINTENANCE, "650-555-0102");
   await mkUser("accounting@aerops.demo", "Priya", "Shah", Role.ACCOUNTANT, "650-555-0103");
@@ -415,6 +416,7 @@ async function main() {
   const brAdmin = await db.user.create({
     data: { organizationId: blueRidge.id, email: "admin@blueridge.demo", passwordHash: password, firstName: "Casey", lastName: "Turner", role: Role.SCHOOL_ADMIN },
   });
+  await db.organization.update({ where: { id: blueRidge.id }, data: { ownerId: brAdmin.id } });
   const brCfiUser = await db.user.create({
     data: { organizationId: blueRidge.id, email: "cfi@blueridge.demo", passwordHash: password, firstName: "Morgan", lastName: "Lee", role: Role.INSTRUCTOR },
   });

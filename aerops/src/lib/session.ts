@@ -66,7 +66,7 @@ export function impersonationTtlMs() {
 
 // --- Session resolution ------------------------------------------------------
 
-async function orgSessionFor(userId: string): Promise<Omit<AppSession, "kind" | "platformRole" | "impersonation"> | null> {
+async function orgSessionFor(userId: string, tokenSessionVersion?: number): Promise<Omit<AppSession, "kind" | "platformRole" | "impersonation"> | null> {
   const user = await db.user.findUnique({
     where: { id: userId },
     include: {
@@ -75,6 +75,8 @@ async function orgSessionFor(userId: string): Promise<Omit<AppSession, "kind" | 
     },
   });
   if (!user || !user.isActive || user.deletedAt) return null;
+  // "Log out all devices" bumps sessionVersion; stale JWTs die here.
+  if (tokenSessionVersion !== undefined && user.sessionVersion !== tokenSessionVersion) return null;
   const permissions = user.customRole
     ? (new Set(user.customRole.permissions as Permission[]) as ReadonlySet<Permission>)
     : permissionsForRole(user.role);
@@ -131,7 +133,7 @@ export async function getSession(): Promise<AppSession | null> {
     };
   }
 
-  const org = await orgSessionFor(raw.user.id);
+  const org = await orgSessionFor(raw.user.id, raw.user.sessionVersion);
   if (!org) return null;
   return { kind: "org", ...org };
 }

@@ -23,6 +23,7 @@ export const authConfig = {
         token.role = user.role;
         token.organizationId = user.organizationId;
         token.platformRole = user.platformRole;
+        token.sessionVersion = user.sessionVersion;
         token.firstName = user.firstName;
         token.lastName = user.lastName;
       }
@@ -34,6 +35,7 @@ export const authConfig = {
         session.user.role = token.role as import("@prisma/client").Role;
         session.user.organizationId = token.organizationId as string;
         session.user.platformRole = token.platformRole as import("@prisma/client").PlatformRole | undefined;
+        session.user.sessionVersion = (token.sessionVersion as number | undefined) ?? 0;
         session.user.firstName = token.firstName as string;
         session.user.lastName = token.lastName as string;
       }

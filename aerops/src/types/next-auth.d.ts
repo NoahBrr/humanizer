@@ -6,6 +6,7 @@ declare module "next-auth" {
     role: Role;
     organizationId: string;
     platformRole?: PlatformRole;
+    sessionVersion?: number;
     firstName: string;
     lastName: string;
   }
@@ -16,6 +17,7 @@ declare module "next-auth" {
       role: Role;
       organizationId: string;
       platformRole?: PlatformRole;
+      sessionVersion?: number;
       firstName: string;
       lastName: string;
     } & DefaultSession["user"];
@@ -28,6 +30,7 @@ declare module "next-auth/jwt" {
     role?: Role;
     organizationId?: string;
     platformRole?: PlatformRole;
+    sessionVersion?: number;
     firstName?: string;
     lastName?: string;
   }

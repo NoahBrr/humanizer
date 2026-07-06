@@ -21,6 +21,8 @@ function SignInForm() {
   const params = useSearchParams();
   const [email, setEmail] = useState("admin@aerops.demo");
   const [password, setPassword] = useState("demo1234");
+  const [totp, setTotp] = useState("");
+  const [mfaStep, setMfaStep] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,14 +30,34 @@ function SignInForm() {
     e?.preventDefault();
     setLoading(true);
     setError(null);
+    const effectiveEmail = overrideEmail ?? email;
+    const effectivePassword = overrideEmail ? "demo1234" : password;
+
+    // Pre-flight: is a second factor required for this account?
+    if (!mfaStep) {
+      const check = await fetch("/api/auth/mfa-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: effectiveEmail, password: effectivePassword }),
+      }).then((r) => r.json()).catch(() => ({ ok: false }));
+      if (check.ok && check.mfaRequired) {
+        setEmail(effectiveEmail);
+        setPassword(effectivePassword);
+        setMfaStep(true);
+        setLoading(false);
+        return;
+      }
+    }
+
     const res = await signIn("credentials", {
-      email: overrideEmail ?? email,
-      password: overrideEmail ? "demo1234" : password,
+      email: effectiveEmail,
+      password: effectivePassword,
+      totp: totp || undefined,
       redirect: false,
     });
     setLoading(false);
     if (res?.error) {
-      setError("Invalid email or password.");
+      setError(mfaStep ? "That code didn't match — try again." : "Invalid email or password.");
     } else {
       router.push(params.get("callbackUrl") ?? "/dashboard");
       router.refresh();
@@ -64,11 +86,27 @@ function SignInForm() {
             <Label htmlFor="password">Password</Label>
             <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
           </div>
+          {mfaStep && (
+            <div className="space-y-1.5">
+              <Label htmlFor="totp">Authenticator code</Label>
+              <Input
+                id="totp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123 456"
+                value={totp}
+                onChange={(e) => setTotp(e.target.value)}
+                autoFocus
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">Two-factor authentication is enabled for this account.</p>
+            </div>
+          )}
           {error && <p className="text-xs font-medium text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />} Sign in
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />} {mfaStep ? "Verify & sign in" : "Sign in"}
           </Button>
-          <p className="text-center text-[11px] text-muted-foreground">Forgot password and MFA enrollment are handled by your school administrator.</p>
+          <p className="text-center text-[11px] text-muted-foreground">MFA enrollment and password changes live in Settings → Security once signed in.</p>
         </form>
 
         <div className="mt-6">

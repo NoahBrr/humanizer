@@ -65,8 +65,8 @@ export function AcceptInviteForm({ token, orgName, email, roleLabel }: { token: 
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="pw">Choose a password</Label>
-            <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
-            <p className="text-[11px] text-muted-foreground">At least 8 characters.</p>
+            <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={12} required />
+            <p className="text-[11px] text-muted-foreground">At least 12 characters with upper/lowercase, a number, and a symbol.</p>
           </div>
           {error && <p className="text-xs font-medium text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={busy}>

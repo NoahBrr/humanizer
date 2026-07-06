@@ -4,19 +4,26 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { recordAudit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
+import { validatePassword } from "@/lib/password";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const acceptSchema = z.object({
   token: z.string().min(10),
   firstName: z.string().min(1).max(60),
   lastName: z.string().min(1).max(60),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string(),
 });
 
 /** Public endpoint: redeem an invitation token and create the account. */
 export async function POST(req: Request) {
+  const limited = rateLimit(`invite-accept:${clientIp(req)}`, 8, 60_000);
+  if (!limited.allowed) return NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
+
   const body = acceptSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   const data = body.data;
+  const policy = validatePassword(data.password);
+  if (!policy.ok) return NextResponse.json({ error: policy.error }, { status: 400 });
 
   const invitation = await db.invitation.findUnique({
     where: { token: data.token },

@@ -33,6 +33,9 @@ model PlatformUser {
   lastName     String
   role         PlatformRole
   isActive     Boolean      @default(true)
+  mfaEnabled   Boolean      @default(false)
+  mfaSecret    String?
+  sessionVersion Int        @default(0)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -96,6 +99,8 @@ model Organization {
   brandColor String  @default("#2563eb")
   timeZone  String   @default("America/New_York")
   status    OrgStatus @default(ACTIVE)
+  /// Primary Owner (a User id). Transfer requires dual confirmation + audit.
+  ownerId   String?
   planId    String?
   /// Module keys switched off for this org (overrides plan availability)
   disabledModules String[] @default([])
@@ -198,6 +203,9 @@ model User {
   departmentId   String?
   isActive       Boolean  @default(true)
   mfaEnabled     Boolean  @default(false)
+  mfaSecret      String?
+  /// Incremented to invalidate every outstanding JWT ("log out all devices").
+  sessionVersion Int      @default(0)
   deletedAt      DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -869,4 +877,21 @@ model Document {
 
   @@index([organizationId, kind])
   @@index([ownerId])
+}
+
+/// Every sign-in attempt, successful or not — feeds the security dashboard.
+model LoginEvent {
+  id             String   @id @default(cuid())
+  email          String
+  userId         String?
+  organizationId String?
+  platformUserId String?
+  success        Boolean
+  reason         String? // bad_password, mfa_failed, ok, ...
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([email, createdAt])
 }
