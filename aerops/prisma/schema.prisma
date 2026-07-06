@@ -272,9 +272,28 @@ enum TrainingPart {
   PART_141
 }
 
+enum StudentStatus {
+  LEAD
+  DISCOVERY_FLIGHT
+  PROSPECT
+  ENROLLED
+  GRADUATE
+  ALUMNI
+  INACTIVE
+}
+
 model Student {
   id                 String          @id @default(cuid())
   userId             String          @unique
+  status             StudentStatus   @default(ENROLLED)
+  leadSource         String? // walk-in, web, referral, airshow, ...
+  discoveryFlightAt  DateTime?
+  discoveryOutcome   String? // interested, not_interested, follow_up
+  faaCertificateNumber String?
+  ftnNumber          String?
+  writtenTestPassed  Boolean?
+  writtenTestScore   Int?
+  writtenTestDate    DateTime?
   emergencyContact   String?
   emergencyPhone     String?
   certificateHeld    CertificateType @default(NONE)

@@ -115,6 +115,11 @@ async function main() {
         medicalClass: "Third", medicalExpiration: months(6 + Math.floor(Math.random() * 18)),
         assignedInstructorId: instructors[s.cfi].id, accountBalance: s.balance,
         totalHours: s.hours, soloHours: s.solo, tsaVerified: true,
+        leadSource: "referral",
+        ftnNumber: `A${Math.floor(1000000 + Math.random() * 8999999)}`,
+        writtenTestPassed: s.hours > 30 ? true : null,
+        writtenTestScore: s.hours > 30 ? 85 + Math.floor(Math.random() * 10) : null,
+        writtenTestDate: s.hours > 30 ? day(-45) : null,
         emergencyContact: "Family contact", emergencyPhone: "650-555-0199",
       },
     });
@@ -245,7 +250,7 @@ async function main() {
         studentId: taylor.id, instructorId: instructors[0].id, syllabusLessonId: allLessons[Math.min(i, allLessons.length - 1)].id,
         date: day(-60 + i * 7, 10), grade: i === 4 ? LessonGrade.NEEDS_IMPROVEMENT : LessonGrade.SATISFACTORY,
         flightHours: 1.4 + (i % 3) * 0.2, groundHours: 0.5,
-        notes: i === 4 ? "Landings flat; more energy management work needed. Repeat L5 elements next lesson." : "Met lesson objectives. Good progress on ${''}coordination and checklist discipline.",
+        notes: i === 4 ? "Landings flat; more energy management work needed. Repeat L5 elements next lesson." : "Met lesson objectives. Good progress on coordination and checklist discipline.",
         signedByInstructor: true, signedByStudent: true,
       },
     });
@@ -385,6 +390,16 @@ async function main() {
       organizationId: org.id, studentId: students[2].id, number: `INV-${invoiceCounter++}`, status: InvoiceStatus.OVERDUE,
       issuedAt: day(-40), dueAt: day(-10), memo: "Monthly club membership",
       lines: { create: [{ kind: LineItemKind.MEMBERSHIP_FEE, description: "Club membership — monthly", quantity: 1, unitPrice: 89 }, { kind: LineItemKind.LATE_FEE, description: "Late fee", quantity: 1, unitPrice: 15 }] },
+    },
+  });
+
+  // Discovery-flight lead (lifecycle demo)
+  const leadUser = await mkUser("lead@aerops.demo", "Jordan", "Reyes", Role.STUDENT);
+  await db.student.create({
+    data: {
+      userId: leadUser.id, status: "DISCOVERY_FLIGHT", leadSource: "airshow booth",
+      discoveryFlightAt: day(-4, 14), discoveryOutcome: "interested — follow up next week",
+      trainingGoal: "Private Pilot", trainingPart: TrainingPart.PART_61,
     },
   });
 

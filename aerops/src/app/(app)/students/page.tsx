@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Avatar, PageHeader, Progress } from "@/components/ui/misc";
 import { formatCurrency, formatHours, fullName } from "@/lib/utils";
 
@@ -39,7 +39,10 @@ export default async function StudentsPage() {
                       <p className="truncate text-sm font-semibold">{s.user.firstName} {s.user.lastName}</p>
                       <p className="truncate text-xs text-muted-foreground">{s.trainingGoal ?? "—"} · CFI: {fullName(s.assignedInstructor?.user)}</p>
                     </div>
-                    <Badge tone={balance < 0 ? "red" : "green"}>{balance < 0 ? `-${formatCurrency(Math.abs(balance))}` : formatCurrency(balance)}</Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge tone={balance < 0 ? "red" : "green"}>{balance < 0 ? `-${formatCurrency(Math.abs(balance))}` : formatCurrency(balance)}</Badge>
+                      {s.status !== "ENROLLED" && <StatusBadge status={s.status} />}
+                    </div>
                   </div>
                   <div className="mt-4">
                     <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">

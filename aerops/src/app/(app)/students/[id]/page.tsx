@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Award, FileSignature, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Award, FileSignature, ShieldCheck, Gauge, History } from "lucide-react";
+import { computeReadiness } from "@/lib/readiness";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -48,6 +49,40 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const medicalDays = daysUntil(s.medicalExpiration);
   const balance = Number(s.accountBalance);
 
+  // --- Checkride readiness ---------------------------------------------------
+  const allSyllabusLessons = enrollment?.syllabus.stages.flatMap((st) => st.lessons) ?? [];
+  const stageCheckStages = enrollment?.syllabus.stages.filter((st) => st.isStageCheck) ?? [];
+  const stageChecksPassed = stageCheckStages.filter((st) => st.lessons.some((l) => completedLessonIds.has(l.id))).length;
+  const weakAreas = s.lessonRecords
+    .filter((r) => r.grade === "NEEDS_IMPROVEMENT")
+    .map((r) => r.syllabusLesson?.name ?? "General airmanship");
+  const readiness = computeReadiness({
+    totalHours: Number(s.totalHours),
+    requiredHours: required,
+    lessonsCompleted: allSyllabusLessons.filter((l) => completedLessonIds.has(l.id)).length,
+    lessonsTotal: allSyllabusLessons.length,
+    stageChecksPassed,
+    stageChecksTotal: stageCheckStages.length,
+    endorsementCount: s.endorsements.length,
+    medicalValid: medicalDays !== null && medicalDays > 0,
+    writtenTestPassed: s.writtenTestPassed,
+    checkrideScheduled: s.checkrides.some((c) => c.status === "SCHEDULED"),
+    weakAreas,
+  });
+
+  // --- Unified timeline --------------------------------------------------------
+  type TL = { at: Date; kind: string; text: string };
+  const timeline: TL[] = [
+    { at: s.enrolledAt, kind: "Enrolled", text: `Joined as ${s.status.replaceAll("_", " ").toLowerCase()}` },
+    ...(s.discoveryFlightAt ? [{ at: s.discoveryFlightAt, kind: "Discovery", text: `Discovery flight — ${s.discoveryOutcome ?? "completed"}` }] : []),
+    ...s.lessonRecords.map((r) => ({ at: r.date, kind: "Lesson", text: `${r.syllabusLesson?.name ?? "Lesson"} — ${r.grade.replaceAll("_", " ").toLowerCase()}` })),
+    ...s.endorsements.map((e) => ({ at: e.signedAt, kind: "Endorsement", text: e.title })),
+    ...s.checkrides.map((c) => ({ at: c.date, kind: "Checkride", text: `${c.rating.replaceAll("_", " ")} — ${c.status.toLowerCase()}` })),
+    ...s.ratings.map((r) => ({ at: r.earnedAt, kind: "Certificate", text: `${r.rating.replaceAll("_", " ")} earned` })),
+    ...s.invoices.map((inv) => ({ at: inv.issuedAt, kind: "Invoice", text: `${inv.number} — ${inv.status.replaceAll("_", " ").toLowerCase()}` })),
+    ...(s.writtenTestDate ? [{ at: s.writtenTestDate, kind: "Knowledge Test", text: `Written ${s.writtenTestPassed ? "passed" : "attempted"}${s.writtenTestScore ? ` — ${s.writtenTestScore}%` : ""}` }] : []),
+  ].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 20);
+
   return (
     <div className="animate-fade-up space-y-4">
       <Link href="/students" className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
@@ -65,6 +100,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <StatusBadge status={s.status} />
+          {s.ftnNumber && <Badge tone="gray">FTN {s.ftnNumber}</Badge>}
+          {s.writtenTestPassed && <Badge tone="green">Written {s.writtenTestScore ?? ""}%</Badge>}
           {s.tsaVerified && <Badge tone="green"><ShieldCheck className="h-3 w-3" /> TSA verified</Badge>}
           <Badge tone={balance < 0 ? "red" : "green"}>Balance {balance < 0 ? `-${formatCurrency(Math.abs(balance))}` : formatCurrency(balance)}</Badge>
         </div>
@@ -177,6 +215,34 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-1.5"><Gauge className="h-4 w-4" /> Checkride Readiness</CardTitle>
+          <CardDescription>Transparent factor-by-factor score — the future AI layer refines weights, never hides reasoning</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 flex items-center gap-4">
+            <div className="text-3xl font-semibold tabular-nums">{readiness.score}<span className="text-base text-muted-foreground">/100</span></div>
+            <StatusBadge status={readiness.status} className="text-xs" />
+            <div className="min-w-0 flex-1"><Progress value={readiness.score} tone={readiness.score >= 70 ? "success" : readiness.score >= 40 ? "primary" : "warning"} /></div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            {readiness.factors.map((f) => (
+              <div key={f.label} className="flex items-start gap-2 rounded-lg border border-border p-2.5">
+                <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${f.met ? "bg-success" : "bg-warning"}`} />
+                <div>
+                  <p className="text-xs font-medium">{f.label}</p>
+                  <p className="text-[11px] text-muted-foreground">{f.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {readiness.weakAreas.length > 0 && (
+            <p className="mt-3 text-xs"><span className="font-semibold text-warning">Focus areas:</span> <span className="text-muted-foreground">{readiness.weakAreas.join(" · ")}</span></p>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Lesson History & Instructor Notes</CardTitle></CardHeader>
@@ -196,6 +262,19 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                 <p className="mt-1.5 text-[10px] text-muted-foreground">
                   {r.signedByInstructor ? "✓ Instructor signed" : "○ Awaiting instructor signature"} · {r.signedByStudent ? "✓ Student signed" : "○ Awaiting student signature"}
                 </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-1.5"><History className="h-4 w-4" /> Student Timeline</CardTitle></CardHeader>
+          <CardContent className="space-y-1.5">
+            {timeline.map((t, i) => (
+              <div key={i} className="flex items-center gap-3 text-xs">
+                <span className="w-20 shrink-0 text-[11px] text-muted-foreground">{formatDate(t.at)}</span>
+                <Badge tone={t.kind === "Checkride" || t.kind === "Certificate" ? "green" : t.kind === "Endorsement" ? "violet" : t.kind === "Invoice" ? "gray" : "blue"}>{t.kind}</Badge>
+                <span className="min-w-0 flex-1 truncate">{t.text}</span>
               </div>
             ))}
           </CardContent>
