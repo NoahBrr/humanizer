@@ -37,6 +37,7 @@ export default async function MissionControlPage({ searchParams }: { searchParam
       canSeeFinance: session.permissions.has("billing.view"),
       canSeeCrm: session.permissions.has("students.manage"),
       canSeeCfi: session.permissions.has("instructors.view"),
+      canSeeHealth: session.permissions.has("reports.view"),
     }),
     db.missionControlScene.findMany({ where: { organizationId: session.organizationId }, orderBy: { createdAt: "asc" } }),
   ]);

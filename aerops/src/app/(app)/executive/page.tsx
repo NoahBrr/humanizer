@@ -3,8 +3,7 @@ import Link from "next/link";
 import { HeartPulse, Tv, TrendingUp } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { airworthinessOf } from "@/lib/airworthiness";
-import { computeHealthScore } from "@/lib/health-score";
+import { computeOrgHealth } from "@/lib/health-score";
 import { PageHeader, Progress } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +26,7 @@ export default async function ExecutivePage() {
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const yearStart = new Date(new Date().getFullYear(), 0, 1);
 
-  const [payToday, payWeek, payMonth, payYear, openInvoices, fleet, leads, students, dispatches90] = await Promise.all([
+  const [payToday, payWeek, payMonth, payYear, openInvoices, dispatches90, health] = await Promise.all([
     db.payment.aggregate({ where: { invoice: { organizationId }, paidAt: { gte: since(0) } }, _sum: { amount: true } }),
     db.payment.aggregate({ where: { invoice: { organizationId }, paidAt: { gte: since(7) } }, _sum: { amount: true } }),
     db.payment.aggregate({ where: { invoice: { organizationId }, paidAt: { gte: monthStart } }, _sum: { amount: true } }),
@@ -35,15 +34,6 @@ export default async function ExecutivePage() {
     db.invoice.findMany({
       where: { organizationId, status: { in: ["OPEN", "PARTIALLY_PAID", "OVERDUE"] } },
       include: { lines: true, payments: true },
-    }),
-    db.aircraft.findMany({
-      where: { organizationId, isSimulator: false, status: { not: "RETIRED" } },
-      include: { components: true, squawks: { where: { severity: "GROUNDING", status: { notIn: ["RESOLVED", "CLOSED"] } } } },
-    }),
-    db.lead.findMany({ where: { organizationId }, select: { status: true } }),
-    db.student.findMany({
-      where: { user: { organizationId, isActive: true }, status: "ENROLLED" },
-      select: { totalHours: true, lessonRecords: { select: { date: true }, orderBy: { date: "desc" }, take: 1 } },
     }),
     db.dispatch.findMany({
       where: { aircraft: { organizationId }, status: "CLOSED", closedAt: { gte: since(90) } },
@@ -53,6 +43,7 @@ export default async function ExecutivePage() {
         instructor: { select: { hourlyRate: true, user: { select: { firstName: true, lastName: true } } } },
       },
     }),
+    computeOrgHealth(organizationId),
   ]);
 
   const outstandingAR = openInvoices.reduce(
@@ -83,28 +74,6 @@ export default async function ExecutivePage() {
   const instructorRank = [...byInstructor.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.revenue - a.revenue);
   const totalHours90 = dispatches90.reduce((t, d) => t + Number(d.flightTime ?? 0), 0);
   const estProfit90 = aircraftRank.reduce((t, a) => t + a.profit, 0);
-
-  // Health score inputs
-  const airworthy = fleet.filter((a) => airworthinessOf(a, a.components).canDispatch).length;
-  const groundingSquawks = fleet.reduce((t, a) => t + a.squawks.length, 0);
-  const idleStudents = students.filter((s) => !s.lessonRecords[0] || Date.now() - s.lessonRecords[0].date.getTime() > 21 * 86_400_000).length;
-  const enrolledLeads = leads.filter((l) => l.status === "ENROLLED").length;
-  const closedLeads = enrolledLeads + leads.filter((l) => l.status === "LOST").length;
-  const health = computeHealthScore({
-    revenueMonth: Number(payMonth._sum.amount ?? 0),
-    outstandingAR,
-    overdueInvoices: overdue,
-    totalOpenInvoices: openInvoices.length,
-    airworthyAircraft: airworthy,
-    totalAircraft: fleet.length,
-    groundingSquawks,
-    activeStudents: students.length,
-    idleStudents,
-    avgReadiness: students.length ? Math.min(100, (students.reduce((t, s) => t + Number(s.totalHours), 0) / students.length / 40) * 100) : 0,
-    activeLeads: leads.filter((l) => !["ENROLLED", "LOST"].includes(l.status)).length,
-    conversionRate: closedLeads > 0 ? enrolledLeads / closedLeads : null,
-    utilizationPct: fleet.length ? (totalHours90 / (fleet.length * 180)) * 100 : 0,
-  });
 
   const kpis = [
     { label: "Revenue today", value: formatCurrency(payToday._sum.amount) },

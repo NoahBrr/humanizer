@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { fleetHealthOf } from "@/lib/fleet-health";
 import { generateInsights, type Insight } from "@/lib/insights";
+import { computeOrgHealth, type HealthScore } from "@/lib/health-score";
+import { buildOperationalForecast, type OperationalForecast } from "@/lib/forecast";
 import type { ModuleKey } from "@/lib/features";
 import type { MaintenanceStatus } from "@prisma/client";
 
@@ -49,8 +51,27 @@ export type MissionControlSnapshot = {
   cfi: { instructors: { name: string; cfiDays: number | null; medicalDays: number | null; hours7d: number }[] } | null;
   crm: { newLeads7d: number; followUpsDue: number; pipelineValue: number; openLeads: number } | null;
   finance: { overdueTotal: number; paymentsMtd: number; paymentsToday: number; openInvoices: number } | null;
-  alerts: { id: string; title: string; body: string | null; kind: string; createdAt: string; critical: boolean; unread: boolean }[];
+  /** Organization health score with explained categories — null without reports.view */
+  health: HealthScore | null;
+  /** Tomorrow's operational forecast with predicted conflicts */
+  forecast: OperationalForecast;
+  /** Today's operational actions from the immutable audit trail */
+  timeline: { at: string; actor: string; action: string; entityType: string }[];
+  alerts: WallAlert[];
   insights: Insight[];
+};
+
+export type AlertPriority = "EMERGENCY" | "CRITICAL" | "HIGH" | "ATTENTION" | "INFO";
+
+export type WallAlert = {
+  id: string;
+  title: string;
+  body: string | null;
+  kind: string;
+  createdAt: string;
+  priority: AlertPriority;
+  critical: boolean;
+  unread: boolean;
 };
 
 export type FleetCard = {
@@ -94,8 +115,23 @@ export type OpsFlight = {
   type: string;
 };
 
-const CRITICAL_KINDS = new Set(["AIRCRAFT_GROUNDED", "WEATHER_CANCELLATION", "MAINTENANCE_DUE"]);
 const ACTIVE_WO: MaintenanceStatus[] = ["OPEN", "SCHEDULED", "ASSIGNED", "WAITING_PARTS", "IN_PROGRESS", "AWAITING_INSPECTION", "APPROVED", "RETURN_TO_SERVICE"];
+
+/**
+ * Section 16C prioritization: every alert is classified so the wall can
+ * surface what matters without anyone searching for it. EMERGENCY is
+ * reserved for incident/emergency operations (future incident command).
+ */
+const PRIORITY_RANK: Record<AlertPriority, number> = { EMERGENCY: 0, CRITICAL: 1, HIGH: 2, ATTENTION: 3, INFO: 4 };
+
+function classifyAlert(kind: string, title: string): AlertPriority {
+  if (kind === "AIRCRAFT_GROUNDED") return "CRITICAL";
+  if (kind === "WEATHER_CANCELLATION" || kind === "MAINTENANCE_DUE" || title.startsWith("Low stock")) return "HIGH";
+  if (kind === "BALANCE_DUE" || kind === "SQUAWK_REPORTED" || kind === "DOCUMENT_EXPIRING" || kind === "INSTRUCTOR_UNAVAILABLE") return "ATTENTION";
+  return "INFO";
+}
+
+const TIMELINE_PREFIXES = ["schedule.", "dispatch.", "maintenance.", "inventory.", "aircraft.", "squawk", "lead", "mission_control."];
 
 export type SnapshotOptions = {
   organizationId: string;
@@ -104,6 +140,7 @@ export type SnapshotOptions = {
   canSeeFinance: boolean;
   canSeeCrm: boolean;
   canSeeCfi: boolean;
+  canSeeHealth: boolean;
 };
 
 export async function buildMissionControlSnapshot(opts: SnapshotOptions): Promise<MissionControlSnapshot> {
@@ -153,12 +190,25 @@ export async function buildMissionControlSnapshot(opts: SnapshotOptions): Promis
     }),
   ]);
 
-  const [maintenance, training, finance, cfi] = await Promise.all([
+  const [maintenance, training, finance, cfi, health, forecast, auditRows] = await Promise.all([
     hasMaintenance ? maintenanceSection(organizationId) : Promise.resolve(null),
     isTrainingOrg ? trainingSection(organizationId, now) : Promise.resolve(null),
     opts.canSeeFinance && hasBilling ? financeSection(organizationId, monthStart, dayStart) : Promise.resolve(null),
     opts.canSeeCfi && isTrainingOrg ? cfiSection(organizationId, now) : Promise.resolve(null),
+    opts.canSeeHealth ? computeOrgHealth(organizationId) : Promise.resolve(null),
+    buildOperationalForecast(organizationId),
+    db.auditLog.findMany({
+      where: { organizationId, createdAt: { gte: new Date(now.getTime() - 24 * 3_600_000) } },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      select: { createdAt: true, actorLabel: true, action: true, entityType: true },
+    }),
   ]);
+
+  const timeline = auditRows
+    .filter((r) => TIMELINE_PREFIXES.some((p) => r.action.startsWith(p)) || (opts.canSeeFinance && r.action.startsWith("billing.")))
+    .slice(0, 12)
+    .map((r) => ({ at: r.createdAt.toISOString(), actor: r.actorLabel, action: r.action, entityType: r.entityType ?? "" }));
 
   const toOps = (e: (typeof events)[number]): OpsFlight => ({
     id: e.id,
@@ -246,15 +296,24 @@ export async function buildMissionControlSnapshot(opts: SnapshotOptions): Promis
         }
       : null,
     finance,
-    alerts: notifications.map((n) => ({
-      id: n.id,
-      title: n.title,
-      body: n.body,
-      kind: n.kind,
-      createdAt: n.createdAt.toISOString(),
-      critical: CRITICAL_KINDS.has(n.kind) || n.title.startsWith("Low stock"),
-      unread: !n.isRead,
-    })),
+    health,
+    forecast,
+    timeline,
+    alerts: notifications
+      .map((n) => {
+        const priority = classifyAlert(n.kind, n.title);
+        return {
+          id: n.id,
+          title: n.title,
+          body: n.body,
+          kind: n.kind,
+          createdAt: n.createdAt.toISOString(),
+          priority,
+          critical: PRIORITY_RANK[priority] <= PRIORITY_RANK.HIGH,
+          unread: !n.isRead,
+        };
+      })
+      .sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || b.createdAt.localeCompare(a.createdAt)),
     insights: insights.slice(0, 4),
   };
 }

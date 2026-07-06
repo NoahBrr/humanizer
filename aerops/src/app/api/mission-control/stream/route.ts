@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     canSeeFinance: session.permissions.has("billing.view"),
     canSeeCrm: session.permissions.has("students.manage"),
     canSeeCfi: session.permissions.has("instructors.view"),
+    canSeeHealth: session.permissions.has("reports.view"),
   };
 
   const encoder = new TextEncoder();

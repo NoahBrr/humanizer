@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Plane, Radio, Wrench, GraduationCap, Landmark, Bell, Sparkles, X, CheckCheck,
-  Gauge, CloudSun, Megaphone, Users, Plus, Trash2, Tv,
+  Gauge, CloudSun, Megaphone, Users, Plus, Trash2, Tv, HeartPulse, TrendingUp, History,
 } from "lucide-react";
 import type { MissionControlSnapshot, OpsFlight, FleetCard, AirportWeather } from "@/lib/mission-control";
 import { PANEL_KEYS, PANEL_LABELS, type PanelKey, type Scene } from "@/lib/mission-control-scenes";
@@ -76,7 +76,9 @@ export function MissionControlWall({
     if (p === "finance") return !!snap.finance;
     if (p === "cfi") return !!snap.cfi;
     if (p === "crm") return !!snap.crm;
+    if (p === "health") return !!snap.health;
     if (p === "weather") return snap.weather.length > 0;
+    if (p === "timeline") return snap.timeline.length > 0;
     return true;
   };
   const panels = scene.panels.filter(available);
@@ -138,6 +140,9 @@ export function MissionControlWall({
         {panels.map((p) => {
           switch (p) {
             case "kpi": return <KpiPanel key={p} snap={snap} />;
+            case "health": return <HealthPanel key={p} snap={snap} />;
+            case "forecast": return <ForecastPanel key={p} snap={snap} />;
+            case "timeline": return <TimelinePanel key={p} snap={snap} />;
             case "ops": return <OpsPanel key={p} snap={snap} />;
             case "alerts": return <AlertsPanel key={p} snap={snap} />;
             case "fleet": return <FleetPanel key={p} snap={snap} />;
@@ -436,21 +441,113 @@ function AirportRow({ w }: { w: AirportWeather }) {
   );
 }
 
+const PRIORITY_STYLE: Record<string, { color: string; label: string }> = {
+  EMERGENCY: { color: "#991b1b", label: "EMERG" },
+  CRITICAL: { color: "#ef4444", label: "CRIT" },
+  HIGH: { color: "#f97316", label: "HIGH" },
+  ATTENTION: { color: "#f59e0b", label: "ATTN" },
+  INFO: { color: "#64748b", label: "INFO" },
+};
+
 function AlertsPanel({ snap }: { snap: MissionControlSnapshot }) {
   return (
     <Panel title="Alerts" icon={<Bell className="h-3.5 w-3.5" />}>
       <div className="space-y-1.5">
         {snap.alerts.length === 0 && <p className="text-sm text-slate-500">All quiet.</p>}
-        {snap.alerts.slice(0, 8).map((a) => (
-          <div key={a.id} className={`rounded-xl border px-3 py-1.5 ${a.critical && a.unread ? "border-red-800 bg-red-950/40" : "border-slate-800/80 bg-slate-950/50"}`}>
-            <div className="flex items-center gap-2">
-              {a.unread && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${a.critical ? "bg-red-500" : "bg-blue-500"}`} />}
-              <p className={`min-w-0 flex-1 truncate text-sm ${a.unread ? "font-semibold" : "text-slate-400"}`}>{a.title}</p>
-              <span className="shrink-0 text-[10px] text-slate-500">{hhmm(a.createdAt)}</span>
+        {snap.alerts.slice(0, 8).map((a) => {
+          const p = PRIORITY_STYLE[a.priority] ?? PRIORITY_STYLE.INFO;
+          return (
+            <div key={a.id} className={`rounded-xl border px-3 py-1.5 ${a.critical && a.unread ? "border-red-800 bg-red-950/40" : "border-slate-800/80 bg-slate-950/50"}`}>
+              <div className="flex items-center gap-2">
+                <span className="w-11 shrink-0 rounded px-1 py-px text-center text-[9px] font-bold tracking-wider" style={{ background: `${p.color}26`, color: p.color }}>
+                  {p.label}
+                </span>
+                <p className={`min-w-0 flex-1 truncate text-sm ${a.unread ? "font-semibold" : "text-slate-400"}`}>{a.title}</p>
+                <span className="shrink-0 text-[10px] text-slate-500">{hhmm(a.createdAt)}</span>
+              </div>
             </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function HealthPanel({ snap }: { snap: MissionControlSnapshot }) {
+  const h = snap.health!;
+  const tone = h.overall >= 75 ? "#10b981" : h.overall >= 50 ? "#f59e0b" : "#ef4444";
+  return (
+    <Panel title="Organization Health" icon={<HeartPulse className="h-3.5 w-3.5" />}>
+      <div className="flex items-center gap-3">
+        <span className="tabular-nums text-5xl font-bold tracking-tight" style={{ color: tone }}>{h.overall}</span>
+        <span className="text-sm text-slate-500">/100 · {h.overall >= 75 ? "Healthy" : h.overall >= 50 ? "Needs attention" : "At risk"}</span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {h.categories.map((c) => {
+          const ct = c.score >= 75 ? "#10b981" : c.score >= 50 ? "#f59e0b" : "#ef4444";
+          return (
+            <div key={c.key}>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-slate-300">{c.label}</span>
+                <span className="tabular-nums font-bold" style={{ color: ct }}>{c.score}</span>
+              </div>
+              <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-full rounded-full" style={{ width: `${c.score}%`, background: ct }} />
+              </div>
+              <p className="mt-0.5 text-[10px] text-slate-600">{c.detail}</p>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function ForecastPanel({ snap }: { snap: MissionControlSnapshot }) {
+  const f = snap.forecast;
+  const shortfall = f.aircraftDemand.needed > f.aircraftDemand.dispatchable;
+  return (
+    <Panel title="Forecast — Tomorrow" icon={<TrendingUp className="h-3.5 w-3.5" />}>
+      <div className="grid grid-cols-2 gap-2 text-center md:grid-cols-4">
+        <BigNumber label="Flights booked" value={f.flightsBooked} />
+        <BigNumber label="Booked hours" value={f.bookedHours.toFixed(1)} />
+        <BigNumber label="Aircraft need/have" value={`${f.aircraftDemand.needed}/${f.aircraftDemand.dispatchable}`} tone={shortfall ? "#ef4444" : "#10b981"} />
+        {f.projectedRevenue > 0 && <BigNumber label="Proj. revenue" value={usd(f.projectedRevenue)} tone="#10b981" />}
+      </div>
+      {f.instructorLoad.length > 0 && (
+        <p className="mt-2 text-[11px] text-slate-500">
+          CFI load: {f.instructorLoad.map((i) => `${i.name.split(" ")[0]} ${i.hours.toFixed(1)}h`).join(" · ")}
+        </p>
+      )}
+      <div className="mt-2 space-y-1.5">
+        {f.risks.length === 0 && <p className="text-sm text-slate-500">No predicted conflicts for tomorrow&apos;s schedule.</p>}
+        {f.risks.map((r, i) => (
+          <div key={i} className={`rounded-xl border p-2.5 ${r.level === "HIGH" ? "border-orange-800/70 bg-orange-950/30" : "border-slate-800/80 bg-slate-950/50"}`}>
+            <p className="text-sm font-semibold" style={{ color: r.level === "HIGH" ? "#fdba74" : "#fbbf24" }}>{r.message}</p>
+            <p className="mt-0.5 text-[11px] text-slate-400">{r.basis}</p>
           </div>
         ))}
       </div>
+    </Panel>
+  );
+}
+
+function TimelinePanel({ snap }: { snap: MissionControlSnapshot }) {
+  const label = (action: string) => action.replaceAll("_", " ").replaceAll(".", " · ");
+  return (
+    <Panel title="Command Timeline" icon={<History className="h-3.5 w-3.5" />}>
+      <div className="space-y-1">
+        {snap.timeline.map((t, i) => (
+          <div key={i} className="flex items-baseline gap-2 border-l border-slate-800 pl-3 text-xs">
+            <span className="tabular-nums shrink-0 font-bold text-slate-400">{hhmm(t.at)}</span>
+            <span className="min-w-0 flex-1 truncate">
+              <span className="font-medium text-slate-300">{label(t.action)}</span>
+              <span className="text-slate-600"> — {t.actor}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[10px] text-slate-600">From the immutable audit trail · last 24h · operational actions only</p>
     </Panel>
   );
 }

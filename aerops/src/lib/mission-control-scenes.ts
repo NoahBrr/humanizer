@@ -5,6 +5,8 @@
  */
 export const PANEL_KEYS = [
   "kpi",
+  "health",
+  "forecast",
   "ops",
   "fleet",
   "aircraftwall",
@@ -16,12 +18,16 @@ export const PANEL_KEYS = [
   "finance",
   "alerts",
   "insights",
+  "timeline",
 ] as const;
 
 export type PanelKey = (typeof PANEL_KEYS)[number];
 
 export const PANEL_LABELS: Record<PanelKey, string> = {
   kpi: "KPI Wall",
+  health: "Org Health",
+  forecast: "Forecast",
+  timeline: "Command Timeline",
   ops: "Operations Board",
   fleet: "Fleet Grid",
   aircraftwall: "Aircraft Wall",
@@ -38,11 +44,11 @@ export const PANEL_LABELS: Record<PanelKey, string> = {
 export type Scene = { key: string; label: string; panels: PanelKey[]; builtin: boolean };
 
 export const BUILTIN_SCENES: Scene[] = [
-  { key: "default", label: "Mission Control", builtin: true, panels: ["kpi", "ops", "alerts", "fleet", "insights", "maintenance", "training", "finance"] },
-  { key: "ops", label: "Operations Wall", builtin: true, panels: ["ops", "weather", "fleet", "alerts", "insights"] },
-  { key: "maintenance", label: "Maintenance Wall", builtin: true, panels: ["maintenance", "aircraftwall", "alerts", "insights"] },
+  { key: "default", label: "Mission Control", builtin: true, panels: ["kpi", "ops", "alerts", "forecast", "fleet", "insights", "maintenance", "training", "finance", "timeline"] },
+  { key: "ops", label: "Operations Wall", builtin: true, panels: ["ops", "weather", "forecast", "fleet", "alerts", "timeline"] },
+  { key: "maintenance", label: "Maintenance Wall", builtin: true, panels: ["maintenance", "aircraftwall", "alerts", "insights", "timeline"] },
   { key: "training", label: "Training Wall", builtin: true, panels: ["training", "cfi", "ops", "alerts", "insights"] },
-  { key: "executive", label: "Executive Wall", builtin: true, panels: ["kpi", "finance", "crm", "fleet", "insights", "alerts"] },
+  { key: "executive", label: "Executive Wall", builtin: true, panels: ["health", "kpi", "forecast", "finance", "crm", "insights", "alerts"] },
   { key: "weather", label: "Weather Wall", builtin: true, panels: ["weather", "ops", "alerts"] },
   { key: "crm", label: "Admissions Wall", builtin: true, panels: ["crm", "insights", "alerts"] },
 ];
