@@ -38,6 +38,7 @@ export function enabledModules(planModules: string[] | undefined, disabledModule
 /** Which module gates each app section. Sections not listed are always on. */
 export const SECTION_MODULES: Record<string, ModuleKey> = {
   "/schedule": "scheduling",
+  "/operations": "dispatch",
   "/dispatch": "dispatch",
   "/maintenance": "maintenance",
   "/billing": "billing",
