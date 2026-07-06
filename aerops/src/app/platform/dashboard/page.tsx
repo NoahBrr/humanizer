@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { Building2, Users, Plane, DollarSign, Activity, Database } from "lucide-react";
 import { db } from "@/lib/db";
+import { computeCustomerSuccess } from "@/lib/customer-success";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/badge";
+import { StatusBadge, Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +30,19 @@ export default async function PlatformDashboard() {
 
   const active = orgs.filter((o) => o.status === "ACTIVE");
   const mrr = active.reduce((t, o) => t + Number(o.plan?.priceMonthly ?? 0), 0);
+
+  // Customer success read per active org (Section 19) — fine at this scale;
+  // becomes a nightly rollup job once org count makes it a hot path.
+  const successByOrg = await Promise.all(
+    active.map(async (o) => ({ org: o, success: await computeCustomerSuccess(o.id) })),
+  );
+  const atRisk = successByOrg.filter((s) => s.success.risk !== "HEALTHY");
+
+  const revenueByPlan = [...active.reduce((m, o) => {
+    const name = o.plan?.name ?? "No plan";
+    m.set(name, (m.get(name) ?? 0) + Number(o.plan?.priceMonthly ?? 0));
+    return m;
+  }, new Map<string, number>()).entries()];
 
   // Section 18 success metrics — measured from live data, never estimated.
   const successMetrics = [
@@ -86,6 +101,61 @@ export default async function PlatformDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Revenue</CardTitle>
+            <CardDescription>Subscription analytics across active organizations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "MRR", value: formatCurrency(mrr) },
+                { label: "ARR (run rate)", value: formatCurrency(mrr * 12) },
+                { label: "Avg revenue / org", value: formatCurrency(active.length ? mrr / active.length : 0) },
+              ].map((m) => (
+                <div key={m.label} className="rounded-lg border border-border p-3">
+                  <p className="text-lg font-semibold tabular-nums tracking-tight">{m.value}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{m.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 space-y-1.5">
+              {revenueByPlan.map(([plan, amount]) => (
+                <div key={plan} className="flex items-center justify-between text-xs">
+                  <span className="font-medium">{plan}</span>
+                  <span className="tabular-nums text-muted-foreground">{formatCurrency(amount)}/mo</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Customer Success
+              {atRisk.length > 0 ? <Badge tone="amber">{atRisk.length} need attention</Badge> : <Badge tone="green">All healthy</Badge>}
+            </CardTitle>
+            <CardDescription>Adoption, activity, and recommended outreach per organization</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {successByOrg.map(({ org, success }) => (
+              <Link key={org.id} href={`/platform/organizations/${org.id}`} className="block rounded-lg border border-border p-2.5 hover:bg-muted/50">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-medium">{org.name}</span>
+                  <Badge tone={success.risk === "HEALTHY" ? "green" : success.risk === "WATCH" ? "amber" : "red"}>
+                    {success.risk.replaceAll("_", " ")}
+                  </Badge>
+                  <span className="ml-auto tabular-nums text-muted-foreground">onboarding {success.onboarding.pct}%</span>
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">{success.riskFactors[0] ?? success.outreach[0]}</p>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

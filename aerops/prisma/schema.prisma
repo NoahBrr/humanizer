@@ -1176,3 +1176,15 @@ model MissionControlScene {
   @@unique([organizationId, name])
   @@index([organizationId])
 }
+
+/// Internal platform-staff note on a customer organization (Section 19).
+/// Never visible to the customer — rendered only in the Founder Platform.
+model PlatformNote {
+  id             String   @id @default(cuid())
+  organizationId String
+  authorLabel    String
+  body           String
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+}

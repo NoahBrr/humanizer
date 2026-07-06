@@ -9,7 +9,9 @@ import { StatusBadge, Badge } from "@/components/ui/badge";
 import { Avatar, Progress } from "@/components/ui/misc";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/rbac";
+import { computeCustomerSuccess } from "@/lib/customer-success";
 import { OrgActions, ImpersonateButton, ModuleToggles } from "./org-actions";
+import { NotesPanel } from "./notes-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +30,11 @@ export default async function OrganizationDetail({ params }: { params: Promise<{
     },
   });
   if (!org) notFound();
-  const plans = await db.subscriptionPlan.findMany({ orderBy: { priceMonthly: "asc" } });
+  const [plans, success, notes] = await Promise.all([
+    db.subscriptionPlan.findMany({ orderBy: { priceMonthly: "asc" } }),
+    computeCustomerSuccess(org.id),
+    db.platformNote.findMany({ where: { organizationId: org.id }, orderBy: { createdAt: "desc" }, take: 10 }),
+  ]);
 
   const canImpersonate = ["FOUNDER", "PLATFORM_ADMIN", "CUSTOMER_SUCCESS", "SUPPORT_ENGINEER"].includes(session?.platformRole ?? "");
   const canManage = ["FOUNDER", "PLATFORM_ADMIN", "BILLING_ADMIN"].includes(session?.platformRole ?? "");
@@ -59,6 +65,55 @@ export default async function OrganizationDetail({ params }: { params: Promise<{
       </div>
 
       {canManage && <OrgActions orgId={org.id} status={org.status} planId={org.planId} plans={plans.map((p) => ({ id: p.id, name: p.name, price: Number(p.priceMonthly) }))} />}
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Onboarding</CardTitle>
+            <CardDescription>{success.onboarding.pct}% complete</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Progress value={success.onboarding.pct} tone={success.onboarding.pct === 100 ? "success" : "primary"} />
+            {success.onboarding.steps.map((s) => (
+              <div key={s.label} className="flex items-center gap-2 text-xs">
+                <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${s.done ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+                  {s.done ? "✓" : "·"}
+                </span>
+                <span className={s.done ? "" : "text-muted-foreground"}>{s.label}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Customer Success
+              <Badge tone={success.risk === "HEALTHY" ? "green" : success.risk === "WATCH" ? "amber" : "red"}>
+                {success.risk.replaceAll("_", " ")}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              {success.activity.logins14d} sign-ins (14d) · {success.activity.bookings7d} bookings (7d)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs">
+            {success.riskFactors.map((f) => (
+              <p key={f} className="font-medium text-warning">⚠ {f}</p>
+            ))}
+            {success.outreach.map((o) => (
+              <p key={o} className="text-muted-foreground">→ {o}</p>
+            ))}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {success.adoption.map((a) => (
+                <Badge key={a.label} tone={a.active ? "green" : "gray"}>{a.label}</Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <NotesPanel orgId={org.id} notes={notes.map((n) => ({ id: n.id, authorLabel: n.authorLabel, body: n.body, createdAt: n.createdAt.toISOString() }))} />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
