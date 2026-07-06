@@ -208,7 +208,13 @@ export async function authorize(permission: Permission | null, opts: { mutating?
     return { error: NextResponse.json({ error: "This organization is suspended. Contact AeroOps support." }, { status: 403 }) };
   }
   if (opts.mutating && session.impersonation?.readOnly) {
-    return { error: NextResponse.json({ error: "Impersonation is read-only — changes are disabled." }, { status: 403 }) };
+    const isApiKey = session.userId.startsWith("apikey:");
+    return {
+      error: NextResponse.json(
+        { error: isApiKey ? "This API key is read-only — create a key with write scopes for mutations." : "Impersonation is read-only — changes are disabled." },
+        { status: 403 },
+      ),
+    };
   }
   if (permission && !session.permissions.has(permission)) {
     return { error: NextResponse.json({ error: "You don't have permission for this action. Ask an administrator to grant it." }, { status: 403 }) };
