@@ -1034,3 +1034,50 @@ model Lead {
   @@index([organizationId, status])
   @@index([organizationId, nextFollowUp])
 }
+
+/// Scoped service-account key for the public API (Bearer aero_...).
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  /// sha256 of the full key; the key itself is shown once at creation.
+  keyHash        String    @unique
+  prefix         String // first 12 chars, for identification
+  scopes         String[] // permission keys from lib/permissions.ts
+  readOnly       Boolean   @default(false)
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId])
+}
+
+/// Outbound webhook subscription; deliveries are HMAC-signed with `secret`.
+model Webhook {
+  id             String   @id @default(cuid())
+  organizationId String
+  url            String
+  events         String[] // e.g. flight.closed, aircraft.grounded, lead.created
+  secret         String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  deliveries WebhookDelivery[]
+
+  @@index([organizationId])
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  webhookId  String
+  event      String
+  statusCode Int?
+  success    Boolean  @default(false)
+  error      String?
+  createdAt  DateTime @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+}

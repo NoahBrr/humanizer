@@ -10,6 +10,8 @@ export const authConfig = {
   providers: [],
   callbacks: {
     authorized({ auth, request }) {
+      // Public-API requests authenticate with Bearer keys at the route layer.
+      if (request.headers.get("authorization")?.startsWith("Bearer aero_")) return true;
       const isAuthed = !!auth?.user;
       const { pathname } = request.nextUrl;
       const isPublic =

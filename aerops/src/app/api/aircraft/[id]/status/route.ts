@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
+import { emitWebhook } from "@/lib/webhooks";
 
 const patchSchema = z.object({
   status: z.enum(["AVAILABLE", "IN_MAINTENANCE", "GROUNDED", "RESERVED", "RETIRED"]),
@@ -33,6 +34,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
 
   if (body.data.status === "GROUNDED") {
+    await emitWebhook(session.organizationId, "aircraft.grounded", { aircraftId: id, tailNumber: aircraft.tailNumber });
     await db.notification.create({
       data: {
         organizationId: session.organizationId,

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
+import { emitWebhook } from "@/lib/webhooks";
 
 const paymentSchema = z.object({
   amount: z.number().positive(),
@@ -51,6 +52,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     entityId: id,
     newValue: { amount: body.data.amount, method: body.data.method, status: nextStatus },
   });
+
+  if (nextStatus === "PAID") {
+    await emitWebhook(session.organizationId, "invoice.paid", { invoiceId: id, number: invoice.number, amount: body.data.amount });
+  }
 
   return NextResponse.json({ payment, status: nextStatus }, { status: 201 });
 }

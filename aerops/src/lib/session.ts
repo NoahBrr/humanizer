@@ -1,6 +1,6 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "crypto";
-import { cookies } from "next/headers";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import type { OrgStatus, PlatformRole, Role } from "@prisma/client";
 import { auth } from "@/auth";
@@ -146,6 +146,41 @@ export async function getSession(): Promise<AppSession | null> {
   return { kind: "org", ...org };
 }
 
+// --- API-key (service account) sessions ---------------------------------------
+
+/**
+ * Resolve a Bearer `aero_...` key into a scoped service-account session.
+ * Keys flow through the SAME authorize() gate as humans: scopes are
+ * permission keys, read-only keys are refused all mutations, org modules
+ * and suspension apply identically. This is what makes /api/v1 a real
+ * public API rather than a parallel implementation.
+ */
+async function apiKeySession(token: string): Promise<AppSession | null> {
+  const keyHash = createHash("sha256").update(token).digest("hex");
+  const key = await db.apiKey.findUnique({ where: { keyHash } });
+  if (!key || key.revokedAt) return null;
+  const org = await db.organization.findUnique({
+    where: { id: key.organizationId },
+    select: { status: true, disabledModules: true, businessProfiles: true, plan: { select: { modules: true } } },
+  });
+  if (!org) return null;
+  db.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
+  return {
+    kind: "org",
+    userId: `apikey:${key.id}`,
+    email: "",
+    firstName: "API",
+    lastName: key.name,
+    organizationId: key.organizationId,
+    role: "DISPATCHER",
+    permissions: new Set(key.scopes as Permission[]),
+    orgStatus: org.status,
+    modules: enabledModules(org.plan?.modules, org.disabledModules, modulesForProfiles(org.businessProfiles)),
+    businessProfiles: org.businessProfiles,
+    ...(key.readOnly ? { impersonation: { platformUserId: "", platformLabel: `API key ${key.prefix}`, readOnly: true as const } } : {}),
+  };
+}
+
 // --- Route-handler guards ------------------------------------------------------
 
 type AuthorizeOk = { session: AppSession; error?: never };
@@ -157,7 +192,15 @@ type AuthorizeErr = { session?: never; error: NextResponse };
  * `mutating` call is refused so support staff can look but not touch).
  */
 export async function authorize(permission: Permission | null, opts: { mutating?: boolean } = {}): Promise<AuthorizeOk | AuthorizeErr> {
-  const session = await getSession();
+  // Public API path: Bearer key beats the browser cookie.
+  const authHeader = (await headers()).get("authorization");
+  let session: AppSession | null = null;
+  if (authHeader?.startsWith("Bearer aero_")) {
+    session = await apiKeySession(authHeader.slice(7));
+    if (!session) return { error: NextResponse.json({ error: "Invalid or revoked API key" }, { status: 401 }) };
+  } else {
+    session = await getSession();
+  }
   if (!session || (session.kind === "platform" && !session.impersonation && !session.organizationId)) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
