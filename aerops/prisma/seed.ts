@@ -197,6 +197,27 @@ async function main() {
     ],
   });
 
+  // --- Parts inventory (Section 15B) ------------------------------------
+  const oil = await db.part.create({
+    data: { organizationId: org.id, partNumber: "PH-20W50", manufacturer: "Phillips 66", description: "X/C 20W-50 aviation oil (qt)", category: "Consumable", unitCost: 9.85, quantity: 34, minQuantity: 24, maxQuantity: 96, location: "A1-3" },
+  });
+  await db.part.createMany({
+    data: [
+      { organizationId: org.id, partNumber: "REM40E", manufacturer: "Champion", description: "REM40E spark plug", category: "Engine", unitCost: 32.5, quantity: 6, minQuantity: 8, maxQuantity: 32, location: "B2-1" },
+      { organizationId: org.id, partNumber: "AA48108-2", manufacturer: "Tempest", description: "Oil filter", category: "Consumable", unitCost: 28.9, quantity: 11, minQuantity: 6, maxQuantity: 24, location: "A1-4" },
+      { organizationId: org.id, partNumber: "606C61-8", manufacturer: "Michelin", description: "Air 6.00-6 6-ply main tire", category: "Landing Gear", unitCost: 189, quantity: 4, minQuantity: 2, maxQuantity: 8, location: "C4-2" },
+      { organizationId: org.id, partNumber: "RA66-106", manufacturer: "Rapco", description: "Brake pad set", category: "Landing Gear", unitCost: 42, quantity: 3, minQuantity: 4, location: "C4-5" },
+      { organizationId: org.id, partNumber: "10-357290", manufacturer: "Slick", description: "4371 magneto", condition: "OVERHAULED", category: "Engine", unitCost: 1450, quantity: 1, minQuantity: 1, location: "SEC-1" },
+    ],
+  });
+  await db.inventoryMovement.createMany({
+    data: [
+      { partId: oil.id, type: "RECEIVE", quantity: 48, notes: "PO-2214 — Aircraft Spruce", performedBy: "Miguel Ortiz", createdAt: day(-12, 10) },
+      { partId: oil.id, type: "INSTALL", quantity: -8, notes: "100-hr oil change N204SP", performedBy: "Miguel Ortiz", createdAt: day(-8, 15) },
+      { partId: oil.id, type: "INSTALL", quantity: -6, notes: "Oil change N735GG", performedBy: "Dana Wells", createdAt: day(-3, 11) },
+    ],
+  });
+
   // --- Lesson types & syllabus ------------------------------------------
   const ltFlight = await db.lessonType.create({ data: { organizationId: org.id, name: "Dual Flight Lesson", color: "#2563eb", durationMin: 120 } });
   const ltSolo = await db.lessonType.create({ data: { organizationId: org.id, name: "Solo Flight", color: "#0891b2", durationMin: 120, requiresInstructor: false } });

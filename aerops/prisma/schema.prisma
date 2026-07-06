@@ -1107,3 +1107,58 @@ model WebhookDelivery {
 
   @@index([webhookId, createdAt])
 }
+
+/// Aviation inventory item (parts, consumables, tools).
+model Part {
+  id             String   @id @default(cuid())
+  organizationId String
+  partNumber     String
+  manufacturer   String?
+  description    String
+  category       String   @default("Consumable") // Engine, Tires, Oil, Avionics...
+  condition      String   @default("NEW")
+  unitCost       Decimal? @db.Decimal(10, 2)
+  quantity       Int      @default(0)
+  minQuantity    Int      @default(0)
+  maxQuantity    Int?
+  location       String? // warehouse / bin / shelf
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  movements InventoryMovement[]
+
+  @@unique([organizationId, partNumber])
+  @@index([organizationId, category])
+}
+
+enum MovementType {
+  RECEIVE
+  TRANSFER
+  INSTALL
+  REMOVE
+  RETURN
+  SCRAP
+  WARRANTY
+  ADJUSTMENT
+  LOST
+  DAMAGED
+  AUDIT
+}
+
+/// Every stock change, forever — the traceability ledger.
+model InventoryMovement {
+  id           String       @id @default(cuid())
+  partId       String
+  type         MovementType
+  quantity     Int // signed: receives positive, installs negative
+  workOrderId  String?
+  aircraftId   String?
+  notes        String?
+  performedBy  String?
+  createdAt    DateTime     @default(now())
+
+  part Part @relation(fields: [partId], references: [id], onDelete: Cascade)
+
+  @@index([partId, createdAt])
+}

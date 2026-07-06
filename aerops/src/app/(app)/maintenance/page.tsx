@@ -1,8 +1,9 @@
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
+import { fleetHealthOf } from "@/lib/fleet-health";
 import { PageHeader } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/badge";
+import { StatusBadge, Badge } from "@/components/ui/badge";
 import { formatDate, daysUntil } from "@/lib/utils";
 import { FleetStatusGrid, SquawkList } from "./maintenance-actions";
 import { WorkOrderBoard } from "./work-order-board";
@@ -16,10 +17,15 @@ export default async function MaintenancePage() {
   const session = await getSession();
   const organizationId = session!.organizationId;
 
-  const [aircraft, squawks, orders] = await Promise.all([
+  const [aircraft, squawks, orders, parts] = await Promise.all([
     db.aircraft.findMany({
       where: { organizationId, isSimulator: false },
-      include: { components: true, aircraftType: { select: { model: true } } },
+      include: {
+        components: true,
+        aircraftType: { select: { model: true } },
+        squawks: { where: { status: { notIn: ["RESOLVED", "CLOSED"] } }, select: { severity: true } },
+        maintenance: { where: { startDate: { gte: new Date(Date.now() - 90 * 86_400_000) } }, select: { startDate: true, status: true, category: true } },
+      },
       orderBy: { tailNumber: "asc" },
     }),
     db.squawk.findMany({
@@ -33,7 +39,17 @@ export default async function MaintenancePage() {
       include: { aircraft: { select: { tailNumber: true } } },
       orderBy: { startDate: "asc" },
     }),
+    db.part.findMany({
+      where: { organizationId },
+      include: { movements: { orderBy: { createdAt: "desc" }, take: 1 } },
+      orderBy: { partNumber: "asc" },
+    }),
   ]);
+
+  const fleetHealth = aircraft
+    .map((a) => ({ tail: a.tailNumber, model: a.aircraftType.model, health: fleetHealthOf(a, a.components, a.squawks, a.maintenance) }))
+    .sort((x, y) => x.health.score - y.health.score);
+  const lowStock = parts.filter((p) => p.quantity < p.minQuantity);
 
   const upcomingInspections = aircraft
     .flatMap((a) =>
@@ -82,6 +98,74 @@ export default async function MaintenancePage() {
             </div>
           </MetricCard>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Fleet Health Score</CardTitle>
+            <CardDescription>0-100 condition index per aircraft — airworthiness, open squawks, repeat maintenance, engine time. Every deduction is explained.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2.5">
+            {fleetHealth.map(({ tail, model, health }) => (
+              <div key={tail} className="rounded-lg border border-border p-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold">{tail}</span>
+                  <span className="text-[10px] text-muted-foreground">{model}</span>
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <span className="text-sm font-bold tabular-nums">{health.score}</span>
+                    <StatusBadge status={health.rating} />
+                  </span>
+                </div>
+                {health.factors.length > 0 ? (
+                  <ul className="mt-1.5 space-y-0.5">
+                    {health.factors.map((f) => (
+                      <li key={f.label} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="font-semibold tabular-nums text-destructive">{f.impact}</span>
+                        <span><span className="font-medium text-foreground">{f.label}:</span> {f.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-[11px] text-muted-foreground">No open squawks, inspections within limits, no repeat maintenance.</p>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Parts Inventory
+              {lowStock.length > 0 && <Badge tone="red">{lowStock.length} below minimum</Badge>}
+            </CardTitle>
+            <CardDescription>Stock moves only through the typed movement ledger — receives, installs, scraps — so every quantity is auditable.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {parts.length === 0 && <p className="text-xs text-muted-foreground">No parts on file yet.</p>}
+            {parts.map((p) => {
+              const low = p.quantity < p.minQuantity;
+              const last = p.movements[0];
+              return (
+                <div key={p.id} className={`rounded-lg border p-2 ${low ? "border-destructive/40 bg-destructive/5" : "border-border"}`}>
+                  <div className="flex items-center gap-2 text-xs">
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{p.partNumber}</code>
+                    <span className="min-w-0 flex-1 truncate font-medium">{p.description}</span>
+                    {low && <Badge tone="red">Low stock</Badge>}
+                    <span className={`tabular-nums ${low ? "font-semibold text-destructive" : "text-muted-foreground"}`}>
+                      {p.quantity} / min {p.minQuantity}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    {p.condition} · {p.category}{p.location ? ` · bin ${p.location}` : ""}
+                    {last ? ` · last: ${last.type.toLowerCase()} ${last.quantity > 0 ? "+" : ""}${last.quantity}${last.performedBy ? ` by ${last.performedBy}` : ""}` : ""}
+                  </p>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
       </div>
 
       <WorkOrderBoard
