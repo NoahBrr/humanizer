@@ -1,7 +1,10 @@
 # AeroOps Roadmap — Living Product Backlog
 
 The single source of truth for where AeroOps stands and what gets built next.
-Companion to [ARCHITECTURE.md](./ARCHITECTURE.md) (how to build),
+Companion to
+[docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
+(how to build), [CONSTITUTION.md](./CONSTITUTION.md) +
+[CLAUDE.md](./CLAUDE.md) (the rules and the session OS),
 [PRODUCTION.md](./PRODUCTION.md) (how to launch), and the [README](./README.md)
 (how to run). **Update this file after every major development session.**
 
@@ -9,7 +12,19 @@ Companion to [ARCHITECTURE.md](./ARCHITECTURE.md) (how to build),
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
-_Last session update: 2026-07-07 — Phase 0 engineering governance: created
+_Last session update: 2026-07-07 — Phase 0.5 company operating system:
+`docs/company/` (VISION, PRODUCT_PRINCIPLES, NORTH_STAR), `docs/design/`
+(DESIGN_SYSTEM), 4 executive roles added to the AI Review Board (CEO, PM,
+Financial, Reliability), CLAUDE.md 9-step governance sequence, and a full
+governance audit — one substantive contradiction found and fixed everywhere
+(route pipeline is authorize→validate, matching the code), CONSTITUTION.md
+and README.md refreshed, cross-links completed. UI deviations recorded in
+DESIGN_SYSTEM for later cleanup (chart hex palette, weather-tone duplication,
+missing error.tsx). Docs only; not deployed. Next: implement the
+governance-audit security findings (platform session revocation,
+AUTH_SECRET fallback) through the review board._
+
+_Phase 0 (same day) — engineering governance: created
 `docs/architecture/` (ARCHITECTURE source of truth + 19 ADRs in DECISIONS +
 API/DATABASE/SECURITY standards), `docs/engineering/` (ENGINEERING_HANDBOOK
 + AI_REVIEW_BOARD with 8 reviewers and gate matrix), `docs/aviation/`

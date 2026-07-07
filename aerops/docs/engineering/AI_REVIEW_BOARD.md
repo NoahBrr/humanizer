@@ -111,8 +111,10 @@ boundaries: the `src/lib` engine layer, thin routes/pages, the Prisma schema,
 and the module seams described in ARCHITECTURE.md.
 
 **Checklist**
-- [ ] Business logic is in `src/lib`; routes only validate (zod), authorize,
-      call an engine, audit, emit. Components only render.
+- [ ] Business logic is in `src/lib`; routes only authorize, validate (zod),
+      call an engine, audit, emit (pipeline per
+      [API_STANDARDS.md](../architecture/API_STANDARDS.md)). Components only
+      render.
 - [ ] A computation appearing twice became a lib function (the
       `computeOrgHealth` pattern).
 - [ ] Schema changes are named migrations, additive-only within a release;
@@ -471,4 +473,7 @@ reliability surface).
 - [PRODUCTION.md](../../PRODUCTION.md) — the Production Reviewer's audit basis
 - [ROADMAP.md](../../ROADMAP.md) — where verdicts' deferred work lands
 - [AVIATION_STANDARDS.md](../aviation/AVIATION_STANDARDS.md) — domain standards the UX/QA gates enforce
+- [API_STANDARDS.md](../architecture/API_STANDARDS.md) · [DATABASE_STANDARDS.md](../architecture/DATABASE_STANDARDS.md) · [SECURITY_STANDARDS.md](../architecture/SECURITY_STANDARDS.md) — what gates 2/3 enforce
+- [ENGINEERING_HANDBOOK.md](./ENGINEERING_HANDBOOK.md) — the workflow the board reviews within
+- [VISION.md](../company/VISION.md) · [NORTH_STAR.md](../company/NORTH_STAR.md) · [PRODUCT_PRINCIPLES.md](../company/PRODUCT_PRINCIPLES.md) — what the executive gates review against
 - [.claude/agents/](../../.claude/agents/) — the reviewer subagent definitions

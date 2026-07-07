@@ -1,6 +1,6 @@
 # AeroOps Database Standards
 
-How the schema (`prisma/schema.prisma`, ~55 models) is designed, migrated,
+How the schema (`prisma/schema.prisma`, 50 models) is designed, migrated,
 and queried. These standards describe what the codebase actually does;
 anything not yet true is marked **(aspirational — not yet enforced)**.
 
@@ -186,4 +186,5 @@ runtime-created rows); the dev seed **never** runs in production
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system shape and engines
 - [SECURITY_STANDARDS.md](./SECURITY_STANDARDS.md) — auth, tenancy, secrets
 - [ENGINEERING_HANDBOOK.md](../engineering/ENGINEERING_HANDBOOK.md) — how we work
+- [DECISIONS.md](./DECISIONS.md) — ADR-007 (no-RLS tenancy), ADR-015 (additive-only migrations)
 - [PRODUCTION.md](../../PRODUCTION.md) — launch plan (§11 backups, §13 blockers)

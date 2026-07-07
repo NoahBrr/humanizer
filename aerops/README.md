@@ -8,6 +8,12 @@ Built with Next.js 15 (App Router), TypeScript, Tailwind CSS 4, Prisma, and
 PostgreSQL. UI patterned after modern enterprise tools: command palette (⌘K),
 dark/light mode, keyboard-friendly, responsive.
 
+**Working on the code?** Start with [CLAUDE.md](./CLAUDE.md) (session
+operating system), [CONSTITUTION.md](./CONSTITUTION.md) (enforced rules),
+and the governance library in [docs/](./docs/) — architecture, ADRs,
+standards, review board, company vision. [ROADMAP.md](./ROADMAP.md) is the
+living backlog; [PRODUCTION.md](./PRODUCTION.md) is the launch plan.
+
 ## Public website & onboarding
 
 The marketing site lives at `/` (with `/features`, `/solutions/*`, `/pricing`,
@@ -32,7 +38,7 @@ keyboard shortcut; phones/tablets use the bottom navigation bar.
 
 ## Quick start
 
-Requirements: Node 20+, PostgreSQL 14+.
+Requirements: Node 20+, PostgreSQL 16.
 
 ```bash
 npm install
@@ -193,13 +199,13 @@ src/
   auth.ts, auth.config.ts     Auth.js (edge-safe split), role claims in JWT
   middleware.ts               session gate for all app routes
   lib/db.ts                   Prisma client singleton
-  lib/rbac.ts                 role → section access map
+  lib/permissions.ts, rbac.ts data-driven RBAC catalog + nav→permission map
   lib/scheduling.ts           conflict detection + alternative-slot search
   app/(auth)/sign-in          public auth pages
   app/(app)/…                 role-gated product pages (server components)
   app/api/…                   REST endpoints (zod-validated, org-scoped)
   components/ui, shell        design system + navigation chrome
-prisma/schema.prisma          ~30 models, FKs + indexes, multi-tenant
+prisma/schema.prisma          50 models, FKs + indexes, multi-tenant
 prisma/seed.ts                demo flight school with a live two-week schedule
 ```
 
@@ -219,10 +225,11 @@ Key design decisions:
 
 ## Production integrations (stubs by design)
 
-MFA enrollment, Stripe charging, QuickBooks sync, Twilio/SendGrid delivery,
-S3/Supabase uploads, and live METAR/TAF are represented in the schema, UI,
-and settings but not wired to external accounts — each is an isolated
-adapter point ready for keys.
+Stripe subscriptions, QuickBooks sync, Resend email delivery (SMS via
+Twilio later), Cloudflare R2 uploads, and live METAR/TAF are represented in
+the schema, UI, and settings but not wired to external accounts — each is
+an isolated adapter point ready for keys, sequenced in
+[PRODUCTION.md](./PRODUCTION.md) §13.
 
 ## Scripts
 

@@ -203,8 +203,8 @@ Two credentials, one resolution path (`src/lib/session.ts`):
   The catalog surfaces to customers in Settings → Developers.
 - The permission catalog (`src/lib/permissions.ts`) doubles as the API-key
   scope documentation — scope keys are permission keys.
-- OpenAPI generation is staged on the roadmap (ARCHITECTURE.md known
-  limitations) **(aspirational — not yet enforced)**. Until it lands: a new
+- OpenAPI generation is staged on the roadmap ([ROADMAP.md](../../ROADMAP.md))
+  **(aspirational — not yet enforced)**. Until it lands: a new
   or changed route documents itself through its zod schema, its
   constitution-test entry (if excepted), and actionable error strings — and
   PR descriptions record the real requests used to verify it, including
@@ -216,4 +216,5 @@ Two credentials, one resolution path (`src/lib/session.ts`):
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system shape and engines
 - [SECURITY_STANDARDS.md](./SECURITY_STANDARDS.md) — auth, tenancy, secrets
 - [ENGINEERING_HANDBOOK.md](../engineering/ENGINEERING_HANDBOOK.md) — how we work
+- [DECISIONS.md](./DECISIONS.md) — ADR-009 (event bus), ADR-018 (Stripe idempotency)
 - [PRODUCTION.md](../../PRODUCTION.md) — launch plan (§13 blockers, §16 env matrix)

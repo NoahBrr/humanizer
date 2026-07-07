@@ -215,4 +215,5 @@ lands.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system shape, engines, event bus
 - [ENGINEERING_HANDBOOK.md](../engineering/ENGINEERING_HANDBOOK.md) — coding, workflow, and release standards
 - [PRODUCTION.md](../../PRODUCTION.md) — launch plan; §3/§12/§13 are the security hardening path
+- [DECISIONS.md](./DECISIONS.md) — ADR-003 (JWT sessions), ADR-004 (separate PlatformUser identity)
 - [CLAUDE.md](../../CLAUDE.md) — session-start operating system

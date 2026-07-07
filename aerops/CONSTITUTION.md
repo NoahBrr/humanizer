@@ -1,8 +1,16 @@
 # AeroOps Engineering Constitution
 
 The standards every engineer, AI coding assistant, and contributor follows.
-Companions: [ARCHITECTURE.md](./ARCHITECTURE.md) (how the system is built),
-[ROADMAP.md](./ROADMAP.md) (what gets built when). Start every development
+Companions:
+[docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
+(how the system is built), the standards library
+([API](./docs/architecture/API_STANDARDS.md) ·
+[database](./docs/architecture/DATABASE_STANDARDS.md) ·
+[security](./docs/architecture/SECURITY_STANDARDS.md) ·
+[handbook](./docs/engineering/ENGINEERING_HANDBOOK.md) ·
+[review board](./docs/engineering/AI_REVIEW_BOARD.md)),
+[ROADMAP.md](./ROADMAP.md) (what gets built when), and
+[PRODUCTION.md](./PRODUCTION.md) (how it launches). Start every development
 session by reading `CLAUDE.md` — it is the session-start digest of this
 document.
 
@@ -16,15 +24,19 @@ maintenance / CRM tools. Think platform first: every feature should
 strengthen the engines, the event vocabulary, the API surface, and Mission
 Control — not just its own page. Write for the engineer reading this in
 twenty years; prefer readable over clever; never take an undocumented
-shortcut (document it in "Known limitations" instead).
+shortcut (record it as an honest deferral in [ROADMAP.md](./ROADMAP.md)
+instead).
 
 ## The enforced rules
 
 1. ⚖ **One authorization gate.** Every API route calls `authorize()` /
    `authorizePlatform()`. Exactly two exception categories exist, each
-   allowlisted with a reason in the test: public-by-design routes (NextAuth,
-   health, invitation accept, pre-auth MFA check) and self-service identity
-   routes (own MFA/password/sessions), which must still session-guard and 401.
+   allowlisted **with a written reason in `tests/constitution.test.ts`**
+   (the test is the authoritative enumeration): public-by-design routes
+   (NextAuth, health, registration, invitation accept, pre-auth MFA check,
+   demo requests) and self-service routes (own MFA/password/sessions, org
+   create/join/search, waitlist, invite-link redemption), which must still
+   session-guard and 401.
 2. ⚖ **Never bypass the event bus.** `emitWebhook` is called only inside
    `src/lib`; domain code emits through `emitDomainEvent`. The event
    vocabulary must not drift from reality: every registered event must have
@@ -32,11 +44,14 @@ shortcut (document it in "Known limitations" instead).
 3. ⚖ **Navigation is permission-mapped.** Every nav item has a
    `SECTION_PERMISSIONS` entry; UI, server pages, and APIs gate from the same
    permission set. Never hardcode a role check in a component.
-4. ⚖ **Canonical status colors.** One `STATUS_TONE` map, one file, meanings
-   frozen (Section 3). New states get new entries; existing meanings never
-   change.
-5. **Business logic lives in `src/lib`.** Routes validate (zod), authorize,
-   call an engine, audit, emit. Components render. If a computation appears
+4. ⚖ **Canonical status colors.** One `STATUS_TONE` map, one file
+   (`src/lib/status-colors.ts`), meanings frozen — the
+   [design system](./docs/design/DESIGN_SYSTEM.md) documents them. New
+   states get new entries; existing meanings never change.
+5. **Business logic lives in `src/lib`.** Routes authorize, validate (zod),
+   call an engine, audit, emit — pipeline per
+   [API_STANDARDS.md](./docs/architecture/API_STANDARDS.md). Components
+   render. If a computation appears
    in two places, it becomes a lib function (see `computeOrgHealth` — that
    refactor is the pattern).
 6. **Explainable engines.** Computed answers ship with their reasons —

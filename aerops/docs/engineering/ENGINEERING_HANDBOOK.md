@@ -43,7 +43,8 @@ aerops/
 ```
 
 Internal boundaries are the future monorepo package seams — nothing crosses
-them except through exported functions (ARCHITECTURE.md "Shape").
+them except through exported functions
+([ARCHITECTURE.md §1](../architecture/ARCHITECTURE.md)).
 
 ## Naming conventions
 
@@ -152,8 +153,11 @@ them except through exported functions (ARCHITECTURE.md "Shape").
 
 ## API workflow
 
-Every route follows the same shape: **validate (zod) → authorize → call an
-engine → audit → emit** (thin routes, ARCHITECTURE.md rule 3).
+Every route follows the same shape: **authorize → validate (zod) → call an
+engine → audit → emit** — authorize first, so anonymous callers never get
+their bodies parsed. Canonical pipeline:
+[API_STANDARDS.md](../architecture/API_STANDARDS.md); thin-routes rule:
+[ARCHITECTURE.md §3](../architecture/ARCHITECTURE.md).
 
 - Gate through `authorize(permission, {mutating})` /
   `authorizePlatform(roles)` — no exceptions; new routes must pass the
@@ -181,9 +185,9 @@ gate **(aspirational — no `.github/workflows` exists yet; PRODUCTION.md
 
 ## Code review process
 
-- Features pass the **AI Review Board** ([AI_REVIEW_BOARD.md](./AI_REVIEW_BOARD.md),
-  being written in parallel with this handbook): a feature is not complete
-  until it passes all 8 reviewers.
+- Features pass the **AI Review Board** ([AI_REVIEW_BOARD.md](./AI_REVIEW_BOARD.md)):
+  a feature is not complete until it passes all 8 reviewer gates, plus the
+  executive gates (Product Manager at feature-slice scope and above).
 - Role-based review flow (CLAUDE.md "Engineering roles"): architect scopes →
   engineer builds → qa-engineer + security-reviewer in parallel →
   docs-engineer → production-reviewer before release-sized merges. Don't
@@ -272,7 +276,8 @@ environment exists yet.)**
 | This handbook / SECURITY_STANDARDS | A standard itself changes |
 
 Never document behavior you haven't confirmed in the code. Record honest
-deferrals ("Known limitations") instead of taking undocumented shortcuts.
+deferrals in [ROADMAP.md](../../ROADMAP.md) instead of taking undocumented
+shortcuts.
 
 ## Related documents
 

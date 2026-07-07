@@ -224,9 +224,11 @@ root's `.claude/agents/` so they're discovered from either anchor). Use them
 so work runs like a coordinated team — but don't ceremonialize small fixes; a typo doesn't
 need a committee. Typical flow for a feature slice:
 
-**architect → engineer (+ ui-engineer / db-architect where touched) →
-qa-engineer + security-reviewer in parallel → docs-engineer →
-production-reviewer before release-sized merges.**
+**architect (CTO + PM lenses) → engineer (+ ui-engineer / db-architect
+where touched) → security-reviewer + performance-reviewer + qa-engineer +
+ui-engineer in parallel → docs-engineer → production-reviewer before
+release-sized merges** (the board's gate matrix scales this down for small
+fixes).
 
 | Role | Agent | Use when |
 |---|---|---|
@@ -255,4 +257,5 @@ node scripts/verify-print.mjs       # verify homepage print render + PDF export
 
 Local DB: `postgresql://aerops:aerops@localhost:5432/aerops`.
 Demo logins (password `demo1234`): `admin@aerops.demo` (org admin),
-`founder@aerops.io` (platform founder); full list in README.md.
+`founder@aerops.io` (platform founder); more in README.md, complete set in
+`prisma/seed.ts`.

@@ -80,17 +80,19 @@ flowchart TD
 ## 3. Backend architecture
 
 Business logic lives in `src/lib` engines; routes and pages stay thin. A
-route does exactly five things, in order:
+route does exactly five things, in order (canonical definition:
+[API_STANDARDS.md](./API_STANDARDS.md) — authorize first, so anonymous
+callers never get their bodies parsed):
 
 ```
-validate (zod) → authorize() → call engine → recordAudit → emitDomainEvent
+authorize() → validate (zod) → call engine → recordAudit → emitDomainEvent
 ```
 
 Engines are **explainable**: anything computed — scheduling conflicts,
 airworthiness, checkride readiness, fleet health (0–100), org health,
 insights, forecasts — returns its reasons (factors/basis/confidence)
 alongside its answer. A number without a "why" is a bug, and contract tests
-pin it (fleet-health factors must sum to the score).
+pin it (fleet-health factor impacts must sum to the score delta from 100).
 
 | Engine | File | Answers |
 |---|---|---|
@@ -172,7 +174,9 @@ Shared schema, row-scoped: every operational record hangs off
 `Organization` via `organizationId` with scoped indexes. **Org scope comes
 from the session, never from client input** — cross-tenant queries exist
 only on platform-admin routes behind `authorizePlatform`. Isolation is
-enforced in the engine layer (not DB RLS — an ADR documents why), verified
+enforced in the engine layer (not DB RLS —
+[ADR-007](./DECISIONS.md#adr-007--shared-schema-row-scoped-multi-tenancy-enforced-in-the-engine-layer)
+documents why), verified
 by cross-tenant denial tests against the running app. Tenant lifecycle
 tooling (demo generation, snapshots, simulation) lives behind the platform
 surface and is FK-order-aware (`lib/org-snapshot.ts` is the canonical wipe
@@ -291,9 +295,9 @@ require a human through permissioned APIs). Full standards:
 Canonical write path (dispatch closeout, the reference implementation):
 
 ```
-UI action → POST /api/dispatch/.../closeout
-  → zod validation
-  → authorize("dispatch.manage", {mutating: true})   ← session, org scope, impersonation check
+UI action → POST /api/dispatch/[id]/close
+  → authorize("dispatch.close", {mutating: true})    ← session, org scope, impersonation check
+  → org-scoped load + zod validation
   → engine: one db.$transaction { meters + ledger + invoice }
   → recordAudit(actor, org, action, metadata, IP/UA)
   → emitDomainEvent(orgId, "flight.closed", …)       ← webhooks/automations/notifications fan out

@@ -3,7 +3,7 @@
 The step-by-step plan for taking AeroOps from verified local app to
 production SaaS. **This is a plan, not a deployment** — nothing here has been
 provisioned. Work items are mirrored in [ROADMAP.md](./ROADMAP.md);
-architecture context lives in [ARCHITECTURE.md](./ARCHITECTURE.md).
+architecture context lives in [docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md).
 
 Independently verification-audited on 2026-07-07 against the running
 codebase: 112 tests green, lint + production build green, weather
