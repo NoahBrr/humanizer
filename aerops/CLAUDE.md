@@ -135,14 +135,34 @@ unset. Additive migrations only; secrets never in the repo.
 ## 12. Instructions for future Claude Code sessions
 
 1. Start: read this file → skim ROADMAP's "Last session update" → `npm test`.
-2. **Before implementing**: read the relevant sections of
-   [docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
-   and the engine you're touching. **Before changing an existing pattern**:
-   check [docs/architecture/DECISIONS.md](./docs/architecture/DECISIONS.md) —
-   if an ADR decided it, write a superseding ADR first, never a silent edit.
-   Any intentional deviation from the architecture gets explained (in the
-   plan, the ADR, and the commit) *before* the code is written — shortcuts
-   that violate architecture are refused, not smuggled in.
+2. **Before any significant implementation, run this sequence in order**
+   (skip for typo-tier fixes, per the review-board gate matrix):
+   1. Read [docs/company/VISION.md](./docs/company/VISION.md) — does this
+      serve a named persona and the current market?
+   2. Read [docs/company/NORTH_STAR.md](./docs/company/NORTH_STAR.md) —
+      does it weaken anything under "What must never change"? If yes, stop.
+   3. Review [docs/company/PRODUCT_PRINCIPLES.md](./docs/company/PRODUCT_PRINCIPLES.md)
+      — which principles apply, and which wins where they conflict?
+   4. Verify compliance with
+      [docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
+      and read the engine you're touching.
+   5. Check [docs/architecture/DECISIONS.md](./docs/architecture/DECISIONS.md)
+      — if an ADR decided the pattern, write a superseding ADR first,
+      never a silent edit.
+   6. Apply [docs/engineering/ENGINEERING_HANDBOOK.md](./docs/engineering/ENGINEERING_HANDBOOK.md)
+      (and [docs/design/DESIGN_SYSTEM.md](./docs/design/DESIGN_SYSTEM.md)
+      for anything with a screen).
+   7. Evaluate against
+      [docs/aviation/AVIATION_STANDARDS.md](./docs/aviation/AVIATION_STANDARDS.md).
+   8. Complete all required AI reviews
+      ([docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md),
+      including the executive gates at feature-slice scope and above).
+   9. Update documentation in the same PR when behavior or architecture
+      changes — docs are part of the feature.
+
+   Any intentional deviation from architecture or principles gets explained
+   (in the plan, the ADR, and the commit) *before* the code is written —
+   shortcuts that violate architecture are refused, not smuggled in.
 3. Work in slices using the roles below; keep the constitution green. No
    feature is complete until it passes the quality gates in §13.
 4. DB down? `pg_ctlcluster 16 main start`; reseed with `npm run seed`
@@ -169,13 +189,17 @@ territory moves.
 
 | Document | Governs |
 |---|---|
+| [docs/company/VISION.md](./docs/company/VISION.md) | Why AeroOps exists — mission, personas, markets, out-of-scope list |
+| [docs/company/NORTH_STAR.md](./docs/company/NORTH_STAR.md) | What must never change — the highest-level tiebreaker |
+| [docs/company/PRODUCT_PRINCIPLES.md](./docs/company/PRODUCT_PRINCIPLES.md) | The 12 principles that decide features |
+| [docs/design/DESIGN_SYSTEM.md](./docs/design/DESIGN_SYSTEM.md) | Tokens, components, states, print, motion — the visual language |
 | [docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md) | System source of truth — every implementation complies |
 | [docs/architecture/DECISIONS.md](./docs/architecture/DECISIONS.md) | ADR log — check before changing any established pattern |
 | [docs/architecture/API_STANDARDS.md](./docs/architecture/API_STANDARDS.md) | REST conventions, errors, versioning, idempotency |
 | [docs/architecture/DATABASE_STANDARDS.md](./docs/architecture/DATABASE_STANDARDS.md) | Prisma, migrations, indexes, tenancy, backups |
 | [docs/architecture/SECURITY_STANDARDS.md](./docs/architecture/SECURITY_STANDARDS.md) | Auth, sessions, secrets, OWASP, audit |
 | [docs/engineering/ENGINEERING_HANDBOOK.md](./docs/engineering/ENGINEERING_HANDBOOK.md) | How code gets written, reviewed, released |
-| [docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md) | The eight reviewers and their gates |
+| [docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md) | Eight reviewers + four executive roles (CEO, PM, Financial, Reliability) and their gates |
 | [docs/aviation/AVIATION_STANDARDS.md](./docs/aviation/AVIATION_STANDARDS.md) | Aviation-first domain rules (FAA terms, Hobbs/Tach, weather, compliance) |
 | [CONSTITUTION.md](./CONSTITUTION.md) | Machine-enforced rules (`tests/constitution.test.ts`) |
 | [PRODUCTION.md](./PRODUCTION.md) | Launch plan, phases A–F, env matrix |

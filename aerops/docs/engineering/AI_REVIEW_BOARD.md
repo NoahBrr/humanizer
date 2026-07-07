@@ -306,6 +306,163 @@ explicit instruction; a new public surface with no rate limit.
 
 ---
 
+# Executive team
+
+Four executive roles sit above the eight reviewers. Reviewers gate *how* a
+change is built; the executive team gates *whether and when*. They engage at
+the scopes below — never for bug fixes — and they review against the company
+stack: [VISION.md](../company/VISION.md),
+[NORTH_STAR.md](../company/NORTH_STAR.md),
+[PRODUCT_PRINCIPLES.md](../company/PRODUCT_PRINCIPLES.md).
+
+| Executive role | Engages when | Subagent |
+|---|---|---|
+| Chief Executive Officer | New market/vertical, pricing, positioning, anything touching "What must never change" | `architect` (executive lens) |
+| Product Manager | Every feature slice, before build | `architect` (product lens) |
+| Financial Systems Reviewer | Any change where money moves, is computed, or is reported | `db-architect` + `security-reviewer` jointly |
+| Reliability / SRE Reviewer | Release-sized merges; anything touching infra seams, health, or rollback | `production-reviewer` (SRE lens) |
+
+## E1. Chief Executive Officer
+
+**Responsibilities.** Owns coherence between what ships and what the
+company is: vision, market sequencing, pricing/plan structure, scope
+discipline (the "intentionally outside scope" list), and the final call
+when principles conflict irreconcilably below.
+
+**Success metrics.** Vision documents stay true (no drift between VISION.md
+and the shipped product); every shipped quarter maps to the success-horizon
+table; zero features shipped from the out-of-scope list without a VISION.md
+amendment; churn and time-to-value trends once customers exist.
+
+**Review checklist**
+- [ ] The change serves a persona in VISION.md, named explicitly.
+- [ ] It advances the current market (beachhead first) rather than a later
+      ring of the expansion sequence, or argues the exception in writing.
+- [ ] Pricing/plan impact considered (`SubscriptionPlan` limits, module
+      gating) — features land in the right tier.
+- [ ] Nothing under NORTH_STAR "What must never change" is weakened.
+- [ ] The out-of-scope list stays intact — or this review amends VISION.md
+      first, in the same PR.
+
+**Automatic rejection:** a feature for a market AeroOps has not entered;
+anything that monetizes customer data; a change that makes leaving harder
+(export/import degradation); scope-list violations without a VISION.md
+amendment; weakening a never-change item regardless of upside.
+
+**Collaboration.** Consumes the AI CTO's technical-direction verdict rather
+than re-litigating it; delegates feasibility to the Principal Architect;
+hands the PM the "is it right for users *now*" question. Ties between
+principles escalate here and end here.
+
+## E2. Product Manager
+
+**Responsibilities.** The user's advocate in the room: problem definition,
+workflow fit, scope of the slice, clicks-to-done, empty/loading/error
+completeness, and the honest ROADMAP.md row (status, priority, deferrals).
+
+**Success metrics.** Features ship with their workflow complete (no
+"phase 2" for the error state); clicks-to-done stated and defended for new
+workflows; ROADMAP.md reflects reality after every session; zero features
+that a persona cannot be named for.
+
+**Review checklist**
+- [ ] The problem statement names the persona and the moment (front desk at
+      7 AM ≠ owner on Sunday night).
+- [ ] The slice is the smallest shippable version that still completes a
+      workflow — not a fragment needing an unshipped sequel.
+- [ ] Clicks-to-done counted for the primary path; principle 3 ("Every
+      Click Saves Time") applied, principle 2 (Safety) respected where they
+      conflict.
+- [ ] Loading, empty, and error states designed — they are part of the
+      feature (CLAUDE.md §4).
+- [ ] Mobile flow considered at design time, not adapted after.
+- [ ] ROADMAP.md updated: the row, its status, and honest deferrals.
+
+**Automatic rejection:** a feature with no named persona; a workflow that
+dead-ends (no empty/error state); desktop-only UI; a slice that requires
+explaining "the rest is coming" to be usable; ROADMAP.md untouched.
+
+**Collaboration.** Runs before the AI CTO/Architect gates (problem before
+solution); supplies the QA Reviewer the user-flow list to verify; supplies
+the UX Reviewer the workflow-quality intent; disagreements about scope
+resolve PM→CEO, about feasibility PM→Architect.
+
+## E3. Financial Systems Reviewer
+
+**Responsibilities.** Correctness of every path where money is computed,
+moved, stored, or reported: tenant invoicing/ledgers (`lib/billing.ts`,
+dispatch closeout), receivables, plan limits, and — when Phase C lands —
+Stripe subscription state and webhook idempotency.
+
+**Success metrics.** Zero money-precision defects (float leakage) ever;
+closeout→invoice remains leak-free (every closed flight billed); billing
+state transitions replayable from `BillingEvent` + audit trail; refunds/
+credits always net to a consistent ledger.
+
+**Review checklist**
+- [ ] All money is `Decimal` end-to-end — no `parseFloat`, no JS arithmetic
+      on currency, correct Prisma `@db.Decimal` precision.
+- [ ] Multi-row money mutations are one `db.$transaction` (ADR-011); no
+      external calls inside the transaction.
+- [ ] Every financial mutation audited with enough metadata to reconstruct
+      the ledger without the database's current state.
+- [ ] Idempotency for anything webhook- or retry-driven (unique-insert
+      pattern, PRODUCTION.md §13.2); duplicate delivery cannot double-bill.
+- [ ] Tenant boundaries on financial reads (org A can never aggregate org
+      B); plan-limit enforcement can't be bypassed by direct API calls.
+- [ ] Rounding policy explicit at every division (rate proration, tax).
+
+**Automatic rejection:** money as float anywhere; a financial mutation
+outside a transaction or without audit; webhook handlers without
+idempotency; client-supplied prices or totals trusted; a report whose
+numbers cannot be traced to rows.
+
+**Collaboration.** Joint reviews with the Security Reviewer on payment
+surfaces (webhook signatures, portal access); with the Principal Architect
+on schema (Decimal precision, FK actions for financial rows); with the
+Production Reviewer on Stripe rollout gates (`BILLING_ENFORCEMENT` stays
+`off` until the CEO/owner flips it).
+
+## E4. Reliability / Site Reliability Reviewer
+
+**Responsibilities.** The system's behavior when things go wrong:
+deployment safety, rollback readiness, monitoring/alerting coverage, health
+checks, backup/restore, capacity seams, and the honest failure modes of
+every new integration.
+
+**Success metrics.** Every release rollback-safe (additive-only migrations
+held); restore drills executed on schedule and timed (PRODUCTION.md §11.4);
+alert coverage such that a staging/production error pages a human within
+minutes (Phase D exit criterion); zero "silent degradation" integrations.
+
+**Review checklist**
+- [ ] The change survives app rollback: no destructive migration in the
+      same release as the code change (ADR-015).
+- [ ] New adapters follow the env-flag pattern — absent config = today's
+      behavior, degraded gracefully and *visibly logged*, never silently.
+- [ ] Failure modes enumerated: what does this feature do when the DB is
+      slow, the third party is down, the webhook retries?
+- [ ] Anything long-running or retry-prone sits behind the event bus/queue
+      seam, never inline in a request.
+- [ ] `/api/health` and monitoring reflect the new surface where relevant;
+      logs use `lib/logger.ts` with enough context to debug at 3 AM.
+- [ ] Runbook updated when an operational procedure changes (deploy,
+      restore, secret rotation).
+
+**Automatic rejection:** a migration that breaks N-1 app code; an
+integration that fails silently when unconfigured; retry logic that can
+duplicate side effects; a new external dependency with no timeout; removing
+or weakening a health check or alert to make a deploy pass.
+
+**Collaboration.** Extends the Production Reviewer's gate on release-sized
+merges (Production owns the checklist, Reliability owns failure-mode
+depth); pairs with the Performance Reviewer on capacity questions (slow vs
+down are different reviews); with the Financial Systems Reviewer on
+billing-critical delivery (Stripe webhooks are both a money and a
+reliability surface).
+
+---
+
 ## Related documents
 
 - [CONSTITUTION.md](../../CONSTITUTION.md) — the enforced law behind every gate
