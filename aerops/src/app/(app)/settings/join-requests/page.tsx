@@ -27,7 +27,9 @@ export default async function JoinRequestsPage() {
     db.inviteLink.findMany({
       where: { organizationId: session.organizationId, revokedAt: null },
       orderBy: { createdAt: "desc" },
-      select: { id: true, label: true, role: true, token: true, autoApprove: true, uses: true, maxUses: true, expiresAt: true },
+      // The raw token is never stored (ADR-020) — the shareable URL is shown
+      // once at creation, so it is not selectable here.
+      select: { id: true, label: true, role: true, autoApprove: true, uses: true, maxUses: true, expiresAt: true },
     }),
   ]);
 

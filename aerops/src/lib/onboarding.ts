@@ -1,9 +1,9 @@
-import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
+import { createToken, hashToken } from "@/lib/tokens";
 
 /**
  * Public onboarding engine: individual accounts, self-serve organization
@@ -97,13 +97,12 @@ export async function createOrganizationForUser(userId: string, input: CreateOrg
   for (const raw of input.inviteEmails ?? []) {
     const email = raw.toLowerCase().trim();
     if (!email || email === user.email) continue;
-    const token = randomBytes(24).toString("base64url");
     await db.invitation.create({
       data: {
         organizationId: org.id,
         email,
         role: "STUDENT",
-        token,
+        tokenHash: createToken().hash,
         invitedBy: `${user.firstName} ${user.lastName}`,
         expiresAt: new Date(Date.now() + 14 * 86_400_000),
       },
@@ -198,7 +197,7 @@ export async function approveJoinRequest(
 // --- Invite links ----------------------------------------------------------------
 
 export async function redeemInviteLink(token: string, userId: string) {
-  const link = await db.inviteLink.findUnique({ where: { token }, include: { organization: { select: { id: true, name: true, status: true, deletedAt: true } } } });
+  const link = await db.inviteLink.findUnique({ where: { tokenHash: hashToken(token) }, include: { organization: { select: { id: true, name: true, status: true, deletedAt: true } } } });
   if (!link || link.revokedAt) return { error: "This invite link is no longer valid." };
   if (link.expiresAt && link.expiresAt < new Date()) return { error: "This invite link has expired." };
   if (link.maxUses !== null && link.uses >= link.maxUses) return { error: "This invite link has reached its maximum uses." };

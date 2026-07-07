@@ -83,9 +83,19 @@ the code.
   HMAC; both consume it through `requireAuthSecret()` — there is no
   fallback path in production (see the fail-closed bullet above), and each
   stage uses its own strong secret (PRODUCTION.md §16).
-- Webhook secrets live per-subscription in the `Webhook` row; API keys are
-  stored **only** as sha256 hashes (`keyHash`) — the raw `aero_` token is
-  shown once.
+- **Token storage policy (ADR-020):** every bearer token AeroOps issues —
+  API keys, invitation tokens, invite-link tokens — is stored **only** as a
+  sha256 hash (`keyHash` / `tokenHash`) via `lib/tokens.ts`; the raw value is
+  shown once at creation and never persisted. Lookup hashes the presented
+  token and matches the stored hash. A database read (backup leak, injection,
+  insider) yields no working credential. Enforced by
+  `tests/token-security.test.ts` (no raw `token` column, no `where: { token`
+  lookup). Consequence: an invite link, being one-way-hashed, is shown once
+  and is not re-displayable — reshare by creating a new link. Impersonation
+  and session tokens are HMAC-signed / JWT, not stored (see the session
+  table above). Webhook secrets are a special case: stored raw because the
+  sender must re-read them to HMAC-sign each delivery (documented exception,
+  DATABASE_STANDARDS.md).
 - Vercel encrypted envs per stage, 1Password/Doppler as source of truth,
   quarterly rotation **(aspirational — not yet enforced)** — PRODUCTION.md
   §3.13.

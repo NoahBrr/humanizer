@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorizePlatform } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/permissions";
+import { createToken } from "@/lib/tokens";
 
 const createSchema = z.object({
   name: z.string().min(2),
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   const plan = await db.subscriptionPlan.findUnique({ where: { id: data.planId } });
   if (!plan) return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
 
-  const token = randomBytes(24).toString("base64url");
+  const { raw: token, hash: tokenHash } = createToken();
   const org = await db.organization.create({
     data: {
       name: data.name,
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
         create: {
           email: data.adminEmail.toLowerCase(),
           role: "SCHOOL_ADMIN",
-          token,
+          tokenHash,
           invitedBy: `${session.firstName} ${session.lastName} (AeroOps)`,
           expiresAt: new Date(Date.now() + 14 * 86_400_000),
         },

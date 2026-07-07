@@ -326,6 +326,41 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
   "docs are part of the feature" rule.
 - **Reconsider when:** the org grows real (human) process tooling.
 
+## ADR-020 — All bearer tokens stored as one-way sha256 hashes, raw shown once
+
+**Date:** 2026-07 (Phase 1B) · **Status:** Accepted
+
+- **Context:** API keys were already hashed (`keyHash`), but invitation and
+  invite-link tokens were stored **raw** (`token String @unique`). A database
+  read — backup leak, SQL injection, insider — handed out working
+  account-creation and org-join credentials.
+- **Alternatives:** encrypt-at-rest (reversible — still yields plaintext to
+  anyone with the key; needed only if the raw value must be recovered);
+  selector/verifier split (extra column, no benefit over hash-lookup here);
+  leave invite links raw because they're "semi-public" (rejected — auto-approve
+  links attach members directly; defense-in-depth applies).
+- **Why:** one policy for every token the platform issues — store only
+  `sha256(raw)` via `lib/tokens.ts`, show the raw value once, look up by
+  hashing the presented token. Consistent with the existing API-key path,
+  cheap per-request (fast hash, high-entropy token needs no bcrypt/salt),
+  and machine-enforced (`tests/token-security.test.ts`).
+- **Consequences / trade-offs:** hashing is one-way, so an invite link can no
+  longer be re-displayed to the admin after creation — the settings UI moved
+  to a one-time reveal + create-new-to-reshare (the redeemer's `/join/<token>`
+  experience is unchanged). `Webhook.secret` stays raw as a documented
+  exception: it is a signing key the delivery path must re-read to HMAC each
+  attempt, not a bearer token. Impersonation/session tokens are signed-not-
+  stored (ADR-003), so they're already covered.
+- **Migration:** in-place backfill (`sha256(convert_to(token,'UTF8'))`,
+  byte-identical to `lib/tokens.ts`) then drop the raw column, so existing
+  links keep working — no invalidation. Safe because pre-production, but the
+  backfill would preserve real tokens too.
+- **Risks:** sha256 (not bcrypt) is correct only because these tokens carry
+  ≥192 bits of entropy; a future *low-entropy* token type must not reuse this
+  helper without a KDF. Reconsider when email verification / password reset
+  tokens land (Phase B) — they use the same hashed-single-use pattern
+  (already the plan, PRODUCTION.md §13.1).
+
 ---
 
 **Adding an ADR:** copy the format, take the next number, link any ADR it

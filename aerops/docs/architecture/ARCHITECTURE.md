@@ -139,7 +139,9 @@ start/stop audited and customer-notified. `AUTH_SECRET` fails closed in
 production (`lib/env.ts` + `instrumentation.ts` — see
 [SECURITY_STANDARDS.md](./SECURITY_STANDARDS.md)). Email verification and
 password reset land in Phase B of [PRODUCTION.md](../../PRODUCTION.md)
-§13.1.
+§13.1. All bearer tokens AeroOps issues (API keys, invitation and
+invite-link tokens) are stored only as sha256 hashes and shown once
+([ADR-020](./DECISIONS.md#adr-020--all-bearer-tokens-stored-as-one-way-sha256-hashes-raw-shown-once)).
 
 ## 6. Authorization model
 

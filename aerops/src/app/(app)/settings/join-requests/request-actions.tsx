@@ -107,13 +107,16 @@ export function DecisionPanel({ requestId, requestedRole, locations }: { request
 
 // --- Invite links manager --------------------------------------------------------
 
-type LinkRow = { id: string; label: string; role: string; token: string; autoApprove: boolean; uses: number; maxUses: number | null; expiresAt: string | null };
+type LinkRow = { id: string; label: string; role: string; autoApprove: boolean; uses: number; maxUses: number | null; expiresAt: string | null };
 
 export function InviteLinksManager({ links }: { links: LinkRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [showNew, setShowNew] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // The shareable URL is returned once at creation and never stored, so it is
+  // shown here exactly once for the admin to copy (ADR-020).
+  const [freshUrl, setFreshUrl] = useState<string | null>(null);
   const [label, setLabel] = useState("General invite");
   const [role, setRole] = useState("STUDENT");
   const [autoApprove, setAutoApprove] = useState(false);
@@ -122,7 +125,7 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
 
   async function create() {
     setBusy(true);
-    await fetch("/api/invite-links", {
+    const res = await fetch("/api/invite-links", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -133,8 +136,10 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
         expiresInDays: expiresInDays ? Number(expiresInDays) : null,
       }),
     });
+    const data = await res.json().catch(() => null);
     setBusy(false);
     setShowNew(false);
+    if (res.ok && data?.link?.url) setFreshUrl(`${window.location.origin}${data.link.url}`);
     router.refresh();
   }
 
@@ -145,10 +150,11 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
     router.refresh();
   }
 
-  function copy(token: string) {
-    navigator.clipboard.writeText(`${window.location.origin}/join/${token}`).catch(() => null);
-    setCopied(token);
-    setTimeout(() => setCopied(null), 1500);
+  function copyFresh() {
+    if (!freshUrl) return;
+    navigator.clipboard.writeText(freshUrl).catch(() => null);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (
@@ -157,6 +163,21 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
         <p className="text-sm font-semibold">Invite links</p>
         <Button size="sm" variant="outline" onClick={() => setShowNew(!showNew)}><Plus className="h-3.5 w-3.5" /> New link</Button>
       </div>
+
+      {freshUrl && (
+        <div className="rounded-lg border border-brand-royal/30 bg-brand-royal/5 p-3">
+          <p className="text-xs font-semibold text-brand-navy dark:text-foreground">Copy this link now — it won&apos;t be shown again.</p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded bg-card px-2 py-1.5 text-[11px] text-muted-foreground">{freshUrl}</code>
+            <Button size="sm" onClick={copyFresh}>
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} Copy
+            </Button>
+            <button onClick={() => setFreshUrl(null)} className="cursor-pointer rounded-lg p-1.5 text-muted-foreground hover:bg-muted" aria-label="Dismiss">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {showNew && (
         <Card>
@@ -200,9 +221,6 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
               {l.expiresAt ? ` · expires ${new Date(l.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : " · no expiration"}
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => copy(l.token)}>
-            {copied === l.token ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />} Copy link
-          </Button>
           <button onClick={() => revoke(l.id)} disabled={busy} className="cursor-pointer rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label="Revoke link">
             <X className="h-3.5 w-3.5" />
           </button>

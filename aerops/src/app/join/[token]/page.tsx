@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { hashToken } from "@/lib/tokens";
 import { AeroOpsLogoStacked } from "@/components/brand/logo";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { RedeemButton } from "./redeem-button";
@@ -17,7 +18,7 @@ export default async function JoinTokenPage({ params }: { params: Promise<{ toke
   const { token } = await params;
   const [link, session] = await Promise.all([
     db.inviteLink.findUnique({
-      where: { token },
+      where: { tokenHash: hashToken(token) },
       include: { organization: { select: { name: true, brandColor: true, status: true, deletedAt: true } } },
     }),
     getSession(),

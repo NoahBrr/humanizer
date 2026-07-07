@@ -176,7 +176,9 @@ model Invitation {
   email          String
   role           Role      @default(STUDENT)
   customRoleId   String?
-  token          String    @unique
+  /// sha256 of the single-use invite token; the raw token is emailed/shown
+  /// once and never stored (lib/tokens.ts, ADR-020).
+  tokenHash      String    @unique
   invitedBy      String?
   expiresAt      DateTime
   acceptedAt     DateTime?
@@ -1291,7 +1293,9 @@ model JoinRequest {
 model InviteLink {
   id             String    @id @default(cuid())
   organizationId String
-  token          String    @unique @default(cuid())
+  /// sha256 of the shareable link token; the raw token is shown once at
+  /// creation and never stored (lib/tokens.ts, ADR-020).
+  tokenHash      String    @unique
   label          String    @default("General invite")
   role           Role      @default(STUDENT)
   autoApprove    Boolean   @default(false)

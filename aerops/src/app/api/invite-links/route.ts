@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
+import { createToken } from "@/lib/tokens";
 import { JOINABLE_ROLES } from "@/lib/onboarding";
 
 const createSchema = z.object({
@@ -21,9 +22,12 @@ export async function POST(req: Request) {
   const body = createSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
 
+  // Store only the hash; the raw token is returned once for the admin to copy.
+  const { raw: token, hash: tokenHash } = createToken();
   const link = await db.inviteLink.create({
     data: {
       organizationId: session.organizationId,
+      tokenHash,
       label: body.data.label,
       role: body.data.role as (typeof JOINABLE_ROLES)[number],
       autoApprove: body.data.autoApprove,
@@ -41,7 +45,8 @@ export async function POST(req: Request) {
     entityId: link.id,
     newValue: { label: link.label, role: link.role, autoApprove: link.autoApprove },
   });
-  return NextResponse.json({ ok: true, link: { id: link.id, token: link.token, url: `/join/${link.token}` } }, { status: 201 });
+  // The raw token is shown exactly once — it is not recoverable from storage.
+  return NextResponse.json({ ok: true, link: { id: link.id, url: `/join/${token}` } }, { status: 201 });
 }
 
 const revokeSchema = z.object({ id: z.string().min(1) });

@@ -6,6 +6,7 @@ import { recordAudit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import { validatePassword } from "@/lib/password";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { hashToken } from "@/lib/tokens";
 
 const acceptSchema = z.object({
   token: z.string().min(10),
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   if (!policy.ok) return NextResponse.json({ error: policy.error }, { status: 400 });
 
   const invitation = await db.invitation.findUnique({
-    where: { token: data.token },
+    where: { tokenHash: hashToken(data.token) },
     include: { organization: { include: { plan: true, _count: { select: { users: true } } } } },
   });
   if (!invitation) return NextResponse.json({ error: "This invitation link is invalid." }, { status: 404 });

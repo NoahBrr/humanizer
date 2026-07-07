@@ -7,6 +7,7 @@
  */
 import { PrismaClient, Role, EventType, EventStatus, SquawkSeverity, SquawkStatus, MaintenanceStatus, DispatchStatus, InvoiceStatus, LineItemKind, PaymentMethod, NotificationKind, CertificateType, TrainingPart, CheckrideStatus, LessonGrade, DocumentKind, AircraftStatus, PlatformRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { hashToken } from "../src/lib/tokens";
 import { DEFAULT_ROLE_PERMISSIONS } from "../src/lib/permissions";
 
 const db = new PrismaClient();
@@ -505,7 +506,8 @@ async function main() {
   await db.invitation.create({
     data: {
       organizationId: blueRidge.id, email: "newmember@blueridge.demo", role: Role.STUDENT,
-      token: "demo-invite-blueridge", invitedBy: "Casey Turner", expiresAt: day(14),
+      // Raw token "demo-invite-blueridge" → sha256 (ADR-020: never store raw).
+      tokenHash: hashToken("demo-invite-blueridge"), invitedBy: "Casey Turner", expiresAt: day(14),
     },
   });
   await db.auditLog.createMany({

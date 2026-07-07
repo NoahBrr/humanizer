@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { ROLE_LABELS } from "@/lib/rbac";
+import { hashToken } from "@/lib/tokens";
 import { AcceptInviteForm } from "./accept-form";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const metadata = { title: "Join your organization" };
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const invitation = await db.invitation.findUnique({
-    where: { token },
+    where: { tokenHash: hashToken(token) },
     include: { organization: { select: { name: true, status: true } }, customRole: { select: { name: true } } },
   });
 

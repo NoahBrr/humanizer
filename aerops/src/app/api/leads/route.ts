@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { emitDomainEvent } from "@/lib/events";
+import { createToken } from "@/lib/tokens";
 
 const publicSchema = z.object({
   org: z.string().min(2), // organization slug — forms are embeddable per-org
@@ -78,13 +78,13 @@ export async function PATCH(req: Request) {
     if (await db.user.findUnique({ where: { email: lead.email } })) {
       return NextResponse.json({ error: "A user with this email already exists." }, { status: 409 });
     }
-    const token = randomBytes(24).toString("base64url");
+    const { raw: token, hash: tokenHash } = createToken();
     await db.invitation.create({
       data: {
         organizationId: session.organizationId,
         email: lead.email,
         role: "STUDENT",
-        token,
+        tokenHash,
         invitedBy: `${session.firstName} ${session.lastName} (CRM)`,
         expiresAt: new Date(Date.now() + 14 * 86_400_000),
       },

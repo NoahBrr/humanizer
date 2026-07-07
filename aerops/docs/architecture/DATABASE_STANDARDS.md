@@ -109,6 +109,27 @@ anything not yet true is marked **(aspirational — not yet enforced)**.
 - The audit trail is immutable — never rewritten (do-not-break rule 3);
   snapshot restore explicitly never rewrites audit rows.
 
+## Secret & token storage
+
+- **Bearer tokens are stored as one-way hashes only** (ADR-020,
+  SECURITY_STANDARDS.md). The column is named `tokenHash` (or `keyHash` for
+  API keys), typed `String @unique`, and holds a hex sha256 produced by
+  `lib/tokens.ts`. There is **no raw `token` column** on any model —
+  `tests/token-security.test.ts` fails the build if one appears. A raw-token
+  field requires an allowlist entry with a written reason in that test.
+- **Lookup by hash, never by raw value**: `where: { tokenHash: hashToken(x) }`.
+  Querying these models by a raw `token` field is statically banned.
+- **Documented exception — `Webhook.secret` is stored raw** because the
+  delivery path must re-read it to compute the outbound HMAC-SHA256
+  signature per attempt (`lib/webhooks.ts`); it is org-scoped, never
+  returned by any read API, and rotated by recreating the subscription. It
+  is a signing key, not a bearer token.
+- **Migrations that hash an existing raw column backfill in place** so live
+  values survive: add `tokenHash`, `UPDATE … SET tokenHash =
+  encode(sha256(convert_to(token,'UTF8')),'hex')` (byte-identical to
+  `lib/tokens.ts`), then drop the raw column. See
+  `20260707193000_hash_invite_tokens`.
+
 ## Soft delete policy
 
 - `deletedAt` **where recovery matters; never hard-delete customer data

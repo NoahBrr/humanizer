@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
+import { createToken } from "@/lib/tokens";
 
 const createSchema = z.object({
   email: z.string().email(),
@@ -37,14 +37,15 @@ export async function POST(req: Request) {
     );
   }
 
-  const token = randomBytes(24).toString("base64url");
+  // Store only the hash; the raw token lives only in the returned URL.
+  const { raw: token, hash: tokenHash } = createToken();
   const invitation = await db.invitation.create({
     data: {
       organizationId: session.organizationId,
       email,
       role: data.role,
       customRoleId: data.customRoleId ?? null,
-      token,
+      tokenHash,
       invitedBy: `${session.firstName} ${session.lastName}`,
       expiresAt: new Date(Date.now() + data.expiresInDays * 86_400_000),
     },

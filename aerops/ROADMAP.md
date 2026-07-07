@@ -12,6 +12,17 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-07 — Phase 1B token security hardening:
+invitation and invite-link tokens now stored only as sha256 hashes
+(`tokenHash`), mirroring the API-key pattern, via a shared `lib/tokens.ts`;
+raw tokens are shown once and never persisted (ADR-020). Safe in-place
+backfill migration preserves every existing link (no invalidation). Static
+enforcement (`tests/token-security.test.ts`) bans raw `token` columns and
+raw-value lookups. Invite-link admin UX moved to one-time reveal (redeemer
+experience unchanged). Full token inventory documented; `Webhook.secret`
+kept raw as a documented signing-key exception. 5 AI reviews. Suite 141
+tests. Not deployed._
+
 _Last session update: 2026-07-07 — Phase 1A auth & session security
 hardening, the governance framework's first execution: platform-session
 revocation verified per request (isActive + sessionVersion + role from the
@@ -219,6 +230,7 @@ time zones stored-not-applied — triage next session._
 | Immutable audit trail (org + platform + imports + impersonation) | Complete | — | — | |
 | Tenant isolation (org scope from session only, never the client) | Complete | — | — | |
 | Platform session revocation (isActive + sessionVersion per request) | Complete | — | — | Phase 1A; `lib/session-rules.ts`, pinned by `tests/auth-security.test.ts` |
+| Bearer-token hashing (invitation + invite-link tokens → `tokenHash` sha256) | Complete | — | — | Phase 1B; `lib/tokens.ts`, ADR-020, pinned by `tests/token-security.test.ts`; safe backfill migration |
 | AUTH_SECRET fail-closed startup validation | Complete | — | — | Phase 1A; `lib/env.ts` + `instrumentation.ts`; production refuses placeholder/short/missing secrets |
 | HaveIBeenPwned k-anonymity breach-check adapter | Not Started | Medium | S | Local blocklist only today (`lib/password.ts`); adapter slots behind `validatePassword` |
 | Production secret management + env separation | Not Started | Critical | S | PRODUCTION.md §Security |
