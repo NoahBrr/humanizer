@@ -1,4 +1,4 @@
-# AeroOps — Aviation Academy Operating System
+# AeroOps — The Operating System for Aviation
 
 A modern, multi-tenant SaaS platform for flight schools and aviation academies:
 scheduling, dispatch, aircraft management, student training, billing,
@@ -128,6 +128,41 @@ organizations, plus a separate internal backend for AeroOps staff.
 - **Audit trail** — immutable `AuditLog` (actor, org, action, old/new
   values, IP, user agent) written by every important mutation: scheduling,
   dispatch, payments, grounding, invitations, platform actions.
+- **Demo Data Generator** (`/platform/demo-data`) — one click creates an
+  isolated, fully-populated demo tenant from a business template (small/
+  medium school, university, flying club, corporate, FBO, charter, aircraft
+  management) at 5/25/100/500 aircraft: realistic tail numbers, staff,
+  students/members, a ±7-day schedule, dispatch history, invoices &
+  payments, squawks, maintenance, CRM leads, parts inventory, documents.
+- **Live Simulation Engine** (`/platform/simulation`) — 8 scenarios
+  (Morning Rush, Busy Weekend, Weather Event, Maintenance Crisis, Checkride
+  Week, University Semester, Flying Club Weekend, Charter Surge); each tick
+  writes weighted, realistic activity into a tenant — dispatches, flight
+  completions with invoices, new reservations, weather cancellations,
+  squawks/groundings, payments, check-ins, AI recommendations. Point
+  Mission Control at the tenant and the wall moves on its own — built for
+  trade shows and investor demos.
+- **Organization snapshots** — capture a tenant's complete dataset as JSON
+  (row IDs preserved) from the org detail page and restore it later, so a
+  polished demo environment is always one click away. Audit/forensic rows
+  are deliberately excluded from restores.
+
+## Brand system
+
+Centralized and token-driven:
+
+- `src/components/brand/logo.tsx` — `AeroOpsMark` (the "A" icon),
+  `AeroOpsLogo`, `AeroOpsLogoStacked` (color + mono variants), used by the
+  sign-in page, org sidebar, and platform portal.
+- `public/brand/` — standalone SVGs for emails/reports/PDFs:
+  `aerops-logo.svg`, `aerops-logo-dark.svg`, `aerops-mark.svg`,
+  `aerops-mark-white.svg`, `aerops-mark-mono.svg`.
+- `src/app/icon.svg` — favicon; `public/icons/` PNGs back the PWA manifest.
+- `src/app/globals.css` — palette tokens: Deep Navy `#0B2447`, Royal Blue
+  `#1E63D0`, Sky Blue `#38A1E8`, Silver `#C6CFD8`, Gunmetal `#2E3A46`, plus
+  semantic success/warning/danger/info tokens consumed everywhere
+  (`bg-primary`, `text-brand-sky`, `bg-sidebar`, …). Change brand in one
+  place; both themes and the platform portal follow.
 
 ## Architecture
 

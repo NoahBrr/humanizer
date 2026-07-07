@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Plane, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { AeroOpsMark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-config";
 
@@ -31,11 +32,13 @@ export function Sidebar({ allowedPaths, orgName }: { allowedPaths: string[]; org
   return (
     <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-sidebar text-sidebar-foreground transition-[width] lg:flex">
       <div className={cn("flex h-14 items-center gap-2.5 px-5", collapsed && "justify-center px-0")}>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Plane className="h-4 w-4 -rotate-45" />
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white p-0.5 shadow-sm">
+          <AeroOpsMark className="h-full w-full" />
         </div>
         <div className="sidebar-label leading-tight">
-          <p className="text-[13px] font-semibold tracking-tight text-white">AeroOps</p>
+          <p className="text-[13px] font-bold tracking-[0.06em] text-white">
+            AERO<span className="text-brand-sky">OPS</span>
+          </p>
           <p className="max-w-36 truncate text-[10px] text-sidebar-foreground/60">{orgName}</p>
         </div>
       </div>
@@ -61,7 +64,7 @@ export function Sidebar({ allowedPaths, orgName }: { allowedPaths: string[]; org
         })}
       </nav>
       <div className={cn("flex items-center justify-between px-5 py-4", collapsed && "justify-center px-0")}>
-        <p className="sidebar-label text-[10px] text-sidebar-foreground/40">AeroOps · Aviation OS</p>
+        <p className="sidebar-label text-[10px] text-sidebar-foreground/40">AeroOps · The Operating System for Aviation</p>
         <button
           onClick={toggle}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}

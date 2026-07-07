@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, LayoutDashboard, ScrollText, Users, Plane } from "lucide-react";
+import { Activity, Building2, DatabaseZap, LayoutDashboard, ScrollText, Users } from "lucide-react";
+import { AeroOpsMark } from "@/components/brand/logo";
 import { getSession } from "@/lib/session";
 import { PLATFORM_ROLE_LABELS } from "@/lib/rbac";
 import { PlatformNavLinks, PlatformSignOut } from "./platform-nav";
@@ -10,6 +11,8 @@ export const metadata = { title: { default: "Platform", template: "%s · AeroOps
 const PLATFORM_NAV = [
   { href: "/platform/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/platform/organizations", label: "Organizations", icon: Building2 },
+  { href: "/platform/demo-data", label: "Demo Data Generator", icon: DatabaseZap },
+  { href: "/platform/simulation", label: "Live Simulation", icon: Activity },
   { href: "/platform/users", label: "Platform Users", icon: Users },
   { href: "/platform/audit", label: "Audit Log", icon: ScrollText },
 ];
@@ -23,11 +26,13 @@ export default async function PlatformLayout({ children }: { children: React.Rea
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-sidebar text-sidebar-foreground lg:flex">
         <div className="flex h-14 items-center gap-2.5 px-5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600 text-white">
-            <Plane className="h-4 w-4 -rotate-45" />
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white p-0.5 shadow-sm">
+            <AeroOpsMark className="h-full w-full" />
           </div>
           <div className="leading-tight">
-            <p className="text-[13px] font-semibold tracking-tight text-white">AeroOps Platform</p>
+            <p className="text-[13px] font-bold tracking-[0.06em] text-white">
+              AERO<span className="text-brand-sky">OPS</span> <span className="font-semibold text-sidebar-foreground/80">Platform</span>
+            </p>
             <p className="text-[10px] text-sidebar-foreground/60">Internal · {PLATFORM_ROLE_LABELS[session.platformRole]}</p>
           </div>
         </div>

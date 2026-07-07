@@ -6,16 +6,17 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: { default: "AeroOps", template: "%s · AeroOps" },
-  description: "The operating system for flight schools and aviation academies.",
+  description: "AeroOps — The Operating System for Aviation.",
+  applicationName: "AeroOps",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "AeroOps", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
+  icons: { icon: "/icon.svg", apple: "/icons/icon-192.png" },
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#2563eb" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1219" },
+    { media: "(prefers-color-scheme: light)", color: "#0B2447" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B2447" },
   ],
   width: "device-width",
   initialScale: 1,

@@ -12,6 +12,7 @@ import { ROLE_LABELS } from "@/lib/rbac";
 import { computeCustomerSuccess } from "@/lib/customer-success";
 import { OrgActions, ImpersonateButton, ModuleToggles } from "./org-actions";
 import { NotesPanel } from "./notes-panel";
+import { SnapshotsPanel } from "./snapshots-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +31,11 @@ export default async function OrganizationDetail({ params }: { params: Promise<{
     },
   });
   if (!org) notFound();
-  const [plans, success, notes] = await Promise.all([
+  const [plans, success, notes, snapshots] = await Promise.all([
     db.subscriptionPlan.findMany({ orderBy: { priceMonthly: "asc" } }),
     computeCustomerSuccess(org.id),
     db.platformNote.findMany({ where: { organizationId: org.id }, orderBy: { createdAt: "desc" }, take: 10 }),
+    db.orgSnapshot.findMany({ where: { organizationId: org.id }, orderBy: { createdAt: "desc" }, select: { id: true, name: true, sizeBytes: true, createdAt: true, createdBy: true } }),
   ]);
 
   const canImpersonate = ["FOUNDER", "PLATFORM_ADMIN", "CUSTOMER_SUCCESS", "SUPPORT_ENGINEER"].includes(session?.platformRole ?? "");
@@ -59,12 +61,21 @@ export default async function OrganizationDetail({ params }: { params: Promise<{
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {org.isDemo && <Badge tone="cyan">Demo</Badge>}
           <StatusBadge status={org.status} />
           <Badge tone="violet">{org.plan?.name ?? "No plan"} · {formatCurrency(org.plan?.priceMonthly ?? 0)}/mo</Badge>
         </div>
       </div>
 
       {canManage && <OrgActions orgId={org.id} status={org.status} planId={org.planId} plans={plans.map((p) => ({ id: p.id, name: p.name, price: Number(p.priceMonthly) }))} />}
+
+      {canManage && (
+        <SnapshotsPanel
+          orgId={org.id}
+          orgName={org.name}
+          snapshots={snapshots.map((sn) => ({ ...sn, createdAt: sn.createdAt.toISOString() }))}
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>

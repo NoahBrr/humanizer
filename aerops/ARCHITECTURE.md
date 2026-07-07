@@ -96,6 +96,15 @@ and re-synced.
 | Insights | `lib/insights.ts` | recommendations with why/data/confidence |
 | Forecast | `lib/forecast.ts` | tomorrow's load + predicted conflicts |
 | Automations | `lib/automations.ts` | org-toggleable workflow reactions to events |
+- **demo-generator** (`lib/demo-generator.ts`) — provisions isolated demo
+  tenants from business templates (`lib/org-templates.ts`): plan + profiles
+  + system roles + fleet/people/schedule/billing/maintenance/CRM data.
+- **simulation** (`lib/simulation.ts`) — scenario-weighted tick engine that
+  writes live operational activity into a tenant (SimulationRun rows track
+  each session); driven from /platform/simulation.
+- **org-snapshot** (`lib/org-snapshot.ts`) — capture/restore a tenant's full
+  dataset with row IDs preserved; wipe order is FK-aware and audit rows are
+  never rewritten.
 
 ## Security
 

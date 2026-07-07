@@ -108,6 +108,8 @@ model Organization {
   businessProfiles String[] @default([])
   /// Built-in automation keys the org has switched off (see lib/automations.ts)
   disabledAutomations String[] @default([])
+  /// Demo tenants are excluded from customer analytics and safe to delete.
+  isDemo    Boolean  @default(false)
   suspendedAt DateTime?
   deletedAt   DateTime?
   createdAt DateTime @default(now())
@@ -127,6 +129,8 @@ model Organization {
   notifications  Notification[]
   documents      Document[]
   syllabi        Syllabus[]
+  snapshots      OrgSnapshot[]
+  simulations    SimulationRun[]
 
   @@index([status])
 }
@@ -1187,4 +1191,49 @@ model PlatformNote {
   createdAt      DateTime @default(now())
 
   @@index([organizationId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Founder tooling: snapshots & live simulation
+// ---------------------------------------------------------------------------
+
+/// Point-in-time capture of an organization's operational dataset (JSON, row
+/// IDs preserved) so a known-good demo environment can be restored on demand.
+model OrgSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  data           Json
+  sizeBytes      Int      @default(0)
+  createdBy      String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+enum SimulationStatus {
+  RUNNING
+  STOPPED
+}
+
+/// A live simulation session driven from the Founder Platform. Each tick
+/// writes realistic operational activity into the target organization.
+model SimulationRun {
+  id             String           @id @default(cuid())
+  organizationId String
+  scenario       String // morning-rush, busy-weekend, weather-event, ...
+  status         SimulationStatus @default(RUNNING)
+  startedBy      String
+  startedAt      DateTime         @default(now())
+  stoppedAt      DateTime?
+  tickCount      Int              @default(0)
+  eventsCreated  Int              @default(0)
+  lastTickAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
 }

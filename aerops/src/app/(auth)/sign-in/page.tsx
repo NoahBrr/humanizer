@@ -3,11 +3,13 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Plane, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { AeroOpsLogoStacked } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 
 const DEMO_ACCOUNTS = [
+  { email: "founder@aerops.io", label: "Platform Founder" },
   { email: "admin@aerops.demo", label: "School Admin" },
   { email: "dispatch@aerops.demo", label: "Dispatcher" },
   { email: "sarah.cfi@aerops.demo", label: "Instructor" },
@@ -67,14 +69,8 @@ function SignInForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm animate-fade-up">
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-            <Plane className="h-6 w-6 -rotate-45" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-xl font-semibold tracking-tight">Welcome to AeroOps</h1>
-            <p className="mt-1 text-sm text-muted-foreground">The operating system for flight schools</p>
-          </div>
+        <div className="mb-8">
+          <AeroOpsLogoStacked />
         </div>
 
         <form onSubmit={submit} className="space-y-3 rounded-xl border border-border bg-card p-6 shadow-sm">

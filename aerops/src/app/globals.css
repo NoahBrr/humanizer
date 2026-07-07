@@ -2,46 +2,62 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* -------------------------------------------------------------------------
+   AeroOps brand palette
+   Primary:   Deep Navy #0B2447 · Royal Blue #1E63D0 · Sky Blue #38A1E8
+              Silver #C6CFD8 · Gunmetal #2E3A46 · White
+   Secondary: Success Green · Warning Amber · Danger Red · Info Blue
+   Semantic tokens below derive from these — change brand here, everywhere
+   else consumes tokens.
+-------------------------------------------------------------------------- */
 :root {
-  --background: oklch(0.985 0.002 247);
-  --foreground: oklch(0.21 0.02 261);
+  --brand-navy: #0b2447;
+  --brand-royal: #1e63d0;
+  --brand-sky: #38a1e8;
+  --brand-silver: #c6cfd8;
+  --brand-gunmetal: #2e3a46;
+
+  --background: oklch(0.984 0.003 240);
+  --foreground: oklch(0.24 0.035 255);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 261);
-  --muted: oklch(0.955 0.004 247);
-  --muted-foreground: oklch(0.52 0.02 256);
-  --border: oklch(0.91 0.006 247);
-  --input: oklch(0.91 0.006 247);
-  --primary: oklch(0.55 0.2 262);
+  --card-foreground: oklch(0.24 0.035 255);
+  --muted: oklch(0.953 0.006 240);
+  --muted-foreground: oklch(0.5 0.025 250);
+  --border: oklch(0.905 0.009 240);
+  --input: oklch(0.905 0.009 240);
+  --primary: oklch(0.52 0.165 259); /* royal blue */
   --primary-foreground: oklch(0.99 0 0);
-  --accent: oklch(0.94 0.02 262);
-  --accent-foreground: oklch(0.4 0.16 262);
+  --accent: oklch(0.93 0.028 250); /* sky tint */
+  --accent-foreground: oklch(0.42 0.13 257);
   --destructive: oklch(0.58 0.22 27);
   --success: oklch(0.6 0.15 155);
   --warning: oklch(0.72 0.16 75);
-  --ring: oklch(0.55 0.2 262);
-  --sidebar: oklch(0.16 0.02 261);
-  --sidebar-foreground: oklch(0.85 0.01 250);
+  --info: oklch(0.64 0.13 240); /* sky blue */
+  --ring: oklch(0.52 0.165 259);
+  --sidebar: oklch(0.26 0.058 258); /* deep navy */
+  --sidebar-foreground: oklch(0.87 0.012 240); /* silver */
 }
 
 .dark {
-  --background: oklch(0.14 0.014 261);
-  --foreground: oklch(0.93 0.008 250);
-  --card: oklch(0.185 0.016 261);
-  --card-foreground: oklch(0.93 0.008 250);
-  --muted: oklch(0.24 0.016 261);
-  --muted-foreground: oklch(0.66 0.016 253);
-  --border: oklch(0.28 0.018 261);
-  --input: oklch(0.28 0.018 261);
-  --primary: oklch(0.62 0.19 262);
+  --background: oklch(0.15 0.022 256);
+  --foreground: oklch(0.93 0.008 245);
+  --card: oklch(0.19 0.026 256);
+  --card-foreground: oklch(0.93 0.008 245);
+  --muted: oklch(0.245 0.028 256);
+  --muted-foreground: oklch(0.67 0.02 248);
+  --border: oklch(0.29 0.03 256);
+  --input: oklch(0.29 0.03 256);
+  --primary: oklch(0.6 0.16 256);
   --primary-foreground: oklch(0.99 0 0);
-  --accent: oklch(0.27 0.05 262);
-  --accent-foreground: oklch(0.8 0.1 262);
+  --accent: oklch(0.28 0.055 255);
+  --accent-foreground: oklch(0.8 0.09 245);
   --destructive: oklch(0.65 0.2 27);
   --success: oklch(0.68 0.14 155);
   --warning: oklch(0.78 0.14 75);
-  --ring: oklch(0.62 0.19 262);
-  --sidebar: oklch(0.12 0.014 261);
-  --sidebar-foreground: oklch(0.82 0.012 250);
+  --info: oklch(0.72 0.12 235);
+  --ring: oklch(0.6 0.16 256);
+  --sidebar: oklch(0.13 0.03 257);
+  --sidebar-foreground: oklch(0.84 0.014 242);
 }
 
 @theme inline {
@@ -60,9 +76,15 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-royal: var(--brand-royal);
+  --color-brand-sky: var(--brand-sky);
+  --color-brand-silver: var(--brand-silver);
+  --color-brand-gunmetal: var(--brand-gunmetal);
   --radius-lg: 0.625rem;
   --radius-xl: 0.875rem;
 }
