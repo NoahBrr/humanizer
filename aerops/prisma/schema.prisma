@@ -26,18 +26,18 @@ enum PlatformRole {
 }
 
 model PlatformUser {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  passwordHash String
-  firstName    String
-  lastName     String
-  role         PlatformRole
-  isActive     Boolean      @default(true)
-  mfaEnabled   Boolean      @default(false)
-  mfaSecret    String?
-  sessionVersion Int        @default(0)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           PlatformRole
+  isActive       Boolean      @default(true)
+  mfaEnabled     Boolean      @default(false)
+  mfaSecret      String?
+  sessionVersion Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   auditLogs AuditLog[]
 }
@@ -92,48 +92,57 @@ enum OrgStatus {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  logoUrl   String?
-  brandColor String  @default("#2563eb")
-  timeZone  String   @default("America/New_York")
-  status    OrgStatus @default(ACTIVE)
+  id                  String    @id @default(cuid())
+  name                String
+  slug                String    @unique
+  logoUrl             String?
+  brandColor          String    @default("#2563eb")
+  timeZone            String    @default("America/New_York")
+  status              OrgStatus @default(ACTIVE)
   /// Primary Owner (a User id). Transfer requires dual confirmation + audit.
-  ownerId   String?
-  planId    String?
+  ownerId             String?
+  planId              String?
   /// Module keys switched off for this org (overrides plan availability)
-  disabledModules String[] @default([])
+  disabledModules     String[]  @default([])
   /// Activated business activities (see lib/business-profiles.ts). Empty = all plan modules.
-  businessProfiles String[] @default([])
+  businessProfiles    String[]  @default([])
   /// Built-in automation keys the org has switched off (see lib/automations.ts)
-  disabledAutomations String[] @default([])
+  disabledAutomations String[]  @default([])
   /// Demo tenants are excluded from customer analytics and safe to delete.
-  isDemo    Boolean  @default(false)
-  suspendedAt DateTime?
-  deletedAt   DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isDemo              Boolean   @default(false)
+  suspendedAt         DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  plan           SubscriptionPlan? @relation(fields: [planId], references: [id])
-  users          User[]
-  locations      Location[]
-  departments    Department[]
-  orgRoles       OrgRole[]
-  invitations    Invitation[]
-  auditLogs      AuditLog[]
-  aircraft       Aircraft[]
-  lessonTypes    LessonType[]
-  scheduleEvents ScheduleEvent[]
-  invoices       Invoice[]
-  notifications  Notification[]
-  documents      Document[]
-  syllabi        Syllabus[]
-  snapshots      OrgSnapshot[]
-  simulations    SimulationRun[]
-  joinRequests   JoinRequest[]
-  inviteLinks    InviteLink[]
-  importJobs     ImportJob[]
+  plan                 SubscriptionPlan?     @relation(fields: [planId], references: [id])
+  users                User[]
+  locations            Location[]
+  departments          Department[]
+  orgRoles             OrgRole[]
+  invitations          Invitation[]
+  auditLogs            AuditLog[]
+  aircraft             Aircraft[]
+  lessonTypes          LessonType[]
+  scheduleEvents       ScheduleEvent[]
+  invoices             Invoice[]
+  notifications        Notification[]
+  documents            Document[]
+  syllabi              Syllabus[]
+  snapshots            OrgSnapshot[]
+  simulations          SimulationRun[]
+  joinRequests         JoinRequest[]
+  inviteLinks          InviteLink[]
+  importJobs           ImportJob[]
+  loginEvents          LoginEvent[]
+  lessonRequests       LessonRequest[]
+  waitlistEntries      WaitlistEntry[]
+  leads                Lead[]
+  apiKeys              ApiKey[]
+  webhooks             Webhook[]
+  parts                Part[]
+  missionControlScenes MissionControlScene[]
+  platformNotes        PlatformNote[]
 
   @@index([status])
 }
@@ -166,6 +175,8 @@ model Department {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   location     Location?    @relation(fields: [locationId], references: [id])
   users        User[]
+
+  createdAt DateTime @default(now())
 
   @@unique([organizationId, name])
 }
@@ -201,38 +212,38 @@ enum Role {
 }
 
 model User {
-  id             String   @id @default(cuid())
+  id                String    @id @default(cuid())
   /// Null = individual account not yet part of any organization (public
   /// sign-up). Joining or creating an organization sets it.
-  organizationId String?
-  email          String   @unique
-  passwordHash   String
-  firstName      String
-  lastName       String
-  phone          String?
-  avatarUrl      String?
+  organizationId    String?
+  email             String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  phone             String?
+  avatarUrl         String?
   /// Built-in role (drives default permissions). A customRole overrides it.
-  role           Role
-  customRoleId   String?
+  role              Role
+  customRoleId      String?
   primaryLocationId String?
-  departmentId   String?
-  isActive       Boolean  @default(true)
-  mfaEnabled     Boolean  @default(false)
-  mfaSecret      String?
+  departmentId      String?
+  isActive          Boolean   @default(true)
+  mfaEnabled        Boolean   @default(false)
+  mfaSecret         String?
   /// Incremented to invalidate every outstanding JWT ("log out all devices").
-  sessionVersion Int      @default(0)
-  deletedAt      DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  sessionVersion    Int       @default(0)
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  organization      Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customRole        OrgRole?        @relation(fields: [customRoleId], references: [id])
-  primaryLocation   Location?       @relation("PrimaryLocationUsers", fields: [primaryLocationId], references: [id])
-  department        Department?     @relation(fields: [departmentId], references: [id])
+  organization      Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customRole        OrgRole?       @relation(fields: [customRoleId], references: [id])
+  primaryLocation   Location?      @relation("PrimaryLocationUsers", fields: [primaryLocationId], references: [id])
+  department        Department?    @relation(fields: [departmentId], references: [id])
   studentProfile    Student?
   instructorProfile Instructor?
   notifications     Notification[]
-  documents         Document[]      @relation("DocumentOwner")
+  documents         Document[]     @relation("DocumentOwner")
   joinRequests      JoinRequest[]
 
   @@index([organizationId, role])
@@ -261,6 +272,8 @@ model Location {
   primaryUsers   User[]          @relation("PrimaryLocationUsers")
   aircraft       Aircraft[]
   scheduleEvents ScheduleEvent[]
+
+  createdAt DateTime @default(now())
 
   @@index([organizationId])
 }
@@ -299,34 +312,34 @@ enum StudentStatus {
 }
 
 model Student {
-  id                 String          @id @default(cuid())
-  userId             String          @unique
-  status             StudentStatus   @default(ENROLLED)
-  leadSource         String? // walk-in, web, referral, airshow, ...
-  discoveryFlightAt  DateTime?
-  discoveryOutcome   String? // interested, not_interested, follow_up
+  id                   String          @id @default(cuid())
+  userId               String          @unique
+  status               StudentStatus   @default(ENROLLED)
+  leadSource           String? // walk-in, web, referral, airshow, ...
+  discoveryFlightAt    DateTime?
+  discoveryOutcome     String? // interested, not_interested, follow_up
   faaCertificateNumber String?
-  ftnNumber          String?
-  writtenTestPassed  Boolean?
-  writtenTestScore   Int?
-  writtenTestDate    DateTime?
-  emergencyContact   String?
-  emergencyPhone     String?
-  certificateHeld    CertificateType @default(NONE)
-  medicalClass       String?
-  medicalExpiration  DateTime?
-  studentCertNumber  String?
-  tsaVerified        Boolean         @default(false)
-  trainingGoal       String?
-  trainingPart       TrainingPart    @default(PART_61)
+  ftnNumber            String?
+  writtenTestPassed    Boolean?
+  writtenTestScore     Int?
+  writtenTestDate      DateTime?
+  emergencyContact     String?
+  emergencyPhone       String?
+  certificateHeld      CertificateType @default(NONE)
+  medicalClass         String?
+  medicalExpiration    DateTime?
+  studentCertNumber    String?
+  tsaVerified          Boolean         @default(false)
+  trainingGoal         String?
+  trainingPart         TrainingPart    @default(PART_61)
   assignedInstructorId String?
-  accountBalance     Decimal         @default(0) @db.Decimal(10, 2)
-  totalHours         Decimal         @default(0) @db.Decimal(7, 1)
-  soloHours          Decimal         @default(0) @db.Decimal(7, 1)
-  enrolledAt         DateTime        @default(now())
+  accountBalance       Decimal         @default(0) @db.Decimal(10, 2)
+  totalHours           Decimal         @default(0) @db.Decimal(7, 1)
+  soloHours            Decimal         @default(0) @db.Decimal(7, 1)
+  enrolledAt           DateTime        @default(now())
 
-  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assignedInstructor Instructor?     @relation(fields: [assignedInstructorId], references: [id])
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedInstructor Instructor?          @relation(fields: [assignedInstructorId], references: [id])
   enrollments        SyllabusEnrollment[]
   scheduleEvents     ScheduleEvent[]
   dispatches         Dispatch[]
@@ -342,17 +355,17 @@ model Student {
 }
 
 model Instructor {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  certificates    String // comma list: CFI,CFII,MEI
-  cfiNumber       String?
-  cfiExpiration   DateTime?
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  certificates      String // comma list: CFI,CFII,MEI
+  cfiNumber         String?
+  cfiExpiration     DateTime?
   medicalExpiration DateTime?
-  hourlyRate      Decimal  @default(65) @db.Decimal(8, 2)
-  bio             String?
-  hiredAt         DateTime @default(now())
+  hourlyRate        Decimal   @default(65) @db.Decimal(8, 2)
+  bio               String?
+  hiredAt           DateTime  @default(now())
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   students       Student[]
   scheduleEvents ScheduleEvent[]
   dispatches     Dispatch[]
@@ -364,7 +377,7 @@ model Instructor {
 }
 
 model InstructorAvailability {
-  id           String   @id @default(cuid())
+  id           String @id @default(cuid())
   instructorId String
   dayOfWeek    Int // 0 = Sunday
   startTime    String // "08:00"
@@ -396,11 +409,11 @@ enum OwnershipType {
 }
 
 model AircraftType {
-  id           String  @id @default(cuid())
+  id           String @id @default(cuid())
   manufacturer String
   model        String
-  engineType   String  @default("Piston")
-  seats        Int     @default(2)
+  engineType   String @default("Piston")
+  seats        Int    @default(2)
 
   aircraft Aircraft[]
 
@@ -412,7 +425,7 @@ model Aircraft {
   organizationId         String
   locationId             String?
   aircraftTypeId         String
-  tailNumber             String         @unique
+  tailNumber             String
   nickname               String?
   serialNumber           String?
   year                   Int?
@@ -445,16 +458,19 @@ model Aircraft {
   isSimulator            Boolean        @default(false)
   notes                  String?
 
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  location       Location?            @relation(fields: [locationId], references: [id])
-  aircraftType   AircraftType         @relation(fields: [aircraftTypeId], references: [id])
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location       Location?           @relation(fields: [locationId], references: [id])
+  aircraftType   AircraftType        @relation(fields: [aircraftTypeId], references: [id])
   components     AircraftComponent[]
   squawks        Squawk[]
   maintenance    MaintenanceOrder[]
   scheduleEvents ScheduleEvent[]
   dispatches     Dispatch[]
-  documents      Document[]           @relation("AircraftDocuments")
+  documents      Document[]          @relation("AircraftDocuments")
 
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, tailNumber])
   @@index([organizationId, status])
 }
 
@@ -462,16 +478,16 @@ model Aircraft {
 // transponder, ADS-B, oil, tires, brakes, battery...). Either date-based,
 // hours-based, or both.
 model AircraftComponent {
-  id            String    @id @default(cuid())
-  aircraftId    String
-  name          String
-  dueAtHours    Decimal?  @db.Decimal(9, 1)
-  dueAtDate     DateTime?
-  lastDoneHours Decimal?  @db.Decimal(9, 1)
-  lastDoneDate  DateTime?
-  intervalHours Int?
+  id             String    @id @default(cuid())
+  aircraftId     String
+  name           String
+  dueAtHours     Decimal?  @db.Decimal(9, 1)
+  dueAtDate      DateTime?
+  lastDoneHours  Decimal?  @db.Decimal(9, 1)
+  lastDoneDate   DateTime?
+  intervalHours  Int?
   intervalMonths Int?
-  notes         String?
+  notes          String?
 
   aircraft Aircraft @relation(fields: [aircraftId], references: [id], onDelete: Cascade)
 
@@ -496,18 +512,18 @@ enum SquawkSeverity {
 }
 
 model Squawk {
-  id          String         @id @default(cuid())
-  aircraftId  String
+  id           String         @id @default(cuid())
+  aircraftId   String
   reportedById String?
-  title       String
-  description String?
-  category    String? // Airframe, Engine, Avionics, Interior, ...
-  assignedTo  String?
-  severity    SquawkSeverity @default(MINOR)
-  status      SquawkStatus   @default(OPEN)
-  createdAt   DateTime       @default(now())
-  resolvedAt  DateTime?
-  resolution  String?
+  title        String
+  description  String?
+  category     String? // Airframe, Engine, Avionics, Interior, ...
+  assignedTo   String?
+  severity     SquawkSeverity @default(MINOR)
+  status       SquawkStatus   @default(OPEN)
+  createdAt    DateTime       @default(now())
+  resolvedAt   DateTime?
+  resolution   String?
 
   aircraft Aircraft @relation(fields: [aircraftId], references: [id], onDelete: Cascade)
 
@@ -539,26 +555,26 @@ enum WorkOrderPriority {
 }
 
 model MaintenanceOrder {
-  id          String            @id @default(cuid())
-  number      String? // WO-xxxx, assigned on open
-  aircraftId  String
-  title       String
-  description String?
-  category    String? // Engine, Avionics, Routine Inspection, ...
-  priority    WorkOrderPriority @default(NORMAL)
-  status      MaintenanceStatus @default(SCHEDULED)
-  assignedTo  String?
-  correctiveAction String?
-  laborHours  Decimal?          @db.Decimal(6, 1)
+  id                  String            @id @default(cuid())
+  number              String? // WO-xxxx, assigned on open
+  aircraftId          String
+  title               String
+  description         String?
+  category            String? // Engine, Avionics, Routine Inspection, ...
+  priority            WorkOrderPriority @default(NORMAL)
+  status              MaintenanceStatus @default(SCHEDULED)
+  assignedTo          String?
+  correctiveAction    String?
+  laborHours          Decimal?          @db.Decimal(6, 1)
   /// Return-to-service approval (electronic signature)
-  approvedBy  String?
-  approvedAt  DateTime?
-  startDate   DateTime
-  endDate     DateTime?
+  approvedBy          String?
+  approvedAt          DateTime?
+  startDate           DateTime
+  endDate             DateTime?
   estimatedCompletion DateTime?
-  costParts   Decimal?          @db.Decimal(10, 2)
-  costLabor   Decimal?          @db.Decimal(10, 2)
-  loggedAt    DateTime          @default(now())
+  costParts           Decimal?          @db.Decimal(10, 2)
+  costLabor           Decimal?          @db.Decimal(10, 2)
+  loggedAt            DateTime          @default(now())
 
   aircraft Aircraft @relation(fields: [aircraftId], references: [id], onDelete: Cascade)
 
@@ -591,48 +607,50 @@ enum EventStatus {
 }
 
 model LessonType {
-  id             String  @id @default(cuid())
-  organizationId String
-  name           String
-  color          String  @default("#2563eb")
-  durationMin    Int     @default(120)
-  requiresAircraft Boolean @default(true)
+  id                 String  @id @default(cuid())
+  organizationId     String
+  name               String
+  color              String  @default("#2563eb")
+  durationMin        Int     @default(120)
+  requiresAircraft   Boolean @default(true)
   requiresInstructor Boolean @default(true)
 
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   scheduleEvents ScheduleEvent[]
   lessonRequests LessonRequest[]
 
+  createdAt DateTime @default(now())
+
   @@index([organizationId])
 }
 
 model ScheduleEvent {
-  id             String      @id @default(cuid())
-  organizationId String
+  id                 String      @id @default(cuid())
+  organizationId     String
   /// Groups occurrences of a recurring series.
-  seriesId       String?
-  locationId     String?
-  type           EventType   @default(FLIGHT_LESSON)
-  status         EventStatus @default(SCHEDULED)
-  title          String?
-  start          DateTime
-  end            DateTime
-  aircraftId     String?
-  instructorId   String?
-  studentId      String?
-  lessonTypeId   String?
-  syllabusLessonId String?
-  notes          String?
+  seriesId           String?
+  locationId         String?
+  type               EventType   @default(FLIGHT_LESSON)
+  status             EventStatus @default(SCHEDULED)
+  title              String?
+  start              DateTime
+  end                DateTime
+  aircraftId         String?
+  instructorId       String?
+  studentId          String?
+  lessonTypeId       String?
+  syllabusLessonId   String?
+  notes              String?
   cancellationReason String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  location       Location?      @relation(fields: [locationId], references: [id])
-  aircraft       Aircraft?      @relation(fields: [aircraftId], references: [id])
-  instructor     Instructor?    @relation(fields: [instructorId], references: [id])
-  student        Student?       @relation(fields: [studentId], references: [id])
-  lessonType     LessonType?    @relation(fields: [lessonTypeId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location       Location?       @relation(fields: [locationId], references: [id])
+  aircraft       Aircraft?       @relation(fields: [aircraftId], references: [id])
+  instructor     Instructor?     @relation(fields: [instructorId], references: [id])
+  student        Student?        @relation(fields: [studentId], references: [id])
+  lessonType     LessonType?     @relation(fields: [lessonTypeId], references: [id])
   syllabusLesson SyllabusLesson? @relation(fields: [syllabusLessonId], references: [id])
   dispatch       Dispatch?
 
@@ -663,29 +681,29 @@ model Dispatch {
   status          DispatchStatus @default(PENDING)
 
   // Pre-flight release
-  fuelQty         String?
-  oilQty          String?
-  weatherAcknowledged Boolean    @default(false)
-  documentsVerified   Boolean    @default(false)
-  instructorApproved  Boolean    @default(false)
-  studentApproved     Boolean    @default(false)
-  releasedAt      DateTime?
-  releasedBy      String?
+  fuelQty             String?
+  oilQty              String?
+  weatherAcknowledged Boolean   @default(false)
+  documentsVerified   Boolean   @default(false)
+  instructorApproved  Boolean   @default(false)
+  studentApproved     Boolean   @default(false)
+  releasedAt          DateTime?
+  releasedBy          String?
 
   // Post-flight closeout
-  hobbsOut        Decimal?       @db.Decimal(9, 1)
-  hobbsIn         Decimal?       @db.Decimal(9, 1)
-  tachOut         Decimal?       @db.Decimal(9, 1)
-  tachIn          Decimal?       @db.Decimal(9, 1)
-  flightTime      Decimal?       @db.Decimal(6, 1)
-  landings        Int?
-  nightTime       Decimal?       @db.Decimal(6, 1)
-  instrumentTime  Decimal?       @db.Decimal(6, 1)
-  dualReceived    Decimal?       @db.Decimal(6, 1)
-  dualGiven       Decimal?       @db.Decimal(6, 1)
-  picTime         Decimal?       @db.Decimal(6, 1)
-  fuelAddedGal    Decimal?       @db.Decimal(6, 1)
-  closedAt        DateTime?
+  hobbsOut       Decimal?  @db.Decimal(9, 1)
+  hobbsIn        Decimal?  @db.Decimal(9, 1)
+  tachOut        Decimal?  @db.Decimal(9, 1)
+  tachIn         Decimal?  @db.Decimal(9, 1)
+  flightTime     Decimal?  @db.Decimal(6, 1)
+  landings       Int?
+  nightTime      Decimal?  @db.Decimal(6, 1)
+  instrumentTime Decimal?  @db.Decimal(6, 1)
+  dualReceived   Decimal?  @db.Decimal(6, 1)
+  dualGiven      Decimal?  @db.Decimal(6, 1)
+  picTime        Decimal?  @db.Decimal(6, 1)
+  fuelAddedGal   Decimal?  @db.Decimal(6, 1)
+  closedAt       DateTime?
 
   scheduleEvent ScheduleEvent @relation(fields: [scheduleEventId], references: [id], onDelete: Cascade)
   aircraft      Aircraft      @relation(fields: [aircraftId], references: [id])
@@ -711,14 +729,16 @@ model Syllabus {
   stages       SyllabusStage[]
   enrollments  SyllabusEnrollment[]
 
+  createdAt DateTime @default(now())
+
   @@index([organizationId])
 }
 
 model SyllabusStage {
-  id         String @id @default(cuid())
-  syllabusId String
-  name       String
-  order      Int
+  id           String  @id @default(cuid())
+  syllabusId   String
+  name         String
+  order        Int
   isStageCheck Boolean @default(false)
 
   syllabus Syllabus         @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
@@ -728,10 +748,10 @@ model SyllabusStage {
 }
 
 model SyllabusLesson {
-  id      String @id @default(cuid())
-  stageId String
-  name    String
-  order   Int
+  id        String   @id @default(cuid())
+  stageId   String
+  name      String
+  order     Int
   objective String?
   minHours  Decimal? @db.Decimal(5, 1)
 
@@ -743,10 +763,10 @@ model SyllabusLesson {
 }
 
 model SyllabusEnrollment {
-  id         String   @id @default(cuid())
-  studentId  String
-  syllabusId String
-  startedAt  DateTime @default(now())
+  id          String    @id @default(cuid())
+  studentId   String
+  syllabusId  String
+  startedAt   DateTime  @default(now())
   completedAt DateTime?
 
   student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -763,17 +783,17 @@ enum LessonGrade {
 }
 
 model LessonRecord {
-  id               String      @id @default(cuid())
-  studentId        String
-  instructorId     String
-  syllabusLessonId String?
-  date             DateTime    @default(now())
-  grade            LessonGrade @default(SATISFACTORY)
-  flightHours      Decimal?    @db.Decimal(5, 1)
-  groundHours      Decimal?    @db.Decimal(5, 1)
-  notes            String?
-  signedByInstructor Boolean   @default(false)
-  signedByStudent    Boolean   @default(false)
+  id                 String      @id @default(cuid())
+  studentId          String
+  instructorId       String
+  syllabusLessonId   String?
+  date               DateTime    @default(now())
+  grade              LessonGrade @default(SATISFACTORY)
+  flightHours        Decimal?    @db.Decimal(5, 1)
+  groundHours        Decimal?    @db.Decimal(5, 1)
+  notes              String?
+  signedByInstructor Boolean     @default(false)
+  signedByStudent    Boolean     @default(false)
 
   student        Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
   instructor     Instructor      @relation(fields: [instructorId], references: [id])
@@ -783,13 +803,13 @@ model LessonRecord {
 }
 
 model Endorsement {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   studentId    String
   instructorId String
   title        String
   farReference String? // e.g. 61.87(b)
   text         String
-  signedAt     DateTime @default(now())
+  signedAt     DateTime  @default(now())
   expiresAt    DateTime?
 
   student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -850,7 +870,7 @@ model Invoice {
   id             String        @id @default(cuid())
   organizationId String
   studentId      String?
-  number         String        @unique
+  number         String
   status         InvoiceStatus @default(OPEN)
   issuedAt       DateTime      @default(now())
   dueAt          DateTime?
@@ -861,6 +881,7 @@ model Invoice {
   lines        InvoiceLine[]
   payments     Payment[]
 
+  @@unique([organizationId, number])
   @@index([organizationId, status])
   @@index([studentId])
 }
@@ -990,6 +1011,8 @@ model LoginEvent {
   userAgent      String?
   createdAt      DateTime @default(now())
 
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
   @@index([organizationId, createdAt])
   @@index([email, createdAt])
 }
@@ -1022,20 +1045,24 @@ model LessonRequest {
   lessonType LessonType? @relation(fields: [lessonTypeId], references: [id])
   instructor Instructor? @relation(fields: [instructorId], references: [id])
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   @@index([organizationId, status])
 }
 
 /// Students waiting for an opening on a given day; notified on cancellations.
 model WaitlistEntry {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   studentId      String
   date           DateTime // the day they want to fly
   notes          String?
   notifiedAt     DateTime?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, date])
 }
@@ -1069,6 +1096,8 @@ model Lead {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   @@index([organizationId, status])
   @@index([organizationId, nextFollowUp])
 }
@@ -1088,6 +1117,8 @@ model ApiKey {
   createdBy      String?
   createdAt      DateTime  @default(now())
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   @@index([organizationId])
 }
 
@@ -1102,6 +1133,8 @@ model Webhook {
   createdAt      DateTime @default(now())
 
   deliveries WebhookDelivery[]
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
 }
@@ -1122,23 +1155,25 @@ model WebhookDelivery {
 
 /// Aviation inventory item (parts, consumables, tools).
 model Part {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   partNumber     String
   manufacturer   String?
   description    String
-  category       String   @default("Consumable") // Engine, Tires, Oil, Avionics...
-  condition      String   @default("NEW")
-  unitCost       Decimal? @db.Decimal(10, 2)
-  quantity       Int      @default(0)
-  minQuantity    Int      @default(0)
+  category       String    @default("Consumable") // Engine, Tires, Oil, Avionics...
+  condition      String    @default("NEW")
+  unitCost       Decimal?  @db.Decimal(10, 2)
+  quantity       Int       @default(0)
+  minQuantity    Int       @default(0)
   maxQuantity    Int?
   location       String? // warehouse / bin / shelf
   expiresAt      DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   movements InventoryMovement[]
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, partNumber])
   @@index([organizationId, category])
@@ -1160,15 +1195,15 @@ enum MovementType {
 
 /// Every stock change, forever — the traceability ledger.
 model InventoryMovement {
-  id           String       @id @default(cuid())
-  partId       String
-  type         MovementType
-  quantity     Int // signed: receives positive, installs negative
-  workOrderId  String?
-  aircraftId   String?
-  notes        String?
-  performedBy  String?
-  createdAt    DateTime     @default(now())
+  id          String       @id @default(cuid())
+  partId      String
+  type        MovementType
+  quantity    Int // signed: receives positive, installs negative
+  workOrderId String?
+  aircraftId  String?
+  notes       String?
+  performedBy String?
+  createdAt   DateTime     @default(now())
 
   part Part @relation(fields: [partId], references: [id], onDelete: Cascade)
 
@@ -1185,6 +1220,8 @@ model MissionControlScene {
   createdBy      String?
   createdAt      DateTime @default(now())
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   @@unique([organizationId, name])
   @@index([organizationId])
 }
@@ -1197,6 +1234,8 @@ model PlatformNote {
   authorLabel    String
   body           String
   createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
 }
@@ -1261,25 +1300,25 @@ enum JoinRequestStatus {
 /// An individual account asking to become a member of an organization.
 /// Approval assigns the role/location and attaches the user to the org.
 model JoinRequest {
-  id             String            @id @default(cuid())
-  organizationId String
-  userId         String
-  requestedRole  Role              @default(STUDENT)
-  phone          String?
-  certificateInfo String? // pilot certificate / student status, free text
-  reason         String?
-  message        String?
-  status         JoinRequestStatus @default(PENDING)
+  id                 String            @id @default(cuid())
+  organizationId     String
+  userId             String
+  requestedRole      Role              @default(STUDENT)
+  phone              String?
+  certificateInfo    String? // pilot certificate / student status, free text
+  reason             String?
+  message            String?
+  status             JoinRequestStatus @default(PENDING)
   /// Internal note, never shown to the requester.
-  adminNote      String?
+  adminNote          String?
   /// Response shown to the requester (rejection reason / info request).
-  adminResponse  String?
-  assignedRole   Role?
+  adminResponse      String?
+  assignedRole       Role?
   assignedLocationId String?
-  decidedByLabel String?
-  decidedAt      DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  decidedByLabel     String?
+  decidedAt          DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -55,10 +55,17 @@ anything not yet true is marked **(aspirational — not yet enforced)**.
 
 ## Foreign keys
 
+- **Every model with `organizationId` has a real `Organization` relation**
+  (ADR-021) — a bare `organizationId String` with no relation is banned
+  (`tests/schema-governance.test.ts`). New org-owned models declare the
+  relation or carry a documented exception with a reason.
 - **Org-owned children cascade from `Organization`**
   (`onDelete: Cascade`): users, locations, aircraft, schedule events,
-  invoices, documents, syllabi, import jobs, etc. Deleting a tenant is a
-  platform operation, and cascades do the bulk.
+  invoices, documents, syllabi, import jobs, leads, parts, API keys,
+  webhooks, invite links, Mission Control scenes, platform notes, etc.
+  Deleting a tenant is a platform operation, and cascades do the bulk. The
+  exceptions are the security/audit logs (`AuditLog`, `LoginEvent`), which
+  are `onDelete: SetNull` so the trail outlives its subject.
 - **Instructor-linked records are `RESTRICT`**: `LessonRecord.instructor`
   and `Endorsement.instructor` are required relations with no `onDelete`
   override — Prisma's default RESTRICT. You cannot delete an instructor who
@@ -86,20 +93,27 @@ anything not yet true is marked **(aspirational — not yet enforced)**.
 - Scheduling adds per-resource time indexes for conflict detection:
   `[aircraftId, start]`, `[instructorId, start]`, `[studentId, start]`,
   `[seriesId]`.
-- Uniqueness expresses invariants: `Organization.slug`, `User.email`,
-  `ApiKey.keyHash`, `Invitation.token`; per-tenant uniques as composites —
-  `[organizationId, name]` (roles, scenes), `[organizationId, partNumber]`.
+- Uniqueness expresses invariants. **Globally unique** only where the value
+  is global by nature: `Organization.slug`, `User.email`, `ApiKey.keyHash`,
+  `Invitation.tokenHash`. **Tenant-owned natural keys are unique per
+  organization**, never globally (ADR-021) — a global unique both leaks
+  cross-tenant existence and blocks legitimate reuse:
+  `[organizationId, tailNumber]` (aircraft), `[organizationId, number]`
+  (invoices), `[organizationId, partNumber]` (parts),
+  `[organizationId, name]` (roles, departments, scenes). Enforced by
+  `tests/schema-governance.test.ts`.
 - New query shape → check the plan supports it with an org-leading index
   before merging (merge checklist: "tenant isolation checked for new
   queries").
 
 ## Audit fields
 
-- `createdAt DateTime @default(now())` on every org-owned table;
-  `updatedAt @updatedAt` and `deletedAt` **where lifecycle matters**
-  (CONSTITUTION.md conventions). Domain-specific stamps (`enrolledAt`,
-  `hiredAt`, `releasedAt`, `closedAt`) replace generic ones where they say
-  more.
+- `createdAt DateTime @default(now())` on every org-owned table —
+  **enforced** by `tests/schema-governance.test.ts` (ADR-021), which allows a
+  documented domain-specific substitute that says more (`Invoice.issuedAt`,
+  `Document.uploadedAt`, `SimulationRun.startedAt`). `updatedAt @updatedAt`
+  and `deletedAt` are added **where lifecycle matters** (CONSTITUTION.md
+  conventions).
 - **`createdBy`/`updatedBy` are satisfied by the audit log, not columns** —
   a documented shortcut (CONSTITUTION.md): every mutation writes an
   `AuditLog` row with actor, action, entity, old/new values, IP, and user

@@ -373,6 +373,55 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
   tokens land (Phase B) — they use the same hashed-single-use pattern
   (already the plan, PRODUCTION.md §13.1).
 
+## ADR-021 — Tenant-scoped uniqueness for natural keys; a real Organization FK on every org-owned table
+
+**Date:** 2026-07 (Phase 1C) · **Status:** Accepted
+
+- **Context:** the Phase 0 governance audit found (a) nine org-owned models
+  carrying `organizationId` as a bare string with **no FK** to `Organization`
+  (`wipeOrganizationData` deleted them by hand; a raw org delete orphaned
+  them — and did, in the dev DB), and (b) `Aircraft.tailNumber` and
+  `Invoice.number` declared **globally `@unique`**, so two tenants could not
+  share a tail number or an invoice number, and one tenant registering a
+  value revealed another tenant already had it.
+- **Alternatives:** keep global uniqueness (real tail numbers are globally
+  unique on the FAA registry) — rejected: a SaaS tenant must not be blocked
+  or probed by another tenant's data, and aircraft move between operators;
+  application-level cascade only (the status quo) — rejected: isolation must
+  be structural, not a helper that a stray `delete` can bypass; database-level
+  RLS — out of scope (ADR-007 keeps isolation in the engine layer).
+- **Why:** every model with `organizationId` now has a real
+  `organization Organization @relation(..., onDelete: …)` — `Cascade` for
+  operational data, `SetNull` for `LoginEvent` (a security log that must
+  outlive its org, matching `AuditLog`). Natural keys that recur across
+  tenants are `@@unique([organizationId, field])`, never globally `@unique`.
+  Moving global → tenant-scoped is **strictly less restrictive**, so it can
+  never introduce a within-org collision that global uniqueness didn't
+  already prevent — no risk to invoice-number integrity.
+- **Consequences:** the import engine's aircraft/invoice duplicate detection
+  became org-scoped (it had matched across all tenants — a latent
+  cross-tenant read, now closed); the "registered to another organization"
+  errors are gone because that coexistence is now valid. `wipeOrganizationData`
+  is unchanged (it runs during snapshot restore where the org survives, so it
+  still deletes children explicitly); the new FKs only add DB-enforced cleanup
+  on actual org deletion.
+- **Migration:** additive constraints, no column drops. Idempotently
+  remediates pre-existing orphans first (null the `LoginEvent` refs, delete
+  the CASCADE tables' orphans — matching each FK's onDelete) so the
+  constraints validate in any environment. `createdAt @default(now())` added
+  to five org-owned models that had no creation stamp (Department, Location,
+  Aircraft, LessonType, Syllabus); Invoice/Document/SimulationRun keep their
+  domain substitutes (`issuedAt`/`uploadedAt`/`startedAt`).
+- **Enforced by** `tests/schema-governance.test.ts`: org FK presence +
+  onDelete action, tenant-scoped uniqueness, and creation-timestamp
+  conventions — no silent drift from DATABASE_STANDARDS.md.
+- **Risks:** the invoice-number *generator* (`INV-${Date.now().slice(-8)}`)
+  can still collide within one org in the same millisecond — pre-existing,
+  unchanged by this ADR (global uniqueness had the same exposure), and
+  roadmapped for a per-org sequence.
+- **Reconsider when:** a legitimate need for a cross-tenant natural key
+  arises (none today), or per-org invoice sequences land.
+
 ---
 
 **Adding an ADR:** copy the format, take the next number, link any ADR it

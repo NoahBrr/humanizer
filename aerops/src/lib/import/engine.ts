@@ -206,10 +206,12 @@ async function importPerson(ctx: Ctx, v: Record<string, unknown>, kind: "student
 
 async function importAircraft(ctx: Ctx, v: Record<string, unknown>): Promise<"create" | "update" | "skip"> {
   const tail = (v.tailNumber as string).toUpperCase();
-  const existing = await ctx.tx.aircraft.findUnique({ where: { tailNumber: tail }, select: { id: true, organizationId: true } });
-  if (existing && existing.organizationId !== ctx.organizationId) {
-    throw new Error(`${tail} is registered to another organization on AeroOps`);
-  }
+  // Tail numbers are unique per organization (ADR-021), so duplicate
+  // detection is org-scoped — another org owning the same tail is irrelevant.
+  const existing = await ctx.tx.aircraft.findUnique({
+    where: { organizationId_tailNumber: { organizationId: ctx.organizationId, tailNumber: tail } },
+    select: { id: true },
+  });
 
   let locationId: string | undefined;
   if (v.locationIcao) {
@@ -421,8 +423,12 @@ async function importFleetRecord(ctx: Ctx, v: Record<string, unknown>, spec: Imp
 
 async function importInvoice(ctx: Ctx, v: Record<string, unknown>): Promise<"create" | "update" | "skip"> {
   const number = v.number as string;
-  const existing = await ctx.tx.invoice.findUnique({ where: { number }, select: { id: true, organizationId: true } });
-  if (existing && existing.organizationId !== ctx.organizationId) throw new Error(`Invoice number ${number} is used by another organization — prefix your numbers`);
+  // Invoice numbers are unique per organization (ADR-021) — an org may reuse a
+  // number another org also uses; duplicate detection stays org-scoped.
+  const existing = await ctx.tx.invoice.findUnique({
+    where: { organizationId_number: { organizationId: ctx.organizationId, number } },
+    select: { id: true },
+  });
   if (existing) {
     if (ctx.strategy === "skip") return "skip";
     if (ctx.strategy === "update") {

@@ -180,9 +180,12 @@ maintenance, corporate — drive module enablement per org.
 ## 8. Multi-tenancy model
 
 Shared schema, row-scoped: every operational record hangs off
-`Organization` via `organizationId` with scoped indexes. **Org scope comes
-from the session, never from client input** — cross-tenant queries exist
-only on platform-admin routes behind `authorizePlatform`. Isolation is
+`Organization` via `organizationId` — with a **real FK** (ADR-021; enforced
+by `tests/schema-governance.test.ts`), scoped indexes, and natural keys
+unique **per organization** not globally (two tenants may share a tail
+number or invoice number). **Org scope comes from the session, never from
+client input** — cross-tenant queries exist only on platform-admin routes
+behind `authorizePlatform`. Isolation is
 enforced in the engine layer (not DB RLS —
 [ADR-007](./DECISIONS.md#adr-007--shared-schema-row-scoped-multi-tenancy-enforced-in-the-engine-layer)
 documents why), verified

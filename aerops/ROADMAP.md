@@ -12,6 +12,18 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-07 — Phase 1C database integrity & tenant
+safety: added a real Organization FK to all 9 org-owned models that lacked
+one (LoginEvent SetNull to preserve the security log, the rest Cascade),
+moved Aircraft.tailNumber and Invoice.number from global to per-organization
+uniqueness (two tenants may now share them; import duplicate detection
+corrected to org-scoped, closing a latent cross-tenant read), added createdAt
+to 5 org-owned models, and added `tests/schema-governance.test.ts` enforcing
+FK/uniqueness/timestamp conventions (ADR-021). Migration remediates
+pre-existing orphans idempotently. Verified: 146 tests, lint, build,
+migrate, reseed, snapshot round-trip, and DB-level two-org proofs. Not
+deployed._
+
 _Last session update: 2026-07-07 — Phase 1B token security hardening:
 invitation and invite-link tokens now stored only as sha256 hashes
 (`tokenHash`), mirroring the API-key pattern, via a shared `lib/tokens.ts`;
@@ -229,6 +241,10 @@ time zones stored-not-applied — triage next session._
 | Data-driven RBAC, custom roles, single authorize() gate (constitution-tested) | Complete | — | — | |
 | Immutable audit trail (org + platform + imports + impersonation) | Complete | — | — | |
 | Tenant isolation (org scope from session only, never the client) | Complete | — | — | |
+| Organization FK on all org-owned models (9 added: LoginEvent→SetNull, rest Cascade) | Complete | — | — | Phase 1C; ADR-021, `tests/schema-governance.test.ts`; migration remediates orphans |
+| Tenant-scoped uniqueness (Aircraft.tailNumber, Invoice.number → per-org) | Complete | — | — | Phase 1C; two orgs may share a tail/invoice number; import dup-detection now org-scoped |
+| createdAt on all org-owned models + schema-governance drift tests | Complete | — | — | Phase 1C; 5 models gained createdAt; convention machine-enforced |
+| Per-org invoice-number sequence (replace `Date.now().slice(-8)`) | Not Started | Medium | S | Same-ms within-org collision risk (pre-existing); tenant-scoped unique would then be exact |
 | Platform session revocation (isActive + sessionVersion per request) | Complete | — | — | Phase 1A; `lib/session-rules.ts`, pinned by `tests/auth-security.test.ts` |
 | Bearer-token hashing (invitation + invite-link tokens → `tokenHash` sha256) | Complete | — | — | Phase 1B; `lib/tokens.ts`, ADR-020, pinned by `tests/token-security.test.ts`; safe backfill migration |
 | API-key hashing routed through `lib/tokens.ts` | Complete | — | — | Phase 1B review follow-up; unifies the last inline sha256, shrinks the static allowlist |
