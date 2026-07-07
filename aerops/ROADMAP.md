@@ -9,12 +9,17 @@ Companion to [ARCHITECTURE.md](./ARCHITECTURE.md) (how to build),
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
-_Last session update: 2026-07-07 — Independent verification audit passed
-(112 tests, lint, fresh build, weather mutation test, corrected print/PDF
-pipeline), then production deployment **planning**: PRODUCTION.md §13–16 now
-carries per-blocker implementation plans (email, Stripe, Neon, Vercel,
-CI/Sentry), the Phase A–F launch checklist, sequence/risks, and the env-var
-matrix. Nothing provisioned or deployed — planning only._
+_Last session update: 2026-07-07 — Phase 0 engineering governance: created
+`docs/architecture/` (ARCHITECTURE source of truth + 19 ADRs in DECISIONS +
+API/DATABASE/SECURITY standards), `docs/engineering/` (ENGINEERING_HANDBOOK
++ AI_REVIEW_BOARD with 8 reviewers and gate matrix), `docs/aviation/`
+(AVIATION_STANDARDS), CLAUDE.md v2 (§13 governance index + quality gates),
+new `performance-reviewer` subagent. Documentation only — no product code,
+schema, or dependency changes; not deployed. Governance review surfaced
+codebase inconsistencies (recorded in the docs' conflict/gap sections):
+platform-session revocation gap, AUTH_SECRET dev fallback, FK-less
+organizationId columns, global tail-number/invoice uniques, LIFR missing,
+time zones stored-not-applied — triage next session._
 
 ---
 

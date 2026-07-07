@@ -5,7 +5,7 @@ scheduling software. Every section states the standard, then grounds it in
 the code that implements it. Where the codebase falls short of best
 practice, the shortfall is listed honestly in **Gaps to close** at the end —
 never papered over. Companions: [CONSTITUTION.md](../../CONSTITUTION.md),
-[ARCHITECTURE.md](../../ARCHITECTURE.md),
+[ARCHITECTURE.md](../architecture/ARCHITECTURE.md),
 [AI_REVIEW_BOARD.md](../engineering/AI_REVIEW_BOARD.md) (the UX and QA gates
 enforce this document).
 
@@ -333,7 +333,7 @@ candidates, not documentation debt.
 ## Related documents
 
 - [CONSTITUTION.md](../../CONSTITUTION.md) — enforced engineering law (weather + status-color single-source rules)
-- [ARCHITECTURE.md](../../ARCHITECTURE.md) — the engine layer these standards live in
+- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) — the engine layer these standards live in
 - [CLAUDE.md](../../CLAUDE.md) — session operating system, UI/UX and weather rules
 - [ROADMAP.md](../../ROADMAP.md) — where "Gaps to close" rows belong
 - [AI_REVIEW_BOARD.md](../engineering/AI_REVIEW_BOARD.md) — the gates that enforce this document

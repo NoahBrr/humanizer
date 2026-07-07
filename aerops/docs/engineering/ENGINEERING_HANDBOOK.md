@@ -277,7 +277,7 @@ deferrals ("Known limitations") instead of taking undocumented shortcuts.
 ## Related documents
 
 - [CONSTITUTION.md](../../CONSTITUTION.md) — the enforced engineering rules
-- [ARCHITECTURE.md](../../ARCHITECTURE.md) — system shape, engines, event bus
+- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) — system shape, engines, event bus
 - [SECURITY_STANDARDS.md](../architecture/SECURITY_STANDARDS.md) — security posture and OWASP mapping
 - [AI_REVIEW_BOARD.md](./AI_REVIEW_BOARD.md) — the 8-reviewer feature gate
 - [PRODUCTION.md](../../PRODUCTION.md) — launch plan, release/rollback detail

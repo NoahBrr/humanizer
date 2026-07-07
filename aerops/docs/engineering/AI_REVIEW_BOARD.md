@@ -44,17 +44,31 @@ reviewer and the change.
 | 1 | AI CTO | `architect` |
 | 2 | Principal Software Architect | `architect` + `db-architect` |
 | 3 | Security Reviewer | `security-reviewer` |
-| 4 | Performance Reviewer | **none yet** — see below |
+| 4 | Performance Reviewer | `performance-reviewer` |
 | 5 | QA Reviewer | `qa-engineer` |
 | 6 | UX Reviewer | `ui-engineer` |
 | 7 | Documentation Reviewer | `docs-engineer` |
 | 8 | Production Reviewer | `production-reviewer` |
 
-> **Gap:** the Performance Reviewer has no dedicated agent. Today the
-> checklist is split across `db-architect` (queries/indexes) and
-> `production-reviewer` (scale). Recommend creating
-> `.claude/agents/performance-reviewer.md` (read-only, like the other
-> reviewers) so gate 4 has one owner. Flagged, not created.
+> The `performance-reviewer` agent is the newest on the roster
+> (`.claude/agents/performance-reviewer.md`, read-only like the other
+> reviewers); before it existed, gate 4 was split across `db-architect`
+> and `production-reviewer`.
+
+**Completion-gate mapping.** CLAUDE.md §13 states eight completion gates.
+They map onto the eight reviewers as follows — the gates are *outcomes*,
+the reviewers are *who produces them*:
+
+| Completion gate (CLAUDE.md §13) | Produced by |
+|---|---|
+| Architecture Review | AI CTO + Principal Software Architect (both must pass) |
+| Security Review | Security Reviewer |
+| Performance Review | Performance Reviewer |
+| UX Review | UX Reviewer |
+| QA Review | QA Reviewer |
+| Documentation Review | Documentation Reviewer |
+| Production Review | Production Reviewer |
+| Aviation Standards Review | Every reviewer, against [../aviation/AVIATION_STANDARDS.md](../aviation/AVIATION_STANDARDS.md) — QA and UX own the checklist items (terminology, workflows, Hobbs/Tach, weather); any reviewer may fail the gate |
 
 ---
 
@@ -152,8 +166,7 @@ deletion are human-only); weakened impersonation controls.
 
 ## 4. Performance Reviewer
 
-**Subagent:** none yet — split across `db-architect` and
-`production-reviewer` until a dedicated agent exists (flagged above).
+**Subagent:** `performance-reviewer`
 
 **Responsibilities.** Query shape, API latency, React rendering, bundle
 size, caching, behavior at 100+ orgs.
@@ -297,7 +310,7 @@ explicit instruction; a new public surface with no rate limit.
 
 - [CONSTITUTION.md](../../CONSTITUTION.md) — the enforced law behind every gate
 - [CLAUDE.md](../../CLAUDE.md) — session operating system and role flow
-- [ARCHITECTURE.md](../../ARCHITECTURE.md) — the system the board protects
+- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) — the system the board protects
 - [PRODUCTION.md](../../PRODUCTION.md) — the Production Reviewer's audit basis
 - [ROADMAP.md](../../ROADMAP.md) — where verdicts' deferred work lands
 - [AVIATION_STANDARDS.md](../aviation/AVIATION_STANDARDS.md) — domain standards the UX/QA gates enforce
