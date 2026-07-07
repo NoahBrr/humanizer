@@ -20,7 +20,9 @@ const IMPERSONATION_TTL_MS = 60 * 60 * 1000;
  * directly — so tenancy rules are enforced in exactly one place.
  */
 export type AppSession = {
-  kind: "org" | "platform";
+  /// "individual" = signed-in account that belongs to no organization yet
+  /// (public sign-up). They see the /welcome onboarding surface only.
+  kind: "org" | "platform" | "individual";
   userId: string;
   email: string;
   firstName: string;
@@ -79,6 +81,21 @@ async function orgSessionFor(userId: string, tokenSessionVersion?: number): Prom
   if (!user || !user.isActive || user.deletedAt) return null;
   // "Log out all devices" bumps sessionVersion; stale JWTs die here.
   if (tokenSessionVersion !== undefined && user.sessionVersion !== tokenSessionVersion) return null;
+  // Individual account: signed in, but not yet part of any organization.
+  if (!user.organizationId || !user.organization) {
+    return {
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      organizationId: "",
+      role: user.role,
+      permissions: new Set() as ReadonlySet<Permission>,
+      orgStatus: "ACTIVE" as OrgStatus,
+      businessProfiles: [],
+      modules: new Set<ModuleKey>(),
+    };
+  }
   const permissions = user.customRole
     ? (new Set(user.customRole.permissions as Permission[]) as ReadonlySet<Permission>)
     : permissionsForRole(user.role);
@@ -143,7 +160,7 @@ export async function getSession(): Promise<AppSession | null> {
 
   const org = await orgSessionFor(raw.user.id, raw.user.sessionVersion);
   if (!org) return null;
-  return { kind: "org", ...org };
+  return { kind: org.organizationId ? "org" : "individual", ...org };
 }
 
 // --- API-key (service account) sessions ---------------------------------------
@@ -203,6 +220,9 @@ export async function authorize(permission: Permission | null, opts: { mutating?
   }
   if (!session || (session.kind === "platform" && !session.impersonation && !session.organizationId)) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+  if (session.kind === "individual") {
+    return { error: NextResponse.json({ error: "Join or create an organization to use this feature." }, { status: 403 }) };
   }
   if (session.orgStatus !== "ACTIVE") {
     return { error: NextResponse.json({ error: "This organization is suspended. Contact AeroOps support." }, { status: 403 }) };

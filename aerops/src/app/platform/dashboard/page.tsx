@@ -26,6 +26,7 @@ export default async function PlatformDashboard() {
     db.webhookDelivery.count({ where: { createdAt: { gte: since30 } } }),
     db.missionControlScene.count(),
   ]);
+  const demoRequests = await db.demoRequest.findMany({ where: { status: "NEW" }, orderBy: { createdAt: "desc" }, take: 8 });
   const dbLatencyMs = Date.now() - dbStart;
 
   const active = orgs.filter((o) => o.status === "ACTIVE");
@@ -158,7 +159,7 @@ export default async function PlatformDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader>
             <CardTitle>Recent Platform Activity</CardTitle>
             <CardDescription>Latest entries in the immutable audit trail</CardDescription>
@@ -175,6 +176,27 @@ export default async function PlatformDashboard() {
                     {a.organization?.name ?? "Platform"} · {formatDateTime(a.createdAt)}
                   </p>
                 </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Demo & contact requests</CardTitle>
+            <CardDescription>New submissions from the marketing site</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2.5 text-xs">
+            {demoRequests.length === 0 && <p className="text-muted-foreground">No new requests.</p>}
+            {demoRequests.map((r) => (
+              <div key={r.id} className="rounded-lg border border-border px-3 py-2">
+                <p className="font-medium">
+                  {r.name} <span className="text-muted-foreground">· {r.email}</span>
+                  <Badge tone={r.kind === "demo" ? "blue" : "gray"} className="ml-1.5">{r.kind}</Badge>
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {[r.company, r.orgType, r.fleetSize ? `${r.fleetSize} aircraft` : null].filter(Boolean).join(" · ") || "—"} · {formatDateTime(r.createdAt)}
+                </p>
               </div>
             ))}
           </CardContent>

@@ -39,6 +39,8 @@ const STATUS_TONE: Record<string, StatusTone> = {
   TESTING: "cyan",
   AWAITING_INSPECTION: "amber",
   APPROVED: "green",
+  MORE_INFO: "cyan",
+  REJECTED: "red",
   RETURN_TO_SERVICE: "green",
   AOG: "darkred",
   EMERGENCY: "darkred",

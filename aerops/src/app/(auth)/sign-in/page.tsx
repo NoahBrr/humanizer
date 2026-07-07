@@ -105,6 +105,11 @@ function SignInForm() {
           <p className="text-center text-[11px] text-muted-foreground">MFA enrollment and password changes live in Settings → Security once signed in.</p>
         </form>
 
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <a href="/sign-up" className="font-medium text-primary hover:underline">Create one</a>
+        </p>
+
         <div className="mt-6">
           <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Demo accounts · password demo1234</p>
           <div className="grid grid-cols-3 gap-1.5">

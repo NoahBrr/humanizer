@@ -29,8 +29,10 @@ describe("every API route authorizes (one gate, no exceptions)", () => {
   const PUBLIC_ROUTES = new Set([
     "app/api/auth/[...nextauth]/route.ts", // NextAuth handler IS the authenticator
     "app/api/auth/mfa-check/route.ts", // pre-auth step of the login flow, rate limited
+    "app/api/auth/register/route.ts", // public sign-up, rate limited, creates org-less accounts only
     "app/api/health/route.ts", // observability: data-free by contract
     "app/api/invitations/accept/route.ts", // token-authenticated public onboarding
+    "app/api/demo-requests/route.ts", // marketing form intake, rate limited, data-free response
   ]);
 
   // Self-service identity routes: any signed-in user acts on their OWN
@@ -41,6 +43,13 @@ describe("every API route authorizes (one gate, no exceptions)", () => {
     "app/api/security/password/route.ts",
     "app/api/security/sessions/route.ts",
     "app/api/waitlist/route.ts",
+    // Individual-account onboarding: callers have no organization yet, so no
+    // org permission can apply — each route acts only on the caller's own
+    // membership and is engine-validated.
+    "app/api/orgs/route.ts",
+    "app/api/orgs/search/route.ts",
+    "app/api/join-requests/route.ts",
+    "app/api/invite-links/redeem/route.ts",
   ]);
 
   const routes = walk(path.join(SRC, "app", "api")).filter((p) => p.endsWith("route.ts"));

@@ -15,6 +15,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) redirect("/sign-in");
   // Platform staff without an active impersonation belong in /platform.
   if (session.platformRole && !session.impersonation) redirect("/platform");
+  // Individual accounts (no organization yet) live on the onboarding surface.
+  if (session.kind === "individual") redirect("/welcome");
 
   if (session.orgStatus !== "ACTIVE") {
     return (

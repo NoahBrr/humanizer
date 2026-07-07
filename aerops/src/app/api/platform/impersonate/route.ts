@@ -22,6 +22,7 @@ export async function POST(req: Request) {
 
   const target = await db.user.findUnique({ where: { id: body.data.userId }, include: { organization: true } });
   if (!target || !target.isActive || target.deletedAt) return NextResponse.json({ error: "Target user not found" }, { status: 404 });
+  if (!target.organization) return NextResponse.json({ error: "This user does not belong to an organization yet" }, { status: 400 });
   if (target.organization.status === "DELETED") return NextResponse.json({ error: "Organization is deleted" }, { status: 400 });
 
   const value = encodeImpersonation({
@@ -74,7 +75,7 @@ export async function DELETE() {
         entityType: "User",
         entityId: target.id,
       });
-      await db.notification.create({
+      if (target.organizationId) await db.notification.create({
         data: {
           organizationId: target.organizationId,
           kind: "GENERAL",

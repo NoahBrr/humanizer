@@ -8,6 +8,28 @@ Built with Next.js 15 (App Router), TypeScript, Tailwind CSS 4, Prisma, and
 PostgreSQL. UI patterned after modern enterprise tools: command palette (⌘K),
 dark/light mode, keyboard-friendly, responsive.
 
+## Public website & onboarding
+
+The marketing site lives at `/` (with `/features`, `/solutions/*`, `/pricing`,
+`/about`, `/contact`, `/demo`) and is fully separate from the authenticated
+app. Self-serve onboarding:
+
+- **`/sign-up`** creates an individual account (no organization). Individuals
+  land on **`/welcome`** — create a company, join one, or continue solo.
+- **Create company** (`/welcome/create`): name → business activities →
+  location & contact → team invites → done; the creator becomes the owner and
+  activities enable the right modules.
+- **Join company** (`/welcome/join`): search by name/airport/city/org code and
+  file a join request (role, certificate info, message). Admins review at
+  **`/settings/join-requests`** — approve (assign role + location), reject, or
+  ask for more info; everything is audited and the member is notified.
+- **Invite links** (`/join/<token>`): shareable links with role, expiration,
+  max uses, and auto-approve vs. request mode.
+- Demo/contact form submissions surface on the Founder Platform dashboard.
+
+Sidebar: collapses to icons with an always-visible edge handle and the `[`
+keyboard shortcut; phones/tablets use the bottom navigation bar.
+
 ## Quick start
 
 Requirements: Node 20+, PostgreSQL 14+.

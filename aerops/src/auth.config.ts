@@ -14,8 +14,14 @@ export const authConfig = {
       if (request.headers.get("authorization")?.startsWith("Bearer aero_")) return true;
       const isAuthed = !!auth?.user;
       const { pathname } = request.nextUrl;
+      // Marketing site + auth + tokenized entry points are public.
+      const PUBLIC_EXACT = ["/", "/sign-in", "/sign-up", "/login", "/features", "/pricing", "/about", "/contact", "/demo", "/request-flight", "/api/health", "/api/invitations/accept", "/api/auth/register"];
+      const PUBLIC_PREFIX = ["/solutions", "/invite/", "/join/"];
       const isPublic =
-        pathname === "/sign-in" || pathname === "/" || pathname.startsWith("/invite/") || pathname === "/api/invitations/accept" || pathname === "/request-flight" || pathname === "/api/health" || (pathname === "/api/leads" && request.method === "POST");
+        PUBLIC_EXACT.includes(pathname) ||
+        PUBLIC_PREFIX.some((p) => pathname.startsWith(p)) ||
+        (pathname === "/api/leads" && request.method === "POST") ||
+        (pathname === "/api/demo-requests" && request.method === "POST");
       if (isPublic) return true;
       return isAuthed;
     },

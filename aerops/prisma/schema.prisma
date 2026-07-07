@@ -131,6 +131,8 @@ model Organization {
   syllabi        Syllabus[]
   snapshots      OrgSnapshot[]
   simulations    SimulationRun[]
+  joinRequests   JoinRequest[]
+  inviteLinks    InviteLink[]
 
   @@index([status])
 }
@@ -197,7 +199,9 @@ enum Role {
 
 model User {
   id             String   @id @default(cuid())
-  organizationId String
+  /// Null = individual account not yet part of any organization (public
+  /// sign-up). Joining or creating an organization sets it.
+  organizationId String?
   email          String   @unique
   passwordHash   String
   firstName      String
@@ -218,7 +222,7 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customRole        OrgRole?        @relation(fields: [customRoleId], references: [id])
   primaryLocation   Location?       @relation("PrimaryLocationUsers", fields: [primaryLocationId], references: [id])
   department        Department?     @relation(fields: [departmentId], references: [id])
@@ -226,6 +230,7 @@ model User {
   instructorProfile Instructor?
   notifications     Notification[]
   documents         Document[]      @relation("DocumentOwner")
+  joinRequests      JoinRequest[]
 
   @@index([organizationId, role])
 }
@@ -1236,4 +1241,84 @@ model SimulationRun {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Public onboarding: join requests, invite links, demo requests
+// ---------------------------------------------------------------------------
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  MORE_INFO
+  CANCELLED
+}
+
+/// An individual account asking to become a member of an organization.
+/// Approval assigns the role/location and attaches the user to the org.
+model JoinRequest {
+  id             String            @id @default(cuid())
+  organizationId String
+  userId         String
+  requestedRole  Role              @default(STUDENT)
+  phone          String?
+  certificateInfo String? // pilot certificate / student status, free text
+  reason         String?
+  message        String?
+  status         JoinRequestStatus @default(PENDING)
+  /// Internal note, never shown to the requester.
+  adminNote      String?
+  /// Response shown to the requester (rejection reason / info request).
+  adminResponse  String?
+  assignedRole   Role?
+  assignedLocationId String?
+  decidedByLabel String?
+  decidedAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([userId, status])
+}
+
+/// Shareable invite link (distinct from per-email Invitation): anyone with
+/// the URL can join (auto-approve) or file a pre-filled join request.
+model InviteLink {
+  id             String    @id @default(cuid())
+  organizationId String
+  token          String    @unique @default(cuid())
+  label          String    @default("General invite")
+  role           Role      @default(STUDENT)
+  autoApprove    Boolean   @default(false)
+  maxUses        Int?
+  uses           Int       @default(0)
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+/// Demo/contact requests from the public marketing site (no tenant scope).
+model DemoRequest {
+  id        String   @id @default(cuid())
+  kind      String   @default("demo") // demo | contact
+  name      String
+  email     String
+  company   String?
+  phone     String?
+  orgType   String?
+  fleetSize String?
+  message   String?
+  status    String   @default("NEW") // NEW | CONTACTED | CLOSED
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }

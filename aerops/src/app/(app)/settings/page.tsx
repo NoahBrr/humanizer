@@ -37,6 +37,9 @@ export default async function SettingsPage() {
   return (
     <div className="animate-fade-up space-y-4">
       <PageHeader title="Settings" description="School configuration, branding, users, and integrations">
+        <a href="/settings/join-requests" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
+          Join Requests
+        </a>
         <a href="/settings/security" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
           Security →
         </a>

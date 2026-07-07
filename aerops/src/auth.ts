@@ -45,22 +45,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (user) {
           if (!user.isActive || user.deletedAt) return null;
           if (!(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
-            await logLogin({ email, userId: user.id, organizationId: user.organizationId, success: false, reason: "bad_password" });
+            await logLogin({ email, userId: user.id, organizationId: user.organizationId ?? undefined, success: false, reason: "bad_password" });
             return null;
           }
           if (user.mfaEnabled && user.mfaSecret) {
             if (!parsed.data.totp || !verifyTotp(user.mfaSecret, parsed.data.totp)) {
-              await logLogin({ email, userId: user.id, organizationId: user.organizationId, success: false, reason: "mfa_failed" });
+              await logLogin({ email, userId: user.id, organizationId: user.organizationId ?? undefined, success: false, reason: "mfa_failed" });
               return null;
             }
           }
-          await logLogin({ email, userId: user.id, organizationId: user.organizationId, success: true, reason: "ok" });
+          await logLogin({ email, userId: user.id, organizationId: user.organizationId ?? undefined, success: true, reason: "ok" });
           return {
             id: user.id,
             email: user.email,
             name: `${user.firstName} ${user.lastName}`,
             role: user.role,
-            organizationId: user.organizationId,
+            organizationId: user.organizationId ?? "",
             firstName: user.firstName,
             lastName: user.lastName,
             sessionVersion: user.sessionVersion,
@@ -110,11 +110,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!existing || !existing.isActive || existing.deletedAt) return false;
       user.id = existing.id;
       user.role = existing.role;
-      user.organizationId = existing.organizationId;
+      user.organizationId = existing.organizationId ?? "";
       user.firstName = existing.firstName;
       user.lastName = existing.lastName;
       user.sessionVersion = existing.sessionVersion;
-      await logLogin({ email: existing.email, userId: existing.id, organizationId: existing.organizationId, success: true, reason: `oauth_${account.provider}` });
+      await logLogin({ email: existing.email, userId: existing.id, organizationId: existing.organizationId ?? undefined, success: true, reason: `oauth_${account.provider}` });
       return true;
     },
   },
