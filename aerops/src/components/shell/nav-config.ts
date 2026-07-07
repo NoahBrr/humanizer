@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, CalendarDays, Radio, Plane, GraduationCap, Users, Wrench,
-  Receipt, BarChart3, Bell, FolderLock, Settings, ClipboardCheck, Activity, Megaphone, Briefcase, Sparkles, MonitorPlay, type LucideIcon,
+  Receipt, BarChart3, Bell, FolderLock, Settings, UploadCloud, ClipboardCheck, Activity, Megaphone, Briefcase, Sparkles, MonitorPlay, type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -23,5 +23,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/executive", label: "Executive", icon: Briefcase },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/documents", label: "Documents", icon: FolderLock },
+  { href: "/import", label: "Import Data", icon: UploadCloud },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

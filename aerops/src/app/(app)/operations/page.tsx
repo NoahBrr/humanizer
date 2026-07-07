@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Activity, AlertTriangle, Plane, Radio, CloudSun } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
+import { activeLocationWeather, icaoOf, weatherSummary } from "@/lib/weather";
 import { airworthinessOf } from "@/lib/airworthiness";
 import { PageHeader } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -20,6 +21,7 @@ export default async function OperationsCenter() {
   if (!session!.permissions.has("dispatch.release")) redirect("/dashboard");
   const organizationId = session!.organizationId;
   const locationId = (await cookies()).get("aerops-location")?.value || undefined;
+  const wx = await activeLocationWeather(organizationId, locationId);
   const now = new Date();
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(dayStart.getTime() + 86_400_000);
@@ -112,9 +114,13 @@ export default async function OperationsCenter() {
         title="Operations Center"
         description="What is happening right now — flights, fleet, weather, and everything needing attention"
       >
-        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm">
-          <CloudSun className="h-3.5 w-3.5 text-warning" /> <span className="font-semibold text-success">VFR</span> KPAO 310°/8 10SM SCT045
-        </div>
+        {wx && (
+          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+            <CloudSun className="h-3.5 w-3.5 text-warning" />
+            <span className={`font-semibold ${wx.weather.category === "VFR" ? "text-success" : wx.weather.category === "MVFR" ? "text-warning" : "text-destructive"}`}>{wx.weather.category}</span>
+            {icaoOf(wx.location)} {weatherSummary(wx.weather)}
+          </div>
+        )}
       </PageHeader>
 
       {alerts.length > 0 && (

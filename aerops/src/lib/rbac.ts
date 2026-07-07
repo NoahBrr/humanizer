@@ -25,6 +25,7 @@ export const SECTION_PERMISSIONS: Record<string, Permission> = {
   "/executive": "reports.view",
   "/notifications": "notifications.view",
   "/documents": "documents.view",
+  "/import": "data.import",
   "/settings": "settings.manage",
 };
 

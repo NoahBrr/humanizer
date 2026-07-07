@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Activity, Building2, DatabaseZap, LayoutDashboard, ScrollText, Users } from "lucide-react";
+import { Activity, Building2, Database, DatabaseZap, LayoutDashboard, ScrollText, Users } from "lucide-react";
 import { AeroOpsMark } from "@/components/brand/logo";
 import { getSession } from "@/lib/session";
 import { PLATFORM_ROLE_LABELS } from "@/lib/rbac";
@@ -13,6 +13,7 @@ const PLATFORM_NAV = [
   { href: "/platform/organizations", label: "Organizations", icon: Building2 },
   { href: "/platform/demo-data", label: "Demo Data Generator", icon: DatabaseZap },
   { href: "/platform/simulation", label: "Live Simulation", icon: Activity },
+  { href: "/platform/imports", label: "Import Jobs", icon: Database },
   { href: "/platform/users", label: "Platform Users", icon: Users },
   { href: "/platform/audit", label: "Audit Log", icon: ScrollText },
 ];

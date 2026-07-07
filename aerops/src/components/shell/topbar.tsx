@@ -10,12 +10,15 @@ import { ThemeToggle } from "./theme-toggle";
 
 type TopbarNotification = { id: string; title: string; body: string | null; createdAt: string };
 type LocationOpt = { id: string; name: string; icao: string | null };
+type TopbarWeather = { icao: string; category: "VFR" | "MVFR" | "IFR"; summary: string };
+
+const WX_TONE: Record<TopbarWeather["category"], string> = { VFR: "text-success", MVFR: "text-warning", IFR: "text-destructive" };
 
 export function Topbar({
-  firstName, lastName, roleLabel, unreadCount, recent, locations = [], currentLocationId = "",
+  firstName, lastName, roleLabel, unreadCount, recent, locations = [], currentLocationId = "", weather = null,
 }: {
   firstName: string; lastName: string; roleLabel: string; unreadCount: number; recent: TopbarNotification[];
-  locations?: LocationOpt[]; currentLocationId?: string;
+  locations?: LocationOpt[]; currentLocationId?: string; weather?: TopbarWeather | null;
 }) {
   const router = useRouter();
   const [bellOpen, setBellOpen] = useState(false);
@@ -27,8 +30,6 @@ export function Topbar({
       : "aerops-location=; path=/; max-age=0";
     router.refresh();
   }
-
-  const currentIcao = locations.find((l) => l.id === currentLocationId)?.icao ?? locations[0]?.icao ?? "KPAO";
 
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur lg:px-6">
@@ -56,14 +57,16 @@ export function Topbar({
         </div>
       )}
 
-      <div
-        className="hidden items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm xl:flex"
-        title="Live METAR/TAF feeds connect via the Aviation Weather API in production"
-      >
-        <CloudSun className="h-3.5 w-3.5 text-warning" />
-        <span className="font-semibold text-success">VFR</span>
-        <span>{currentIcao} · 310° 8kt · 10SM · SCT045 · 22°C</span>
-      </div>
+      {weather && (
+        <div
+          className="hidden items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm xl:flex"
+          title="Weather for your active location. Live METAR/TAF feeds connect via the Aviation Weather API in production."
+        >
+          <CloudSun className="h-3.5 w-3.5 text-warning" />
+          <span className={`font-semibold ${WX_TONE[weather.category]}`}>{weather.category}</span>
+          <span>{weather.icao} · {weather.summary}</span>
+        </div>
+      )}
 
       <div className="flex-1" />
 

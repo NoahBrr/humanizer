@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
+import { cookies } from "next/headers";
+import { activeLocationWeather, icaoOf, weatherSummary } from "@/lib/weather";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/misc";
@@ -23,6 +25,7 @@ function startOfDay(offset = 0) {
 export default async function DashboardPage() {
   const session = await getSession();
   const organizationId = session!.organizationId;
+  const wx = await activeLocationWeather(organizationId, (await cookies()).get("aerops-location")?.value);
   const todayStart = startOfDay();
   const todayEnd = startOfDay(1);
   const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
@@ -110,10 +113,12 @@ export default async function DashboardPage() {
             {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} · Here&apos;s today&apos;s operating picture.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
-          <CloudSun className="h-4 w-4 text-warning" />
-          KPAO — VFR · Wind 310° 8 kt · 10 SM · SCT045 · 22°C
-        </div>
+        {wx && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+            <CloudSun className="h-4 w-4 text-warning" />
+            {icaoOf(wx.location)} — {wx.weather.category} · {weatherSummary(wx.weather)}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">

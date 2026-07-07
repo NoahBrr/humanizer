@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/session";
+import { activeLocationWeather, icaoOf, weatherSummary } from "@/lib/weather";
 import { db } from "@/lib/db";
 import { canAccessSection, ROLE_LABELS } from "@/lib/rbac";
 import { Sidebar } from "@/components/shell/sidebar";
@@ -33,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { organizationId, userId } = session;
   const locationCookie = (await cookies()).get("aerops-location")?.value ?? "";
+  const activeWx = await activeLocationWeather(session.organizationId, locationCookie);
   const [org, locations, unreadCount, recent] = await Promise.all([
     db.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
     db.location.findMany({ where: { organizationId, isActive: true }, select: { id: true, name: true, icao: true }, orderBy: { name: "asc" } }),
@@ -79,6 +81,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           recent={recent.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
           locations={locations}
           currentLocationId={locations.some((l) => l.id === locationCookie) ? locationCookie : ""}
+          weather={activeWx ? { icao: icaoOf(activeWx.location), category: activeWx.weather.category, summary: weatherSummary(activeWx.weather) } : null}
         />
         <main id="main-content" className="mx-auto max-w-7xl p-4 pb-24 lg:p-6 lg:pb-6">{children}</main>
       </div>

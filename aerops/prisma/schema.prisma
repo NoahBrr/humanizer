@@ -133,6 +133,7 @@ model Organization {
   simulations    SimulationRun[]
   joinRequests   JoinRequest[]
   inviteLinks    InviteLink[]
+  importJobs     ImportJob[]
 
   @@index([status])
 }
@@ -1321,4 +1322,41 @@ model DemoRequest {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Import Center
+// ---------------------------------------------------------------------------
+
+enum ImportJobStatus {
+  COMMITTED
+  ROLLED_BACK
+  ROLLBACK_PARTIAL
+}
+
+/// A committed data import: who ran it, what was mapped, what happened to
+/// every row, and which records it created (for rollback). Mappings are
+/// remembered per (organization, source, data type) by reusing the latest
+/// job's mapping.
+model ImportJob {
+  id             String          @id @default(cuid())
+  organizationId String
+  createdByLabel String
+  createdById    String?
+  source         String // flight-circle | flight-schedule-pro | flightlogger | aviatize | quickbooks | stripe | csv | excel | paste
+  dataType       String // students | aircraft | invoices | ...
+  fileName       String?
+  status         ImportJobStatus @default(COMMITTED)
+  mapping        Json // { targetField: sourceColumn }
+  options        Json? // duplicate strategy, etc.
+  totals         Json? // { total, created, updated, skipped, failed }
+  rowErrors      Json? // [{ row, message }]
+  /// IDs of records CREATED by this job, per model — the rollback manifest.
+  createdRecords Json?
+  rolledBackAt   DateTime?
+  createdAt      DateTime        @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
 }
