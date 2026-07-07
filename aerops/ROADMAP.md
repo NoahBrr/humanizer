@@ -10,10 +10,13 @@ Companion to [ARCHITECTURE.md](./ARCHITECTURE.md) (how to build),
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
 _Last session update: 2026-07-07 — Claude Code operating system (CLAUDE.md
-rewrite + 8 role subagents in `.claude/agents/`) and marketing/print visual
-refresh: all 16 screenshots recaptured from the latest UI, Import Center added
-to the product tour, `@media print` styles, in-repo capture script
-(`scripts/capture-marketing.mjs`), stale boilerplate assets removed._
+rewrite + 8 role subagents, now symlinked at the repo root so Claude Code
+discovers them from either anchor) and marketing/print visual refresh: all 16
+screenshots recaptured from the latest UI, Import Center added to the product
+tour, `@media print` styles, capture + print-verification scripts
+(`scripts/capture-marketing.mjs`, `scripts/verify-print.mjs`). Independent
+verification audit passed: 112 tests, lint, fresh build, weather mutation
+test, PDF export with intact screenshots and hidden interactive chrome._
 
 ---
 

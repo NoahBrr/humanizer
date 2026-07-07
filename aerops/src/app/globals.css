@@ -171,6 +171,12 @@ body {
   }
   header.sticky { position: static; }
   .print-hidden { display: none !important; }
+  /* Transforms are invisible to fragmentation, so a translated element
+     paints across page boundaries — flatten decorative offsets on paper. */
+  .print-flatten { transform: none !important; }
+  /* Chromium won't reliably keep the hero screenshot frame intact when it
+     straddles the first page boundary — give it its own page instead. */
+  .print-break-before { break-before: page; }
   img, figure, .rounded-xl, .rounded-2xl { break-inside: avoid; }
   section { break-inside: avoid-page; }
   a { text-decoration: none; }

@@ -153,8 +153,9 @@ unset. Additive migrations only; secrets never in the repo.
 
 ## Engineering roles (Claude Code subagents)
 
-Specialized subagents live in `.claude/agents/`. Use them so work runs like
-a coordinated team — but don't ceremonialize small fixes; a typo doesn't
+Specialized subagents live in `.claude/agents/` (symlinked from the repo
+root's `.claude/agents/` so they're discovered from either anchor). Use them
+so work runs like a coordinated team — but don't ceremonialize small fixes; a typo doesn't
 need a committee. Typical flow for a feature slice:
 
 **architect → engineer (+ ui-engineer / db-architect where touched) →
@@ -182,6 +183,7 @@ npx prisma migrate dev  # schema changes (always name the migration)
 npm run seed            # reset demo data (TRUNCATE CASCADE — wipes runtime rows)
 npm start -- -p 3100    # production server used for verification
 node scripts/capture-marketing.mjs  # refresh marketing/print screenshots
+node scripts/verify-print.mjs       # verify homepage print render + PDF export
 ```
 
 Local DB: `postgresql://aerops:aerops@localhost:5432/aerops`.

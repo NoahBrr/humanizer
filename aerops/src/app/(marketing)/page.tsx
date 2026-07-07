@@ -85,7 +85,7 @@ export default function HomePage() {
             </div>
             <p className="mt-4 text-xs text-white/50">Self-serve setup in minutes · No credit card to start</p>
           </div>
-          <div className="relative mt-12 translate-y-10 lg:translate-y-14">
+          <div className="print-flatten print-break-before relative mt-12 translate-y-10 lg:translate-y-14">
             <ScreenshotFrame src="/marketing/dashboard.png" alt="AeroOps dashboard — today's operating picture" priority />
           </div>
         </div>
