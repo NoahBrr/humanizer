@@ -39,5 +39,5 @@ export async function POST(req: Request) {
 
   const result = await createOrganizationForUser(session.userId, { ...body.data, businessProfiles: profiles });
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
-  return NextResponse.json({ ok: true, orgId: result.org.id, name: result.org.name }, { status: 201 });
+  return NextResponse.json({ ok: true, orgId: result.org.id, name: result.org.name, invites: result.invites }, { status: 201 });
 }

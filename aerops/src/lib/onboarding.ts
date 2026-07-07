@@ -92,22 +92,25 @@ export async function createOrganizationForUser(userId: string, input: CreateOrg
     data: { organizationId: org.id, role: "SCHOOL_ADMIN", phone: input.phone ?? undefined },
   });
 
-  // Team invitations (email-token based, same as platform provisioning).
-  const invites: string[] = [];
+  // Team invitations: mint a real single-use token per invite and return the
+  // shareable URL to the caller (the raw token exists only here, like every
+  // other invite create site) — never a dead hash-only row.
+  const invites: { email: string; url: string }[] = [];
   for (const raw of input.inviteEmails ?? []) {
     const email = raw.toLowerCase().trim();
     if (!email || email === user.email) continue;
-    await db.invitation.create({
+    const { raw: token, hash: tokenHash } = createToken();
+    const created = await db.invitation.create({
       data: {
         organizationId: org.id,
         email,
         role: "STUDENT",
-        tokenHash: createToken().hash,
+        tokenHash,
         invitedBy: `${user.firstName} ${user.lastName}`,
         expiresAt: new Date(Date.now() + 14 * 86_400_000),
       },
     }).catch(() => null); // duplicate invites are fine to skip
-    invites.push(email);
+    if (created) invites.push({ email, url: `/invite/${token}` });
   }
 
   await recordAudit({
@@ -120,7 +123,7 @@ export async function createOrganizationForUser(userId: string, input: CreateOrg
     newValue: { name: org.name, slug, businessProfiles: input.businessProfiles, invited: invites.length },
   });
 
-  return { org };
+  return { org, invites };
 }
 
 // --- Organization search -------------------------------------------------------

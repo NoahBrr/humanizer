@@ -45,18 +45,29 @@ describe("token helper (lib/tokens.ts)", () => {
 // --- Static enforcement ------------------------------------------------------
 
 describe("no raw bearer-token storage (schema)", () => {
-  // Every bearer secret must be stored as *Hash / *Secret, never a raw
-  // `token` column. New raw-token fields require an allowlist entry + reason.
-  const ALLOWED_TOKEN_FIELDS: Record<string, string> = {
-    // (none) — Invitation.token and InviteLink.token were removed in Phase 1B.
+  // Every bearer token must be stored hashed (`*Hash`). A field whose name
+  // ends in `token`/`secret`/`apikey`/`accesskey` and is a raw `String` is
+  // presumed a raw credential and banned — new ones need an allowlist entry
+  // with a written reason (documented raw secrets: TOTP + webhook signing key,
+  // which are reversible-by-necessity symmetric secrets, not bearer tokens —
+  // ADR-020, DATABASE_STANDARDS §Secret & token storage).
+  const ALLOWED_RAW_SECRETS: Record<string, string> = {
+    mfaSecret: "TOTP shared secret — must be re-read to verify codes; encryption-at-rest is roadmap",
+    secret: "Webhook.secret — HMAC signing key re-read per delivery",
   };
 
-  it("no model declares a raw `token` field", () => {
+  it("no model declares a raw token/secret String field (only *Hash)", () => {
     const offenders = SCHEMA.split("\n")
       .map((l, i) => ({ l: l.trim(), n: i + 1 }))
-      .filter(({ l }) => /^token\s+String/.test(l))
-      .filter(({ l }) => !ALLOWED_TOKEN_FIELDS[l]);
-    expect(offenders.map((o) => `schema.prisma:${o.n}`)).toEqual([]);
+      // field line like `name  Type ...`; flag a secret-ish name typed String
+      // that is not itself a `*Hash` column.
+      .filter(({ l }) => /^(\w*(?:token|secret|apikey|accesskey))\s+String\b/i.test(l))
+      .filter(({ l }) => !/hash\s+String/i.test(l))
+      .filter(({ l }) => {
+        const name = l.match(/^(\w+)/)?.[1] ?? "";
+        return !(name in ALLOWED_RAW_SECRETS);
+      });
+    expect(offenders.map((o) => `schema.prisma:${o.n} — ${o.l}`)).toEqual([]);
   });
 
   it("invitation and invite-link tokens are stored as tokenHash @unique", () => {
@@ -68,13 +79,22 @@ describe("no raw bearer-token storage (schema)", () => {
 describe("no raw-token queries or storage (source)", () => {
   const files = walk(SRC);
 
-  it("nothing queries Invitation/InviteLink by a raw `token` field", () => {
+  it("nothing queries by a raw `token` field (single- or multi-line where)", () => {
     // A lookup must hash first: `where: { tokenHash: hashToken(...) }`.
-    // A literal `where: { token` on these models is the bug this bans.
+    // Match `where: { token` and `where: {\n token:` — a raw-token lookup.
     const offenders = files
-      .filter((p) => /where:\s*\{\s*token\b/.test(readFileSync(p, "utf8")))
+      .filter((p) => /where:\s*\{\s*token\b/.test(readFileSync(p, "utf8").replace(/\s*\n\s*/g, " ")))
       .map((p) => path.relative(SRC, p));
     expect(offenders).toEqual([]);
+  });
+
+  it("the self-serve org-create engine returns invite URLs (never a dead hash-only row)", () => {
+    // Regression guard for the Phase 1B review finding: onboarding must
+    // surface the raw invite URL like every sibling create site, not discard
+    // it — otherwise those invitations are unredeemable and consume seats.
+    const src = readFileSync(path.join(SRC, "lib", "onboarding.ts"), "utf8");
+    expect(src).toMatch(/invites\.push\(\{\s*email,\s*url:\s*`\/invite\/\$\{token\}`/);
+    expect(src).not.toMatch(/tokenHash:\s*createToken\(\)\.hash/); // the discarded-raw antipattern
   });
 
   it("every Invitation/InviteLink create site hashes through lib/tokens", () => {
@@ -91,14 +111,12 @@ describe("no raw-token queries or storage (source)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("bearer-token hashing goes through lib/tokens (or the API-key call site)", () => {
-    // Any file that hashes a token with sha256 should be the shared helper,
-    // the API-key resolver, or the impersonation HMAC — not a new ad-hoc path.
-    const ALLOWED = new Set([
-      path.join("lib", "tokens.ts"),
-      path.join("lib", "session.ts"), // API-key keyHash + impersonation HMAC
-      path.join("app", "api", "developer", "keys", "route.ts"), // API-key mint
-    ]);
+  it("token hashing goes through lib/tokens — no ad-hoc sha256 elsewhere", () => {
+    // The only sanctioned sha256 outside lib/tokens is the impersonation
+    // cookie HMAC (a different primitive, createHmac). Everything that hashes
+    // a bearer token must call hashToken(). API keys were unified in the
+    // Phase 1B review follow-up, so the allowlist is now just the helper.
+    const ALLOWED = new Set([path.join("lib", "tokens.ts")]);
     const offenders = files
       .filter((p) => /createHash\(["']sha256["']\)/.test(readFileSync(p, "utf8")))
       .map((p) => path.relative(SRC, p))

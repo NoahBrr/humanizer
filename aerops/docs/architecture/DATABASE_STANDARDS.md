@@ -119,11 +119,19 @@ anything not yet true is marked **(aspirational — not yet enforced)**.
   field requires an allowlist entry with a written reason in that test.
 - **Lookup by hash, never by raw value**: `where: { tokenHash: hashToken(x) }`.
   Querying these models by a raw `token` field is statically banned.
-- **Documented exception — `Webhook.secret` is stored raw** because the
-  delivery path must re-read it to compute the outbound HMAC-SHA256
-  signature per attempt (`lib/webhooks.ts`); it is org-scoped, never
-  returned by any read API, and rotated by recreating the subscription. It
-  is a signing key, not a bearer token.
+- **Documented raw-secret exceptions** — reversible-by-necessity symmetric
+  secrets that the server must re-read to *verify*, so they cannot be
+  one-way hashed. These are signing/shared keys, not bearer tokens:
+  - `Webhook.secret` — HMAC-SHA256 signing key re-read per delivery
+    (`lib/webhooks.ts`); org-scoped, never returned by a read API, rotated by
+    recreating the subscription.
+  - `mfaSecret` (`User`, `PlatformUser`) — the TOTP shared secret, re-read by
+    `verifyTotp` (`lib/totp.ts`) on every MFA check. Encryption-at-rest
+    (envelope/KMS) is the intended hardening — roadmapped, not yet done.
+
+  `tests/token-security.test.ts` allowlists exactly these two by field name;
+  any new raw `*token`/`*secret` String column fails the build until added
+  with a written reason.
 - **Migrations that hash an existing raw column backfill in place** so live
   values survive: add `tokenHash`, `UPDATE … SET tokenHash =
   encode(sha256(convert_to(token,'UTF8')),'hex')` (byte-identical to

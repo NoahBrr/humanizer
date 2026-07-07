@@ -40,6 +40,10 @@ export default function CreateCompanyPage() {
   const [timeZone, setTimeZone] = useState("America/New_York");
   const [phone, setPhone] = useState("");
   const [emails, setEmails] = useState<string[]>([""]);
+  // Set once the org is created and there are team invite links to hand over
+  // (the raw tokens are shown here exactly once — never stored, ADR-020).
+  const [createdInvites, setCreatedInvites] = useState<{ email: string; url: string }[] | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const modules = useMemo(() => {
     const set = new Set<string>();
@@ -75,12 +79,46 @@ export default function CreateCompanyPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Creation failed.");
+      const invites: { email: string; url: string }[] = data.invites ?? [];
+      if (invites.length) {
+        // Hand the owner the shareable invite links once, then let them continue.
+        setCreatedInvites(invites.map((i) => ({ email: i.email, url: `${window.location.origin}${i.url}` })));
+        setBusy(false);
+        return;
+      }
       router.push("/dashboard");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Creation failed.");
       setBusy(false);
     }
+  }
+
+  if (createdInvites) {
+    return (
+      <div className="animate-fade-up max-w-lg">
+        <h1 className="text-lg font-semibold">Your organization is ready</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Share each teammate their invite link below — <strong>they won&apos;t be shown again</strong>. You can always create more invites in Settings → Team.
+        </p>
+        <div className="mt-4 space-y-2">
+          {createdInvites.map((inv) => (
+            <div key={inv.email} className="rounded-lg border border-border bg-card p-3">
+              <p className="text-xs font-medium">{inv.email}</p>
+              <div className="mt-1.5 flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1.5 text-[11px] text-muted-foreground">{inv.url}</code>
+                <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(inv.url).catch(() => null); setCopied(inv.email); setTimeout(() => setCopied(null), 1500); }}>
+                  {copied === inv.email ? <Check className="h-3.5 w-3.5 text-success" /> : "Copy"}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <Button className="mt-5" onClick={() => { router.push("/dashboard"); router.refresh(); }}>
+          Continue to dashboard <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -172,7 +210,7 @@ export default function CreateCompanyPage() {
 
           {step === 3 && (
             <div className="max-w-md space-y-2">
-              <p className="text-xs text-muted-foreground">Invite teammates by email (optional). They&apos;ll receive an invitation to join your organization — you can also do this later in Settings.</p>
+              <p className="text-xs text-muted-foreground">Invite teammates by email (optional). You&apos;ll get a shareable invite link for each to send them — or add people anytime from Settings → Team.</p>
               {emails.map((e, i) => (
                 <Input key={i} type="email" placeholder="teammate@example.com" value={e} onChange={(ev) => setEmails(emails.map((x, j) => (j === i ? ev.target.value : x)))} />
               ))}

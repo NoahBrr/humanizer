@@ -353,8 +353,20 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
   stored (ADR-003), so they're already covered.
 - **Migration:** in-place backfill (`sha256(convert_to(token,'UTF8'))`,
   byte-identical to `lib/tokens.ts`) then drop the raw column, so existing
-  links keep working — no invalidation. Safe because pre-production, but the
-  backfill would preserve real tokens too.
+  links keep working — no invalidation. This drops a column in the **same
+  release** as the consuming-code change, a deliberate exception to ADR-015's
+  additive-only rule, permitted **only because AeroOps is pre-production**
+  (no deployed release, no N-1 to break; ADR-015 allows exceptions with an
+  ADR — this is it). Consequences to honor going forward:
+  - **Roll-forward only.** Reverting the app past this commit would leave the
+    code reading a `token` column that no longer exists → runtime failure.
+    There is no down-migration and none is reconstructable (hashes are
+    one-way). A future revert requires a forward-fix, not an instant rollback.
+  - **Post-launch, this pattern must be two-phase** (add + dual-read →
+    backfill → drop one release later), per ADR-015.
+  - **If ever run against real tokens**, `DROP COLUMN` leaves plaintext in
+    dead tuples/WAL/backups until `VACUUM FULL` + backup rotation; for real
+    data, rotate the affected tokens instead of relying on the drop.
 - **Risks:** sha256 (not bcrypt) is correct only because these tokens carry
   ≥192 bits of entropy; a future *low-entropy* token type must not reuse this
   helper without a KDF. Reconsider when email verification / password reset

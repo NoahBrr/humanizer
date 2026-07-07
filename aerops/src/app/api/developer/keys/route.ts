@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { createHash, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
+import { hashToken } from "@/lib/tokens";
 import { ALL_PERMISSIONS } from "@/lib/permissions";
 
 const createSchema = z.object({
@@ -22,12 +23,13 @@ export async function POST(req: Request) {
   const scopes = body.data.scopes.filter((s) => (ALL_PERMISSIONS as string[]).includes(s));
   if (scopes.length === 0) return NextResponse.json({ error: "Pick at least one valid scope." }, { status: 400 });
 
+  // aero_-prefixed key with its own entropy; only the hash is stored.
   const key = `aero_${randomBytes(28).toString("base64url")}`;
   const created = await db.apiKey.create({
     data: {
       organizationId: session.organizationId,
       name: body.data.name,
-      keyHash: createHash("sha256").update(key).digest("hex"),
+      keyHash: hashToken(key),
       prefix: key.slice(0, 12),
       scopes,
       readOnly: body.data.readOnly,

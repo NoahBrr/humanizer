@@ -231,6 +231,10 @@ time zones stored-not-applied — triage next session._
 | Tenant isolation (org scope from session only, never the client) | Complete | — | — | |
 | Platform session revocation (isActive + sessionVersion per request) | Complete | — | — | Phase 1A; `lib/session-rules.ts`, pinned by `tests/auth-security.test.ts` |
 | Bearer-token hashing (invitation + invite-link tokens → `tokenHash` sha256) | Complete | — | — | Phase 1B; `lib/tokens.ts`, ADR-020, pinned by `tests/token-security.test.ts`; safe backfill migration |
+| API-key hashing routed through `lib/tokens.ts` | Complete | — | — | Phase 1B review follow-up; unifies the last inline sha256, shrinks the static allowlist |
+| Self-serve wizard team invites surface redeemable links | Complete | — | — | Phase 1B review fix; engine returns `/invite/<token>` URLs (were dead hash-only rows consuming seats) |
+| Encryption-at-rest for `mfaSecret` (TOTP shared secret) | Not Started | Medium | M | Envelope/KMS; documented raw exception today (`lib/totp.ts`) |
+| Team-invite email delivery in create-company wizard | Not Started | High | M | Blocked on email provider (Phase B); links shown once at creation today |
 | AUTH_SECRET fail-closed startup validation | Complete | — | — | Phase 1A; `lib/env.ts` + `instrumentation.ts`; production refuses placeholder/short/missing secrets |
 | HaveIBeenPwned k-anonymity breach-check adapter | Not Started | Medium | S | Local blocklist only today (`lib/password.ts`); adapter slots behind `validatePassword` |
 | Production secret management + env separation | Not Started | Critical | S | PRODUCTION.md §Security |

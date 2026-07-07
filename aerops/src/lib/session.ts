@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
@@ -7,6 +7,7 @@ import type { OrgStatus, PlatformRole, Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { requireAuthSecret } from "@/lib/env";
+import { hashToken } from "@/lib/tokens";
 import { platformClaimsValid } from "@/lib/session-rules";
 import { permissionsForRole, type Permission } from "@/lib/permissions";
 import { enabledModules, type ModuleKey } from "@/lib/features";
@@ -190,8 +191,7 @@ export async function getSession(): Promise<AppSession | null> {
  * public API rather than a parallel implementation.
  */
 async function apiKeySession(token: string): Promise<AppSession | null> {
-  const keyHash = createHash("sha256").update(token).digest("hex");
-  const key = await db.apiKey.findUnique({ where: { keyHash } });
+  const key = await db.apiKey.findUnique({ where: { keyHash: hashToken(token) } });
   if (!key || key.revokedAt) return null;
   const org = await db.organization.findUnique({
     where: { id: key.organizationId },
