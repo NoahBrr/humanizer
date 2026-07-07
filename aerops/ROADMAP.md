@@ -225,6 +225,8 @@ time zones stored-not-applied — triage next session._
 | Distributed rate limiting (Redis-backed) | Not Started | High | S | Per-instance memory today |
 | Security headers (CSP, HSTS) + `npm audit` in CI | Not Started | High | S | |
 | External penetration test before GA | Not Started | High | M | After beta |
+| `React.cache()` memoization of `getSession()` | Not Started | Low | S | One DB read per render pass today (org + platform); pre-dates Phase 1A |
+| Dev warn + revocation log line for platform sessions | Not Started | Low | S | `console.warn` when `DEV_ONLY_AUTH_SECRET` engages; `lib/logger.ts` line on revocation-reject (3 AM correlation) — Phase 1A reviewer nice-to-haves |
 | SOC 2 groundwork | Not Started | Future | XL | Audit trail + RBAC are the foundation |
 
 ## Testing
