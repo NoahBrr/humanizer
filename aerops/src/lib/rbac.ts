@@ -45,14 +45,17 @@ export function isAdmin(role: Role) {
   return role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
 }
 
+// Display-language only. Keys are the Prisma `Role` enum (the RBAC contract);
+// the strings are the aviation-native labels users see. Renaming a value here
+// never changes a permission — the enum and permission bundles are untouched.
 export const ROLE_LABELS: Record<Role, string> = {
-  SUPER_ADMIN: "Super Administrator",
-  SCHOOL_ADMIN: "School Administrator",
-  DISPATCHER: "Dispatcher",
-  INSTRUCTOR: "Instructor",
-  STUDENT: "Student",
-  MAINTENANCE: "Maintenance",
-  ACCOUNTANT: "Accountant",
+  SUPER_ADMIN: "Account Owner",
+  SCHOOL_ADMIN: "Operations Director",
+  DISPATCHER: "Flight Dispatcher",
+  INSTRUCTOR: "Flight Instructor",
+  STUDENT: "Student Pilot",
+  MAINTENANCE: "Maintenance Manager",
+  ACCOUNTANT: "Finance Manager",
 };
 
 export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {

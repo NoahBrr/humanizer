@@ -6,13 +6,15 @@ import { Check, Copy, Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 
+// Labels mirror ROLE_LABELS (rbac.ts) — the aviation-native display names.
+// SUPER_ADMIN (Account Owner) is intentionally not invitable here.
 const ROLES = [
-  ["STUDENT", "Student"],
-  ["INSTRUCTOR", "Instructor"],
-  ["DISPATCHER", "Dispatcher"],
-  ["MAINTENANCE", "Maintenance"],
-  ["ACCOUNTANT", "Accountant"],
-  ["SCHOOL_ADMIN", "School Administrator"],
+  ["STUDENT", "Student Pilot"],
+  ["INSTRUCTOR", "Flight Instructor"],
+  ["DISPATCHER", "Flight Dispatcher"],
+  ["MAINTENANCE", "Maintenance Manager"],
+  ["ACCOUNTANT", "Finance Manager"],
+  ["SCHOOL_ADMIN", "Operations Director"],
 ] as const;
 
 export function InviteUserForm() {
