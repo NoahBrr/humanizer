@@ -378,9 +378,13 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
 **Date:** 2026-07 (Phase 1C) · **Status:** Accepted
 
 - **Context:** the Phase 0 governance audit found (a) nine org-owned models
-  carrying `organizationId` as a bare string with **no FK** to `Organization`
-  (`wipeOrganizationData` deleted them by hand; a raw org delete orphaned
-  them — and did, in the dev DB), and (b) `Aircraft.tailNumber` and
+  carrying `organizationId` as a bare string with **no FK** to `Organization`.
+  Of the nine, `wipeOrganizationData` deleted only four by hand (`Lead`,
+  `LessonRequest`, `WaitlistEntry`, `Part`); the other five (`LoginEvent`,
+  `ApiKey`, `Webhook`, `MissionControlScene`, `PlatformNote`) were **neither
+  FK'd nor wiped** — fully unmanaged on org deletion. A raw org delete
+  orphaned all nine — and did, in the dev DB (26 LoginEvent / 21 Lead / 26
+  Part orphans). And (b) `Aircraft.tailNumber` and
   `Invoice.number` declared **globally `@unique`**, so two tenants could not
   share a tail number or an invoice number, and one tenant registering a
   value revealed another tenant already had it.
@@ -404,7 +408,11 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
   errors are gone because that coexistence is now valid. `wipeOrganizationData`
   is unchanged (it runs during snapshot restore where the org survives, so it
   still deletes children explicitly); the new FKs only add DB-enforced cleanup
-  on actual org deletion.
+  on **actual org deletion**. Note this means snapshot **restore** still does
+  not clear the five previously-unwiped tables (ApiKey, Webhook,
+  MissionControlScene, PlatformNote, LoginEvent) — the org row survives, so
+  cascade never fires; extending the wipe order to cover them is a roadmap
+  follow-up.
 - **Migration:** additive constraints, no column drops. Idempotently
   remediates pre-existing orphans first (null the `LoginEvent` refs, delete
   the CASCADE tables' orphans — matching each FK's onDelete) so the
@@ -413,8 +421,17 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
   Aircraft, LessonType, Syllabus); Invoice/Document/SimulationRun keep their
   domain substitutes (`issuedAt`/`uploadedAt`/`startedAt`).
 - **Enforced by** `tests/schema-governance.test.ts`: org FK presence +
-  onDelete action, tenant-scoped uniqueness, and creation-timestamp
-  conventions — no silent drift from DATABASE_STANDARDS.md.
+  onDelete action, tenant-scoped uniqueness (a *derived* check — no
+  single-field `@unique` on an org-owned non-global field), and
+  creation-timestamp conventions — no silent drift from DATABASE_STANDARDS.md.
+- **Rollback:** additive (no column drops), so app rollback to N-1 needs no
+  DB action. One honest caveat, mirroring ADR-020: the two dropped **global**
+  unique indexes are not reconstructable if, after this migration, two
+  tenants create what is now a legal duplicate tail/invoice number and the
+  app is then rolled back to N-1 code that does a global `findUnique` — that
+  read could match >1 row. Nil risk in practice (nothing deployed, no N-1),
+  but recorded for parity: this migration is roll-forward for the uniqueness
+  change specifically.
 - **Risks:** the invoice-number *generator* (`INV-${Date.now().slice(-8)}`)
   can still collide within one org in the same millisecond — pre-existing,
   unchanged by this ADR (global uniqueness had the same exposure), and

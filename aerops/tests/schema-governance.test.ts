@@ -55,6 +55,7 @@ describe("tenant-scoped uniqueness", () => {
     Part: "partNumber",
     OrgRole: "name",
     Department: "name",
+    MissionControlScene: "name",
   };
 
   it("tenant-owned natural keys are @@unique([organizationId, field]), not @unique", () => {
@@ -67,6 +68,26 @@ describe("tenant-scoped uniqueness", () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  // Derived catch-all (Architect + QA review): rather than only checking the
+  // enumerated list above, forbid ANY single-field `@unique` on an org-owned
+  // model unless the field is a legitimately-global identity/credential.
+  // A tenant natural key (tail number, invoice number, scene name…) reverted
+  // to a bare `@unique` is caught here even if it's not in TENANT_SCOPED.
+  // Legitimately global on an org-owned model: credential hashes, and the
+  // cross-org login identity (User.email — one person, one account; org
+  // membership is a nullable FK). DATABASE_STANDARDS documents these.
+  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email"]);
+  it("no org-owned model declares a single-field @unique on a non-global field", () => {
+    const offenders: string[] = [];
+    for (const m of orgOwned()) {
+      for (const line of m.body.split("\n")) {
+        const mm = line.match(/^\s*(\w+)\s+\w+[^\n]*@unique\b/);
+        if (mm && !GLOBAL_UNIQUE_OK.has(mm[1])) offenders.push(`${m.name}.${mm[1]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("timestamp conventions", () => {
@@ -76,7 +97,6 @@ describe("timestamp conventions", () => {
     Invoice: "issuedAt",
     Document: "uploadedAt",
     SimulationRun: "startedAt",
-    LoginEvent: "createdAt", // has createdAt
   };
 
   it("every org-owned model has createdAt or a documented creation stamp", () => {
