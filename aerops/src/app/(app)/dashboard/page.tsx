@@ -9,7 +9,7 @@ import { cookies } from "next/headers";
 import { activeLocationWeather, icaoOf, weatherSummary } from "@/lib/weather";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/misc";
+import { Progress, EmptyState } from "@/components/ui/misc";
 import { CustomizableDashboard, type DashboardSection } from "@/components/dashboard/customizable-dashboard";
 import { formatCurrency, formatTime, formatDate, fullName, daysUntil } from "@/lib/utils";
 
@@ -113,10 +113,11 @@ export default async function DashboardPage() {
 
   const greeting = (
     <div>
-      <h1 className="text-xl font-semibold tracking-tight">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-brand-royal dark:text-brand-sky">Operations Overview</p>
+      <h1 className="text-[1.35rem] font-semibold leading-tight tracking-tight text-brand-navy dark:text-foreground">
         Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {session!.firstName}
       </h1>
-      <p className="mt-0.5 text-sm text-muted-foreground">
+      <p className="mt-1 text-sm text-muted-foreground">
         {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} · Here&apos;s today&apos;s operating picture.
       </p>
     </div>
@@ -130,7 +131,7 @@ export default async function DashboardPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-medium text-muted-foreground">{s.label}</p>
-                <s.icon className="h-3.5 w-3.5 text-muted-foreground/60" />
+                <s.icon className="h-3.5 w-3.5 text-brand-royal dark:text-brand-sky" />
               </div>
               <p className="mt-1.5 text-2xl font-semibold tracking-tight">{s.value}</p>
               {s.sub && <p className="mt-0.5 text-[10px] text-muted-foreground">{s.sub}</p>}
@@ -153,9 +154,11 @@ export default async function DashboardPage() {
       </CardHeader>
       <CardContent className="space-y-1">
         {todaysFlights.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            No flights scheduled today. Open the schedule to book one.
-          </p>
+          <EmptyState
+            icon={<CalendarCheck className="h-5 w-5" />}
+            title="No flights scheduled today"
+            description="Open the schedule to book the first flight of the day."
+          />
         )}
         {todaysFlights.map((f) => (
           <div key={f.id} className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50">
@@ -298,7 +301,7 @@ export default async function DashboardPage() {
   // Finance — the money picture, below the operational picture.
   const financeSection = (
     <div>
-      <h2 className="mb-3 text-sm font-semibold tracking-tight">Finance</h2>
+      <h2 className="mb-3 text-sm font-semibold tracking-tight text-brand-navy dark:text-foreground">Finance</h2>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Link href="/billing">
           <Card className="transition-shadow hover:shadow-md">

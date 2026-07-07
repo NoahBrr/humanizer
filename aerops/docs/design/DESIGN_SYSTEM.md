@@ -50,8 +50,12 @@ would have to look past.
   (`--font-inter`, fallback `system-ui, sans-serif`), antialiased, with
   `font-feature-settings: "cv11", "ss01"` set on `body` in `globals.css`.
 - Scale in practice (match it — don't invent sizes):
-  - Page title: `text-xl font-semibold tracking-tight` (`PageHeader` in
-    `ui/misc.tsx`).
+  - Page title: `text-[1.35rem] font-semibold tracking-tight text-brand-navy
+    dark:text-foreground` (`PageHeader` in `ui/misc.tsx`) — the marketing
+    heading treatment at operator scale. `PageHeader` also accepts an optional
+    `eyebrow` (the uppercase-tracked marketing kicker, `text-xs font-semibold
+    uppercase tracking-[0.16em] text-brand-royal dark:text-brand-sky`); it is
+    opt-in, so pages that pass no eyebrow are unchanged.
   - Card/section title: `text-sm font-semibold tracking-tight`
     (`CardTitle`); descriptions `text-xs text-muted-foreground`.
   - Body and controls: `text-sm`. Table headers and labels: `text-xs
@@ -144,9 +148,14 @@ would have to look past.
 
 ## Cards
 
-- `ui/card.tsx`: `rounded-xl border border-border bg-card` with a
-  deliberately faint shadow (`0 1px 2px rgb(0 0 0 / 0.04)`) — depth comes
-  from the border, not the shadow.
+- `ui/card.tsx`: `rounded-xl border border-border bg-card` with a soft,
+  navy-tinted elevation
+  (`0 1px 3px rgb(11 36 71 / 0.06), 0 1px 2px rgb(11 36 71 / 0.04)`) — the
+  same navy shadow family the marketing site uses on its screenshot frames
+  (`rgb(11 36 71 / …)`), scaled down to stay calm and operator-dense. Depth
+  still comes mostly from the border; the shadow only warms the lift. `rgb()`
+  brand-navy in an arbitrary shadow value is sanctioned here (it is not a
+  color token consumers read, and it mirrors the marketing frame shadow).
 - Anatomy: `CardHeader` (title + optional description + optional action
   button, `flex-row justify-between` when both) → `CardContent`.
 - Stat tiles are the compact variant: `CardContent p-4`, `text-[11px]
@@ -191,8 +200,10 @@ would have to look past.
 ## Empty states
 
 - Empty states are part of the feature, not follow-ups (CLAUDE.md §4).
-- The primitive is `EmptyState` (`ui/misc.tsx`): optional muted icon,
-  `text-sm font-medium` title, `text-xs text-muted-foreground` description.
+- The primitive is `EmptyState` (`ui/misc.tsx`): an optional icon set in a
+  soft `bg-accent` rounded circle (calm, intentional — not a bare muted
+  glyph), `text-sm font-medium` title, `text-xs text-muted-foreground`
+  description. API (`icon`/`title`/`description`/`action`) is unchanged.
 - Copy states what will appear here and what action creates it: "No imports
   yet — your first import will appear here with its full row-by-row
   report", "No leads yet — share the public form to start the pipeline".
@@ -341,6 +352,36 @@ would have to look past.
   screenshots pipeline.
 - Tone everywhere: aviation-professional, enterprise-calm. If a treatment
   would look at home on a crypto landing page, it doesn't ship here.
+
+### App ↔ marketing alignment (same brand, operator mode)
+
+The tenant app and the public marketing site are one brand expressed at two
+densities — the app is "operator mode," not a landing page. These are the
+governed alignment decisions; keep both surfaces on them.
+
+- **Elevation.** Marketing frames use the navy shadow family
+  `rgb(11 36 71 / …)`. The app `Card` mirrors it, scaled down
+  (`0 1px 3px / 0.06 + 0 1px 2px / 0.04`) so operator density survives while
+  the surface stops reading flat. No app card gets marketing-scale drop
+  shadows.
+- **Headings + eyebrows.** Page titles and top-level section headings use the
+  marketing heading color `text-brand-navy dark:text-foreground` with
+  `tracking-tight`. The uppercase-tracked eyebrow
+  (`tracking-[0.16em] text-brand-royal dark:text-brand-sky`) is the shared
+  kicker; in the app it is opt-in (`PageHeader`'s `eyebrow`, the dashboard
+  greeting) and stays rare so it signals a page, not every card.
+- **Brightness.** The app shell carries a very subtle top wash of
+  `--color-primary` (`.app-shell` in `globals.css`, ~6% via `color-mix`, both
+  themes) so the operator surface shares the marketing site's brightness.
+  Opaque `bg-card` sits above it, so only gutters pick up the tint — contrast,
+  density, and readability are unchanged.
+- **Header family.** The topbar (`bg-background/85 backdrop-blur`) matches the
+  marketing `SiteHeader` treatment; identity/role chrome is grouped behind a
+  hairline divider so the two headers read as one system.
+- **What stays operator-mode.** Body/control sizes, table and card density,
+  `font-medium` buttons, and compact stat tiles are unchanged — the alignment
+  is brand-level (color, elevation, brightness, kickers), never a loosening of
+  operational density.
 
 ## Related documents
 

@@ -32,7 +32,7 @@ export function Topbar({
   }
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur lg:px-6">
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur lg:px-6">
       <button
         onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
         className="hidden h-8 w-56 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-muted md:flex"
@@ -109,7 +109,7 @@ export function Topbar({
           </div>
         )}
       </div>
-      <div className="relative">
+      <div className="relative ml-1 border-l border-border pl-1.5">
         <button
           onClick={() => { setMenuOpen(!menuOpen); setBellOpen(false); }}
           aria-label="Account menu"
@@ -119,7 +119,7 @@ export function Topbar({
           <Avatar first={firstName} last={lastName} />
           <div className="hidden text-left leading-tight md:block">
             <p className="text-xs font-medium">{firstName} {lastName}</p>
-            <p className="text-[10px] text-muted-foreground">{roleLabel}</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{roleLabel}</p>
           </div>
         </button>
         {menuOpen && (

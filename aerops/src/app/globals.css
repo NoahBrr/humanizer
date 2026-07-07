@@ -113,6 +113,18 @@ body {
 .animate-fade-up { animation: fade-up 0.25s ease-out both; }
 
 /* ---------------------------------------------------------------------
+   App shell — a very subtle top wash of brand primary so the operator
+   surface shares the marketing site's brightness without adding chrome.
+   Cards (opaque bg-card) sit above it, so only the gutters pick up the
+   tint; contrast and density are unchanged in both themes.
+--------------------------------------------------------------------- */
+.app-shell {
+  background:
+    radial-gradient(80rem 34rem at 50% -12rem, color-mix(in oklch, var(--color-primary) 6%, transparent), transparent 70%),
+    var(--color-background);
+}
+
+/* ---------------------------------------------------------------------
    FullCalendar theme bridge — map FC variables onto AeroOps tokens
 --------------------------------------------------------------------- */
 .aerops-calendar {

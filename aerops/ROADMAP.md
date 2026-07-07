@@ -12,6 +12,26 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-07 — Sidebar refinement + app/marketing
+visual alignment. (1) Sidebar categories are now collapsible: each of the
+five section headers toggles its links, state persists per browser
+(`aerops-sidebar-groups`), and the active page's section auto-opens on
+navigation — hydration-safe (default all-open on server + first render, prefs
+after mount), independent from the icon-rail collapse. Footer simplified to a
+single clean "Collapse" control; active accent bar, spacing, and org-name
+truncation refined. The mobile "More" drawer is now grouped by the same
+sections. (2) App visual language brought closer to the marketing site
+("same brand, operator mode"): navy-tinted card elevation, `PageHeader` gains
+brand-navy titles + an optional marketing eyebrow, a more intentional
+`EmptyState` (icon in a soft tinted circle), a marketing-family top bar
+(bg/85 + backdrop-blur, role micro-kicker, avatar divider), a subtle
+brand-primary app-shell background wash, and dashboard polish (eyebrow +
+brand-navy headings, AeroOps-blue KPI icons, EmptyState primitive). Tokens
+only; DESIGN_SYSTEM.md updated to govern the decisions. Verified: 155 tests,
+lint, tsc, build; light + dark, desktop + mobile (no overflow), category
+collapse + persistence, all 16 marketing screenshots regenerated, print + PDF
+(zero failed assets). No schema/auth/RBAC/query change. Not deployed._
+
 _Last session update: 2026-07-07 — Immediate UI cleanup pass (shell,
 dashboard, settings, roles). (1) Sidebar navigation is grouped by domain
 (Command Center · Flight Operations · Training · Business · Organization);

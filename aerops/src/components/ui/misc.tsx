@@ -34,21 +34,34 @@ export function Skeleton({ className }: { className?: string }) {
  */
 export function EmptyState({ icon, title, description, action }: { icon?: React.ReactNode; title: string; description?: string; action?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-      {icon && <div className="text-muted-foreground/60">{icon}</div>}
+    <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+      {icon && (
+        <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-foreground">
+          {icon}
+        </div>
+      )}
       <p className="text-sm font-medium">{title}</p>
-      {description && <p className="max-w-sm text-xs text-muted-foreground">{description}</p>}
+      {description && <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }
 
-export function PageHeader({ title, description, children }: { title: string; description?: string; children?: React.ReactNode }) {
+/**
+ * Standard page header. `eyebrow` is the marketing-style uppercase-tracked
+ * kicker (opt-in; default pages render exactly as before). The title carries
+ * the marketing heading treatment (brand-navy, tracking-tight) so the app and
+ * the public site read as one brand in operator mode.
+ */
+export function PageHeader({ eyebrow, title, description, children }: { eyebrow?: string; title: string; description?: string; children?: React.ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        {eyebrow && (
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-brand-royal dark:text-brand-sky">{eyebrow}</p>
+        )}
+        <h1 className="text-[1.35rem] font-semibold leading-tight tracking-tight text-brand-navy dark:text-foreground">{title}</h1>
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {children && <div className="flex items-center gap-2">{children}</div>}
     </div>

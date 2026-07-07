@@ -199,7 +199,7 @@ export function CustomizableDashboard({
           if (shown.length === 0) return null;
           return (
             <section key={s.key}>
-              <h2 className="mb-3 text-sm font-semibold tracking-tight">{s.label}</h2>
+              <h2 className="mb-3 text-sm font-semibold tracking-tight text-brand-navy dark:text-foreground">{s.label}</h2>
               <div className={s.gridClassName ?? "grid grid-cols-1 gap-4"}>
                 {shown.map((c) => (
                   <div key={c.key}>{c.node}</div>
