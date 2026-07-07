@@ -206,6 +206,9 @@ time zones stored-not-applied — triage next session._
 | Data-driven RBAC, custom roles, single authorize() gate (constitution-tested) | Complete | — | — | |
 | Immutable audit trail (org + platform + imports + impersonation) | Complete | — | — | |
 | Tenant isolation (org scope from session only, never the client) | Complete | — | — | |
+| Platform session revocation (isActive + sessionVersion per request) | Complete | — | — | Phase 1A; `lib/session-rules.ts`, pinned by `tests/auth-security.test.ts` |
+| AUTH_SECRET fail-closed startup validation | Complete | — | — | Phase 1A; `lib/env.ts` + `instrumentation.ts`; production refuses placeholder/short/missing secrets |
+| HaveIBeenPwned k-anonymity breach-check adapter | Not Started | Medium | S | Local blocklist only today (`lib/password.ts`); adapter slots behind `validatePassword` |
 | Production secret management + env separation | Not Started | Critical | S | PRODUCTION.md §Security |
 | Distributed rate limiting (Redis-backed) | Not Started | High | S | Per-instance memory today |
 | Security headers (CSP, HSTS) + `npm audit` in CI | Not Started | High | S | |

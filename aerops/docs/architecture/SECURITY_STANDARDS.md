@@ -57,7 +57,7 @@ the code.
 | Session shape | One `AppSession` type for the whole app (`src/lib/session.ts`); three kinds: `org`, `platform`, `individual` (signed up, no org → `/welcome` only) |
 | Resolution | Always `getSession()` — never `auth()` directly — so tenancy rules live in exactly one place |
 | Strategy | NextAuth JWT (`session: { strategy: "jwt" }`, `src/auth.config.ts`); default NextAuth cookies (httpOnly, SameSite Lax) — no custom cookie override in the repo |
-| Revocation | `sessionVersion` on `User`/`PlatformUser`: "log out all devices" bumps it and stale JWTs die in `orgSessionFor()` |
+| Revocation | `sessionVersion` on `User`/`PlatformUser`: any bump (or `isActive = false`) kills all live JWTs on the next request. Org users check in `orgSessionFor()`; platform users check on **every** request in `getSession()` via `platformClaimsValid()` (`src/lib/session-rules.ts`), which also fails closed on tokens missing the version claim. The platform **role** is read from the row, not the token, so demotions apply immediately. Pinned by `tests/auth-security.test.ts` |
 | Impersonation | HMAC-SHA256-signed, expiring (1 h TTL) `aerops-impersonation` cookie, verified with `timingSafeEqual` (`encodeImpersonation`/`decodeImpersonation`). Read-only by default; read-only blocks **all** mutations at the gate. Start and stop are audited (`platform.impersonation_start/_end`) and the customer org is notified at session end (`src/app/api/platform/impersonate/route.ts`). Never weaken this. |
 | Impersonation cookie flags | `httpOnly`, `sameSite: "lax"`, `secure` in production, 1 h `maxAge` |
 | API-key sessions | `Bearer aero_…` header beats the browser cookie; key is sha256-hashed for lookup; revoked keys are refused |
@@ -68,6 +68,15 @@ the code.
 - **No secrets in the repo.** `.gitignore` excludes `.env*` (only
   `.env.example` is committed, placeholder-only — audited as part of
   PRODUCTION.md §3.12).
+- **AUTH_SECRET fails closed.** All access goes through
+  `requireAuthSecret()` in `src/lib/env.ts` (statically enforced by
+  `tests/auth-security.test.ts`): in production a missing, placeholder, or
+  short secret **refuses startup** (`src/instrumentation.ts`) and can never
+  sign a JWT or cookie; development without a configured secret uses the
+  documented `DEV_ONLY_AUTH_SECRET` constant, which production rejects by
+  value. Note `next start` runs in production mode — local verification
+  servers need a real generated secret in `.env`
+  (`openssl rand -base64 32`).
 - `AUTH_SECRET` signs both the NextAuth JWT and the impersonation cookie
   HMAC. The `?? "dev"` fallback in `src/lib/session.ts` exists for local
   dev only; production requires a strong per-stage secret (PRODUCTION.md

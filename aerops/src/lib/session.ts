@@ -5,6 +5,8 @@ import { NextResponse } from "next/server";
 import type { OrgStatus, PlatformRole, Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { requireAuthSecret } from "@/lib/env";
+import { platformClaimsValid } from "@/lib/session-rules";
 import { permissionsForRole, type Permission } from "@/lib/permissions";
 import { enabledModules, type ModuleKey } from "@/lib/features";
 import { modulesForProfiles } from "@/lib/business-profiles";
@@ -44,7 +46,7 @@ export type AppSession = {
 type ImpersonationPayload = { platformUserId: string; targetUserId: string; readOnly: boolean; exp: number };
 
 function sign(data: string) {
-  return createHmac("sha256", process.env.AUTH_SECRET ?? "dev").update(data).digest("base64url");
+  return createHmac("sha256", requireAuthSecret()).update(data).digest("base64url");
 }
 
 export function encodeImpersonation(payload: ImpersonationPayload) {
@@ -123,6 +125,16 @@ export async function getSession(): Promise<AppSession | null> {
   if (!raw?.user?.id) return null;
 
   if (raw.user.platformRole) {
+    // Platform power is verified against the database on EVERY request —
+    // deactivation or a sessionVersion bump revokes all live JWTs at once.
+    // The role also comes from the row, not the token, so demotions apply
+    // immediately too.
+    const platformUser = await db.platformUser.findUnique({
+      where: { id: raw.user.id },
+      select: { isActive: true, sessionVersion: true, role: true, firstName: true, lastName: true, email: true },
+    });
+    if (!platformClaimsValid(platformUser, raw.user.sessionVersion)) return null;
+
     const cookieStore = await cookies();
     const impCookie = cookieStore.get(IMPERSONATION_COOKIE)?.value;
     const imp = impCookie ? decodeImpersonation(impCookie) : null;
@@ -132,10 +144,10 @@ export async function getSession(): Promise<AppSession | null> {
         return {
           kind: "platform",
           ...target,
-          platformRole: raw.user.platformRole,
+          platformRole: platformUser!.role,
           impersonation: {
             platformUserId: raw.user.id,
-            platformLabel: `${raw.user.firstName} ${raw.user.lastName}`,
+            platformLabel: `${platformUser!.firstName} ${platformUser!.lastName}`,
             readOnly: imp.readOnly,
           },
         };
@@ -145,16 +157,16 @@ export async function getSession(): Promise<AppSession | null> {
     return {
       kind: "platform",
       userId: raw.user.id,
-      email: raw.user.email ?? "",
-      firstName: raw.user.firstName,
-      lastName: raw.user.lastName,
+      email: platformUser!.email,
+      firstName: platformUser!.firstName,
+      lastName: platformUser!.lastName,
       organizationId: "",
       role: "SUPER_ADMIN",
       permissions: new Set(),
       orgStatus: "ACTIVE",
       modules: new Set(),
       businessProfiles: [],
-      platformRole: raw.user.platformRole,
+      platformRole: platformUser!.role,
     };
   }
 

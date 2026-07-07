@@ -55,6 +55,11 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
 - **Risks:** JWTs live until expiry unless version-checked — every
   authorization pass must compare `sessionVersion` (it does, in
   `getSession()`).
+- **2026-07 (Phase 1A):** the pattern was extended to `PlatformUser` —
+  platform sessions now verify `isActive` + `sessionVersion` against the
+  row on every request (`lib/session-rules.ts`), closing the gap where the
+  platform branch trusted the JWT claim alone. Same decision, wider
+  enforcement; no supersession.
 - **Reconsider when:** sub-second global revocation becomes a compliance
   requirement (→ Redis session store).
 

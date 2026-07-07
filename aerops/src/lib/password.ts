@@ -1,8 +1,8 @@
 /**
- * Password policy (Section 4): ≥12 chars with upper/lower/number/special,
- * and a breached/common-password check. The local blocklist covers the most
- * common breached passwords; production also queries the HaveIBeenPwned
- * k-anonymity API through an adapter so raw passwords never leave the host.
+ * Password policy: ≥12 chars with upper/lower/number/special, plus a LOCAL
+ * blocklist of the most common breached passwords. That local list is the
+ * entire breach check today — a HaveIBeenPwned k-anonymity adapter is
+ * roadmap work (ROADMAP.md → Security & Compliance), not implemented.
  */
 const COMMON_PASSWORDS = new Set([
   "password", "password1", "password123", "123456", "12345678", "123456789", "1234567890",

@@ -129,10 +129,17 @@ revoke-everywhere. Three session kinds resolve through one helper
 | `individual` | `User` (organizationId null) | `/welcome` onboarding only |
 | `platform` | `PlatformUser` (separate table, separate roles) | `/platform` |
 
-Impersonation (platform staff → tenant) is an HMAC-signed, expiring cookie;
-read-only by default with mutation blocking; start/stop audited and
-customer-notified. Email verification and password reset land in Phase B of
-[PRODUCTION.md](../../PRODUCTION.md) §13.1.
+Platform sessions are re-verified against the `PlatformUser` row on
+**every request** (`isActive` + `sessionVersion`, role read from the row —
+`platformClaimsValid` in `lib/session-rules.ts`), so deactivation,
+revocation bumps, and demotions apply immediately; org users get the same
+check in `orgSessionFor()`. Impersonation (platform staff → tenant) is an
+HMAC-signed, expiring cookie; read-only by default with mutation blocking;
+start/stop audited and customer-notified. `AUTH_SECRET` fails closed in
+production (`lib/env.ts` + `instrumentation.ts` — see
+[SECURITY_STANDARDS.md](./SECURITY_STANDARDS.md)). Email verification and
+password reset land in Phase B of [PRODUCTION.md](../../PRODUCTION.md)
+§13.1.
 
 ## 6. Authorization model
 

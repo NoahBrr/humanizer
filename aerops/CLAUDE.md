@@ -255,6 +255,10 @@ node scripts/capture-marketing.mjs  # refresh marketing/print screenshots
 node scripts/verify-print.mjs       # verify homepage print render + PDF export
 ```
 
+`next start` runs in production mode, so the :3100 verification server needs
+a real `AUTH_SECRET` in `.env` (`openssl rand -base64 32`) — the committed
+placeholder is rejected by the fail-closed guard (`src/lib/env.ts`).
+
 Local DB: `postgresql://aerops:aerops@localhost:5432/aerops`.
 Demo logins (password `demo1234`): `admin@aerops.demo` (org admin),
 `founder@aerops.io` (platform founder); more in README.md, complete set in

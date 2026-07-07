@@ -324,7 +324,7 @@ export function ImportWizard({ rememberedMappings }: { rememberedMappings: Recor
             <ReportSummary report={finalReport} />
             {finalReport.errors.length > 0 && <ErrorTable report={finalReport} onDownload={() => downloadFailedRows(finalReport)} />}
             <p className="mt-3 text-xs text-muted-foreground">
-              This import is saved in the history below{jobId ? " and can be rolled back" : ""}. Imported people sign in via password reset or an invite link.
+              This import is saved in the history below{jobId ? " and can be rolled back" : ""}. Imported people sign in through an invite link from Settings → Team.
             </p>
             <div className="mt-4 flex justify-center gap-2">
               <Button variant="outline" onClick={() => { setStep(1); setTable(null); setTestReport(null); setFinalReport(null); setPasteText(""); }}>
