@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Palette, Clock, KeyRound, Bell, CreditCard, Users, ShieldCheck, MailPlus } from "lucide-react";
+import { Palette, KeyRound, Bell, CreditCard, Users, ShieldCheck, MailPlus } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { ROLE_LABELS } from "@/lib/rbac";
@@ -11,6 +11,7 @@ import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
 import { InviteUserForm } from "./invite-form";
 import { ModuleManager } from "./module-manager";
+import { BrandingForm } from "./branding-form";
 import { BUSINESS_PROFILES } from "@/lib/business-profiles";
 import { AUTOMATIONS } from "@/lib/automations";
 import { MODULES, CORE_MODULES } from "@/lib/features";
@@ -40,6 +41,9 @@ export default async function SettingsPage() {
         <a href="/settings/join-requests" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
           Join Requests
         </a>
+        <a href="/settings/locations" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
+          Locations →
+        </a>
         <a href="/settings/security" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
           Security →
         </a>
@@ -54,27 +58,12 @@ export default async function SettingsPage() {
             <CardTitle className="flex items-center gap-1.5"><Palette className="h-4 w-4" /> School Branding</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-xs text-muted-foreground">School name</span>
-              <span className="font-medium">{org?.name}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-xs text-muted-foreground">Workspace slug</span>
-              <span className="font-mono text-xs">{org?.slug}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-xs text-muted-foreground">Brand color</span>
-              <span className="flex items-center gap-2 font-mono text-xs">
-                <span className="h-4 w-4 rounded" style={{ background: org?.brandColor }} /> {org?.brandColor}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" /> Time zone</span>
-              <span className="font-medium">{org?.timeZone}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
+            {org && <BrandingForm org={{ name: org.name, slug: org.slug, brandColor: org.brandColor, timeZone: org.timeZone }} />}
+            <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
               <span className="text-xs text-muted-foreground">Locations</span>
-              <span className="font-medium">{locations.map((l) => l.icao).join(", ")}</span>
+              <a href="/settings/locations" className="text-xs font-medium text-primary hover:underline">
+                {locations.length} configured — manage →
+              </a>
             </div>
           </CardContent>
         </Card>
@@ -85,6 +74,7 @@ export default async function SettingsPage() {
             <CardDescription>Colors drive the schedule; durations pre-fill new bookings</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
+            {lessonTypes.length === 0 && <p className="text-xs text-muted-foreground">No lesson types yet — add your first to populate the scheduler.</p>}
             {lessonTypes.map((lt) => (
               <div key={lt.id} className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2 text-xs font-medium">
@@ -95,6 +85,9 @@ export default async function SettingsPage() {
                 </span>
               </div>
             ))}
+            <div className="border-t border-border pt-3">
+              <a href="/settings/lesson-types" className="text-xs font-medium text-primary hover:underline">Manage lesson types →</a>
+            </div>
           </CardContent>
         </Card>
       </div>

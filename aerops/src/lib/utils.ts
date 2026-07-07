@@ -45,3 +45,18 @@ export function daysUntil(date: Date | string | null | undefined) {
   if (!date) return null;
   return Math.ceil((new Date(date).getTime() - Date.now()) / 86_400_000);
 }
+
+/**
+ * Normalize an API `error` payload to one human sentence. Our routes return
+ * either a string (`{ error: "…" }`) or a zod `flatten()` object
+ * (`{ error: { fieldErrors, formErrors } }`); forms show the first message.
+ */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object") {
+    const e = err as { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+    for (const msgs of Object.values(e.fieldErrors ?? {})) if (msgs?.[0]) return msgs[0];
+    if (e.formErrors?.[0]) return e.formErrors[0];
+  }
+  return fallback;
+}

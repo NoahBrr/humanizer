@@ -12,6 +12,37 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-07 — Immediate UI cleanup pass (shell,
+dashboard, settings, roles). (1) Sidebar navigation is grouped by domain
+(Command Center · Flight Operations · Training · Business · Organization);
+`nav-config.ts` NAV_GROUPS is the source of truth, NAV_ITEMS is the flat
+projection kept for mobile nav / command palette / constitution scan; active
+items get a clean accent bar. (2) Sidebar collapse hardened against hydration
+mismatch — server and first client render both use collapsed=false, the
+persisted preference is read only after mount; `tests/shell-nav.test.ts`
+guards render-body purity and group→SECTION_PERMISSIONS coverage. (3)
+Dashboard simplified further (single-source weather — the duplicate header
+box removed; calmer spacing; fewer badges) and made customizable: a
+`Customize` popover toggles sections (Today's Flights, Needs Attention +
+Maintenance/Checkrides/Notifications children, Weather, Finance Snapshot,
+Fleet Status), persisted hydration-safely to `localStorage`
+(`aerops-dashboard-layout`); zero query changes. (4) Editable org Settings:
+School Branding is a live form (name, brand color, IANA time zone; slug
+locked with a support-to-change note) plus managed `/settings/locations` and
+`/settings/lesson-types` subpages, backed by three
+`authorize("settings.manage",{mutating:true})` routes under
+`/api/organization/{settings,locations,lesson-types}` — org scope from the
+session, per-row tenant-ownership check on every PATCH, audited
+(`org.settings_change`, `location.create/update`, `lesson_type.create/update`);
+time zones centralized in `lib/timezones.ts`. (5) Aviation-native role
+display labels (Account Owner, Operations Director, Flight Dispatcher, Flight
+Instructor, Student Pilot, Maintenance Manager, Finance Manager) — display
+language only; enum and permission bundles untouched. (6) All 16 marketing
+screenshots regenerated on the new UI; print + PDF re-verified (zero failed
+assets). Verified: 155 tests, lint, tsc, build; live settings round-trip
+(edit→persist→restore) + denial path; no hydration/console errors, no mobile
+overflow. No schema/auth/RBAC change. Not deployed._
+
 _Last session update: 2026-07-07 — Phase 2 product-experience pass
 (second increment): simplified the org dashboard — three operational KPIs
 (Today's Flights, Aircraft Available with a maintenance subline, Students
