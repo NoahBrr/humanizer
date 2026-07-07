@@ -3,9 +3,10 @@
 Read this first, every session. AeroOps is a **production SaaS aviation
 operations platform** — treat every change as customer-facing.
 [CONSTITUTION.md](./CONSTITUTION.md) is law (machine-enforced),
-[ARCHITECTURE.md](./ARCHITECTURE.md) explains the system,
-[ROADMAP.md](./ROADMAP.md) is the living backlog,
-[PRODUCTION.md](./PRODUCTION.md) is the launch plan.
+[docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
+is the system source of truth, [ROADMAP.md](./ROADMAP.md) is the living
+backlog, [PRODUCTION.md](./PRODUCTION.md) is the launch plan. The full
+governance library lives in [`docs/`](./docs/) — see §13.
 
 ## 1. Project overview
 
@@ -134,22 +135,63 @@ unset. Additive migrations only; secrets never in the repo.
 ## 12. Instructions for future Claude Code sessions
 
 1. Start: read this file → skim ROADMAP's "Last session update" → `npm test`.
-2. Work in slices using the roles below; keep the constitution green.
-3. DB down? `pg_ctlcluster 16 main start`; reseed with `npm run seed`
+2. **Before implementing**: read the relevant sections of
+   [docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
+   and the engine you're touching. **Before changing an existing pattern**:
+   check [docs/architecture/DECISIONS.md](./docs/architecture/DECISIONS.md) —
+   if an ADR decided it, write a superseding ADR first, never a silent edit.
+   Any intentional deviation from the architecture gets explained (in the
+   plan, the ADR, and the commit) *before* the code is written — shortcuts
+   that violate architecture are refused, not smuggled in.
+3. Work in slices using the roles below; keep the constitution green. No
+   feature is complete until it passes the quality gates in §13.
+4. DB down? `pg_ctlcluster 16 main start`; reseed with `npm run seed`
    (wipes runtime-created rows: API keys, webhooks, notes, scenes).
    Shell cwd resets between commands — run npm/npx from `aerops/`, git from
    the repo root.
-4. UI changed? Rebuild, serve on :3100, and refresh the marketing/print
+5. UI changed? Rebuild, serve on :3100, and refresh the marketing/print
    visuals: `node scripts/capture-marketing.mjs` — then eyeball the homepage.
-5. Playwright: `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'`;
+6. Playwright: `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'`;
    Mission Control holds an SSE connection open — wait for `load` or a
    selector, never `networkidle`.
-6. Verify page gating by content markers, not status codes (`redirect()`
+7. Verify page gating by content markers, not status codes (`redirect()`
    streams a 200 shell); strip SSR comment markers (`<!-- -->`) before
    grepping rendered HTML.
-7. Record honest deferrals in your report and, if durable, in ROADMAP.md.
-8. Before ending: update ROADMAP.md (statuses + "Last session update"),
+8. Record honest deferrals in your report and, if durable, in ROADMAP.md.
+9. Before ending: update ROADMAP.md (statuses + "Last session update"),
    commit with a clear message, push to the designated branch.
+
+## 13. Governance library & quality gates
+
+The permanent engineering operating system. Read the relevant document
+before working in its territory; update it in the same PR when the
+territory moves.
+
+| Document | Governs |
+|---|---|
+| [docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md) | System source of truth — every implementation complies |
+| [docs/architecture/DECISIONS.md](./docs/architecture/DECISIONS.md) | ADR log — check before changing any established pattern |
+| [docs/architecture/API_STANDARDS.md](./docs/architecture/API_STANDARDS.md) | REST conventions, errors, versioning, idempotency |
+| [docs/architecture/DATABASE_STANDARDS.md](./docs/architecture/DATABASE_STANDARDS.md) | Prisma, migrations, indexes, tenancy, backups |
+| [docs/architecture/SECURITY_STANDARDS.md](./docs/architecture/SECURITY_STANDARDS.md) | Auth, sessions, secrets, OWASP, audit |
+| [docs/engineering/ENGINEERING_HANDBOOK.md](./docs/engineering/ENGINEERING_HANDBOOK.md) | How code gets written, reviewed, released |
+| [docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md) | The eight reviewers and their gates |
+| [docs/aviation/AVIATION_STANDARDS.md](./docs/aviation/AVIATION_STANDARDS.md) | Aviation-first domain rules (FAA terms, Hobbs/Tach, weather, compliance) |
+| [CONSTITUTION.md](./CONSTITUTION.md) | Machine-enforced rules (`tests/constitution.test.ts`) |
+| [PRODUCTION.md](./PRODUCTION.md) | Launch plan, phases A–F, env matrix |
+| [ROADMAP.md](./ROADMAP.md) | Living backlog + session log |
+
+**Quality gates — no feature is complete until ALL eight pass** (scaled to
+change size per the review-board matrix; a typo fix doesn't convene a
+committee):
+
+✓ Architecture Review · ✓ Security Review · ✓ Performance Review ·
+✓ UX Review · ✓ QA Review · ✓ Documentation Review · ✓ Production Review ·
+✓ Aviation Standards Review
+
+Verdicts are recorded in the commit/PR description. Reviewer definitions,
+checklists, pass criteria, and automatic-rejection criteria:
+[docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md).
 
 ## Engineering roles (Claude Code subagents)
 
@@ -170,6 +212,7 @@ production-reviewer before release-sized merges.**
 | Database Architect | `db-architect` | Schema changes, migrations, query performance, FK safety |
 | QA/Test Engineer | `qa-engineer` | Contract tests, running-app verification, regression hunts |
 | Security Reviewer | `security-reviewer` | Auth/tenancy changes, new public or self-service routes, pre-beta audits |
+| Performance Reviewer | `performance-reviewer` | Query shape, latency, React/bundle cost, caching, scale seams |
 | Documentation Engineer | `docs-engineer` | CLAUDE/ROADMAP/ARCHITECTURE/README updates after changes land |
 | Production Readiness Reviewer | `production-reviewer` | Pre-release audit against PRODUCTION.md checklists |
 
