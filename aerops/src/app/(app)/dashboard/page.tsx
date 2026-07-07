@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   Plane, Wrench, Users, GraduationCap, DollarSign, TrendingUp, AlertTriangle,
-  CalendarCheck, Gauge, CloudSun, Award,
+  CalendarCheck, CloudSun, Award,
 } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
@@ -33,7 +33,7 @@ export default async function DashboardPage() {
   const [
     todaysFlights, aircraftCounts, instructorsToday, checkrides,
     revenueTodayAgg, revenueMonthAgg, notifications, squawks, upcomingMx,
-    balances, completedThisMonth, fleetSize,
+    balances, completedThisMonth,
   ] = await Promise.all([
     db.scheduleEvent.findMany({
       where: { organizationId, start: { gte: todayStart, lt: todayEnd }, type: { not: "MAINTENANCE_BLOCK" } },
@@ -79,7 +79,6 @@ export default async function DashboardPage() {
       _sum: { flightTime: true },
       _count: true,
     }),
-    db.aircraft.count({ where: { organizationId, isSimulator: false } }),
   ]);
 
   const byStatus = Object.fromEntries(aircraftCounts.map((c) => [c.status, c._count]));
@@ -88,19 +87,17 @@ export default async function DashboardPage() {
   const studentsFlyingToday = new Set(todaysFlights.filter((f) => f.studentId).map((f) => f.studentId)).size;
   const revenueToday = Number(revenueTodayAgg._sum.amount ?? 0);
   const revenueMonth = Number(revenueMonthAgg._sum.amount ?? 0);
-  const hoursFlownMonth = Number(completedThisMonth._sum.flightTime ?? 0);
-  // Rough utilization: hours flown this month vs 60 available hrs/aircraft/month
-  const utilization = fleetSize > 0 ? Math.min(100, Math.round((hoursFlownMonth / (fleetSize * 60)) * 100)) : 0;
   const outstanding = balances.reduce((t, s) => t + Math.abs(Number(s.accountBalance)), 0);
 
+  // Top row is the OPERATIONAL picture only — "what's happening today".
+  // Finance moves lower; fleet utilization has its own detailed section, so it
+  // isn't duplicated as a KPI. (Dashboard simplification, Phase 2.)
   const stats = [
     { label: "Today's Flights", value: todaysFlights.length, icon: CalendarCheck, href: "/schedule" },
-    { label: "Aircraft Available", value: `${available}`, sub: `${inMx} in maintenance`, icon: Plane, href: "/aircraft" },
+    { label: "Aircraft Available", value: `${available}`, sub: `${inMx} down for maintenance`, icon: Plane, href: "/aircraft" },
     { label: "Students Flying Today", value: studentsFlyingToday, sub: `${instructorsToday} instructors on staff`, icon: GraduationCap, href: "/students" },
-    { label: "Revenue Today", value: formatCurrency(revenueToday), icon: DollarSign, href: "/billing" },
-    { label: "Revenue This Month", value: formatCurrency(revenueMonth), sub: `${completedThisMonth._count} flights closed`, icon: TrendingUp, href: "/reports" },
-    { label: "Fleet Utilization", value: `${utilization}%`, sub: `${hoursFlownMonth.toFixed(1)} hrs this month`, icon: Gauge, href: "/reports" },
   ];
+  const attentionCount = squawks.length + upcomingMx.length + checkrides.length;
 
   return (
     <div className="animate-fade-up space-y-5">
@@ -121,7 +118,7 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {stats.map((s) => (
           <Link key={s.label} href={s.href}>
             <Card className="transition-shadow hover:shadow-md">
@@ -130,7 +127,7 @@ export default async function DashboardPage() {
                   <p className="text-[11px] font-medium text-muted-foreground">{s.label}</p>
                   <s.icon className="h-3.5 w-3.5 text-muted-foreground/60" />
                 </div>
-                <p className="mt-1.5 text-xl font-semibold tracking-tight">{s.value}</p>
+                <p className="mt-1.5 text-2xl font-semibold tracking-tight">{s.value}</p>
                 {s.sub && <p className="mt-0.5 text-[10px] text-muted-foreground">{s.sub}</p>}
               </CardContent>
             </Card>
@@ -138,36 +135,87 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle>Today&apos;s Flights</CardTitle>
-              <CardDescription>All scheduled activity for today</CardDescription>
-            </div>
-            <Link href="/schedule" className="text-xs font-medium text-primary hover:underline">Open schedule →</Link>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {todaysFlights.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No flights scheduled today.</p>}
-            {todaysFlights.map((f) => (
-              <div key={f.id} className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50">
-                <div className="w-14 text-xs font-semibold tabular-nums">{formatTime(f.start)}</div>
-                <div className="h-8 w-1 rounded-full" style={{ background: f.lessonType?.color ?? "#2563eb" }} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {fullName(f.student?.user)} {f.instructor ? `· ${fullName(f.instructor.user)}` : "· Solo"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {f.lessonType?.name ?? f.type} {f.aircraft ? `· ${f.aircraft.tailNumber}` : ""}
-                  </p>
-                </div>
-                <StatusBadge status={f.status} />
+      {/* Today's Flights — the operational centerpiece, full width. */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <div>
+            <CardTitle>Today&apos;s Flights</CardTitle>
+            <CardDescription>Every flight on the schedule today, in order</CardDescription>
+          </div>
+          <Link href="/schedule" className="text-xs font-medium text-primary hover:underline">Open schedule →</Link>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {todaysFlights.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No flights scheduled today. Open the schedule to book one.
+            </p>
+          )}
+          {todaysFlights.map((f) => (
+            <div key={f.id} className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50">
+              <div className="w-14 text-xs font-semibold tabular-nums">{formatTime(f.start)}</div>
+              <div className="h-8 w-1 rounded-full" style={{ background: f.lessonType?.color ?? "var(--color-primary)" }} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {fullName(f.student?.user)} {f.instructor ? `· ${fullName(f.instructor.user)}` : "· Solo"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {f.lessonType?.name ?? f.type} {f.aircraft ? `· ${f.aircraft.tailNumber}` : ""}
+                </p>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+              <StatusBadge status={f.status} />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-        <div className="space-y-4">
+      {/* Needs attention — one place for everything the operator should act on:
+          squawks, upcoming maintenance, checkrides, and recent activity. */}
+      <div>
+        <div className="mb-2 flex items-center gap-2">
+          <h2 className="text-sm font-semibold tracking-tight">Needs attention</h2>
+          {attentionCount > 0 && <Badge tone="amber">{attentionCount}</Badge>}
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Open Squawks</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-muted-foreground/60" />
+            </CardHeader>
+            <CardContent className="space-y-2.5">
+              {squawks.length === 0 && <p className="text-xs text-muted-foreground">No open squawks — the fleet is clean.</p>}
+              {squawks.map((s) => (
+                <Link key={s.id} href="/maintenance" className="block">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-medium">{s.aircraft.tailNumber} — {s.title}</p>
+                      <p className="text-[11px] text-muted-foreground">{formatDate(s.createdAt)}</p>
+                    </div>
+                    <StatusBadge status={s.severity} />
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Upcoming Maintenance</CardTitle>
+              <Wrench className="h-4 w-4 text-muted-foreground/60" />
+            </CardHeader>
+            <CardContent className="space-y-2.5">
+              {upcomingMx.length === 0 && <p className="text-xs text-muted-foreground">Nothing scheduled.</p>}
+              {upcomingMx.map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-medium">{m.aircraft.tailNumber} — {m.title}</p>
+                    <p className="text-[11px] text-muted-foreground">{formatDate(m.startDate)}</p>
+                  </div>
+                  <StatusBadge status={m.status} />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Upcoming Checkrides</CardTitle>
@@ -189,80 +237,73 @@ export default async function DashboardPage() {
 
           <Card>
             <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Recent Activity</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground/60" />
+            </CardHeader>
+            <CardContent className="space-y-2.5">
+              {notifications.length === 0 && <p className="text-xs text-muted-foreground">Nothing new.</p>}
+              {notifications.map((n) => (
+                <div key={n.id}>
+                  <p className="text-xs font-medium">{n.title}</p>
+                  {n.body && <p className="line-clamp-1 text-[11px] text-muted-foreground">{n.body}</p>}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Finance — the money picture, below the operational picture. */}
+      <div>
+        <h2 className="mb-2 text-sm font-semibold tracking-tight">Finance</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Link href="/billing">
+            <Card className="transition-shadow hover:shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-medium text-muted-foreground">Revenue Today</p>
+                  <DollarSign className="h-3.5 w-3.5 text-muted-foreground/60" />
+                </div>
+                <p className="mt-1.5 text-2xl font-semibold tracking-tight">{formatCurrency(revenueToday)}</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/reports">
+            <Card className="transition-shadow hover:shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-medium text-muted-foreground">Revenue This Month</p>
+                  <TrendingUp className="h-3.5 w-3.5 text-muted-foreground/60" />
+                </div>
+                <p className="mt-1.5 text-2xl font-semibold tracking-tight">{formatCurrency(revenueMonth)}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">{completedThisMonth._count} flights closed</p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Outstanding Balances</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground/60" />
             </CardHeader>
             <CardContent className="space-y-2">
+              {balances.length === 0 && <p className="text-xs text-muted-foreground">All accounts settled.</p>}
               {balances.map((s) => (
                 <div key={s.id} className="flex items-center justify-between">
                   <p className="text-xs font-medium">{fullName(s.user)}</p>
                   <p className="text-xs font-semibold text-destructive">{formatCurrency(Math.abs(Number(s.accountBalance)))}</p>
                 </div>
               ))}
-              <div className="border-t border-border pt-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Total outstanding</span>
-                  <span className="font-semibold">{formatCurrency(outstanding)}</span>
+              {balances.length > 0 && (
+                <div className="border-t border-border pt-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Total outstanding</span>
+                    <span className="font-semibold">{formatCurrency(outstanding)}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Open Squawks</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground/60" />
-          </CardHeader>
-          <CardContent className="space-y-2.5">
-            {squawks.map((s) => (
-              <Link key={s.id} href="/maintenance" className="block">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-medium">{s.aircraft.tailNumber} — {s.title}</p>
-                    <p className="text-[11px] text-muted-foreground">{formatDate(s.createdAt)}</p>
-                  </div>
-                  <StatusBadge status={s.severity} />
-                </div>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Upcoming Maintenance</CardTitle>
-            <Wrench className="h-4 w-4 text-muted-foreground/60" />
-          </CardHeader>
-          <CardContent className="space-y-2.5">
-            {upcomingMx.map((m) => (
-              <div key={m.id} className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-xs font-medium">{m.aircraft.tailNumber} — {m.title}</p>
-                  <p className="text-[11px] text-muted-foreground">{formatDate(m.startDate)}</p>
-                </div>
-                <StatusBadge status={m.status} />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Recent Notifications</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground/60" />
-          </CardHeader>
-          <CardContent className="space-y-2.5">
-            {notifications.map((n) => (
-              <div key={n.id}>
-                <p className="text-xs font-medium">{n.title}</p>
-                {n.body && <p className="line-clamp-1 text-[11px] text-muted-foreground">{n.body}</p>}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
       </div>
 
       <Card>

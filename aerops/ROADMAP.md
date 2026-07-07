@@ -12,15 +12,28 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
-_Last session update: 2026-07-07 — Phase 2/2.5 product-experience pass
-(first increment): grounded UI/UX + zero-friction audit of the core screens;
-implemented the empty-state consistency fix (added an action slot to the
+_Last session update: 2026-07-07 — Phase 2 product-experience pass
+(second increment): simplified the org dashboard — three operational KPIs
+(Today's Flights, Aircraft Available with a maintenance subline, Students
+Flying Today), a full-width "Today's Flights" centerpiece, and a
+consolidated "Needs attention" row (squawks, upcoming maintenance,
+checkrides, recent activity); Finance moved lower and the duplicated Fleet
+Utilization KPI + its dead code removed. Presentational only — zero query
+changes. AI Review Board: UX review fixed a non-responsive KPI grid
+(`grid-cols-1 sm:grid-cols-3`) and a raw-hex fallback (→ `var(--color-primary)`),
+verified in a live 390px render; Documentation review corrected a
+misattributed "simple case" quote (→ PRODUCT_PRINCIPLES #11 / roadmap 1.5)
+and completed VISION persona coverage. Authored
+`docs/company/CUSTOMER_ADVISORY_BOARD.md` (12 operator personas) and linked it
+from VISION. Regenerated all 16 marketing screenshots on the new UI; print +
+PDF re-verified (zero failed asset requests). No backend change; not deployed._
+
+_Prior increment (Phase 2/2.5, first): added an action slot to the
 `EmptyState` primitive; converted bare operational empties on Documents and
-Parts to helpful why+next-step states) and corrected developer-terminology
-copy on Documents. Authored `docs/operations/PLAYBOOKS.md` (24 operational
+Parts to helpful why+next-step states; corrected developer-terminology copy
+on Documents. Authored `docs/operations/PLAYBOOKS.md` (24 operational
 playbooks) and `docs/company/PRODUCT_ROADMAP.md` (Beta→Long-term + a Product
-Intelligence roadmap). Larger redesigns phased into the roadmap. No backend
-change; not deployed._
+Intelligence roadmap)._
 
 _Last session update: 2026-07-07 — Phase 1C database integrity & tenant
 safety: added a real Organization FK to all 9 org-owned models that lacked
