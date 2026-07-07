@@ -19,8 +19,14 @@ const EXAMPLE_PLACEHOLDER = "dev-secret-change-in-production-9f8a7b6c5d4e3f2a1b0
 
 const MIN_SECRET_LENGTH = 32;
 
+/**
+ * Fails closed: anything that isn't explicitly a development or test
+ * environment is treated as production, so a typo'd or novel NODE_ENV
+ * ("staging", "prod", unset) gets production-grade secret validation
+ * rather than the dev fallback.
+ */
 export function isProduction(env: string | undefined = process.env.NODE_ENV) {
-  return env === "production";
+  return env !== "development" && env !== "test";
 }
 
 /**

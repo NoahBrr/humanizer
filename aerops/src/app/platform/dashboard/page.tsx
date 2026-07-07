@@ -5,11 +5,13 @@ import { computeCustomerSuccess } from "@/lib/customer-success";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { requirePlatformSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard" };
 
 export default async function PlatformDashboard() {
+  await requirePlatformSession();
   const since30 = new Date(Date.now() - 30 * 86_400_000);
   const dbStart = Date.now();
   const [orgs, userCount, aircraftCount, recentAudit, plans, lessons30, flights30, revenue30, students, apiKeys, deliveries30, scenes] = await Promise.all([

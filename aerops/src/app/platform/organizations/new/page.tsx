@@ -1,10 +1,12 @@
 import { db } from "@/lib/db";
 import { NewOrgWizard } from "./new-org-wizard";
+import { requirePlatformSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "New Organization" };
 
 export default async function NewOrganizationPage() {
+  await requirePlatformSession();
   const plans = await db.subscriptionPlan.findMany({ orderBy: { priceMonthly: "asc" } });
   return (
     <NewOrgWizard

@@ -71,16 +71,18 @@ the code.
 - **AUTH_SECRET fails closed.** All access goes through
   `requireAuthSecret()` in `src/lib/env.ts` (statically enforced by
   `tests/auth-security.test.ts`): in production a missing, placeholder, or
-  short secret **refuses startup** (`src/instrumentation.ts`) and can never
-  sign a JWT or cookie; development without a configured secret uses the
+  short secret **fails the boot gate** (`src/instrumentation.ts`) — the
+  process may bind its port but every request, `/api/health` included,
+  returns 500, and no JWT or cookie is ever signed. Unrecognized `NODE_ENV`
+  values count as production. Development without a configured secret uses the
   documented `DEV_ONLY_AUTH_SECRET` constant, which production rejects by
   value. Note `next start` runs in production mode — local verification
   servers need a real generated secret in `.env`
   (`openssl rand -base64 32`).
 - `AUTH_SECRET` signs both the NextAuth JWT and the impersonation cookie
-  HMAC. The `?? "dev"` fallback in `src/lib/session.ts` exists for local
-  dev only; production requires a strong per-stage secret (PRODUCTION.md
-  §16).
+  HMAC; both consume it through `requireAuthSecret()` — there is no
+  fallback path in production (see the fail-closed bullet above), and each
+  stage uses its own strong secret (PRODUCTION.md §16).
 - Webhook secrets live per-subscription in the `Webhook` row; API keys are
   stored **only** as sha256 hashes (`keyHash`) — the raw `aero_` token is
   shown once.

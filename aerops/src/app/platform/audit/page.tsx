@@ -2,11 +2,13 @@ import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/utils";
+import { requirePlatformSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Audit Log" };
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
+  await requirePlatformSession();
   const { org } = await searchParams;
   const [logs, orgs] = await Promise.all([
     db.auditLog.findMany({

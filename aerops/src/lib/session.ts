@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import type { OrgStatus, PlatformRole, Role } from "@prisma/client";
 import { auth } from "@/auth";
@@ -144,10 +145,10 @@ export async function getSession(): Promise<AppSession | null> {
         return {
           kind: "platform",
           ...target,
-          platformRole: platformUser!.role,
+          platformRole: platformUser.role,
           impersonation: {
             platformUserId: raw.user.id,
-            platformLabel: `${platformUser!.firstName} ${platformUser!.lastName}`,
+            platformLabel: `${platformUser.firstName} ${platformUser.lastName}`,
             readOnly: imp.readOnly,
           },
         };
@@ -157,19 +158,23 @@ export async function getSession(): Promise<AppSession | null> {
     return {
       kind: "platform",
       userId: raw.user.id,
-      email: platformUser!.email,
-      firstName: platformUser!.firstName,
-      lastName: platformUser!.lastName,
+      email: platformUser.email,
+      firstName: platformUser.firstName,
+      lastName: platformUser.lastName,
       organizationId: "",
       role: "SUPER_ADMIN",
       permissions: new Set(),
       orgStatus: "ACTIVE",
       modules: new Set(),
       businessProfiles: [],
-      platformRole: platformUser!.role,
+      platformRole: platformUser.role,
     };
   }
 
+  // Symmetric with the platform path: an org/individual JWT without the
+  // version claim fails closed. (orgSessionFor's optional param remains only
+  // for impersonation-target resolution, where no token exists.)
+  if (raw.user.sessionVersion === undefined) return null;
   const org = await orgSessionFor(raw.user.id, raw.user.sessionVersion);
   if (!org) return null;
   return { kind: org.organizationId ? "org" : "individual", ...org };
@@ -264,6 +269,20 @@ export async function authorize(permission: Permission | null, opts: { mutating?
     }
   }
   return { session };
+}
+
+/**
+ * Page-level guard for /platform server pages. The layout's check does NOT
+ * re-run on client-side (soft) navigation, so every platform page must call
+ * this itself — otherwise a revoked staff session keeps read access by
+ * clicking between nav links (statically enforced by
+ * tests/auth-security.test.ts).
+ */
+export async function requirePlatformSession(roles?: PlatformRole[]): Promise<AppSession> {
+  const session = await getSession();
+  if (!session?.platformRole) redirect("/sign-in");
+  if (roles && !roles.includes(session.platformRole)) redirect("/platform/dashboard");
+  return session;
 }
 
 /** Guard for /platform API routes and pages. */

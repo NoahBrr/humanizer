@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { requirePlatformSession } from "@/lib/session";
 import { MODULES, CORE_MODULES, type ModuleKey } from "@/lib/features";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import { SnapshotsPanel } from "./snapshots-panel";
 export const dynamic = "force-dynamic";
 
 export default async function OrganizationDetail({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
+  const session = await requirePlatformSession();
   const { id } = await params;
   const org = await db.organization.findUnique({
     where: { id },

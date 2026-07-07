@@ -9,10 +9,10 @@
  * any sessionVersion drift — including a token with no version claim —
  * kills the session immediately.
  */
-export function platformClaimsValid(
-  dbUser: { isActive: boolean; sessionVersion: number } | null,
+export function platformClaimsValid<T extends { isActive: boolean; sessionVersion: number }>(
+  dbUser: T | null,
   tokenSessionVersion: number | undefined,
-): boolean {
+): dbUser is T {
   if (!dbUser || !dbUser.isActive) return false;
   if (tokenSessionVersion === undefined) return false;
   return dbUser.sessionVersion === tokenSessionVersion;

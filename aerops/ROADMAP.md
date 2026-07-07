@@ -12,6 +12,18 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-07 — Phase 1A auth & session security
+hardening, the governance framework's first execution: platform-session
+revocation verified per request (isActive + sessionVersion + role from the
+row; `lib/session-rules.ts`), `requirePlatformSession()` guard on every
+data-bearing /platform page (layouts don't re-run on soft navigation —
+Security Board finding), AUTH_SECRET fail-closed (`lib/env.ts` +
+`instrumentation.ts`; unrecognized NODE_ENV treated as production), `?? 0`
+version-claim coercion removed, dead `requireSession()` bypass deleted,
+auth docs corrected (no phantom HIBP/reset claims). Formal AI reviews:
+Architect, Security, Reliability, QA — all findings fixed or roadmapped.
+Not deployed._
+
 _Last session update: 2026-07-07 — Phase 0.5 company operating system:
 `docs/company/` (VISION, PRODUCT_PRINCIPLES, NORTH_STAR), `docs/design/`
 (DESIGN_SYSTEM), 4 executive roles added to the AI Review Board (CEO, PM,

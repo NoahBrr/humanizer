@@ -5,11 +5,13 @@ import { Avatar } from "@/components/ui/misc";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { PLATFORM_ROLE_LABELS } from "@/lib/rbac";
 import { formatDate } from "@/lib/utils";
+import { requirePlatformSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Platform Users" };
 
 export default async function PlatformUsersPage() {
+  await requirePlatformSession();
   const users = await db.platformUser.findMany({ orderBy: { createdAt: "asc" } });
 
   return (

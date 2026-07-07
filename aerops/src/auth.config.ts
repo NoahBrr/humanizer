@@ -43,7 +43,9 @@ export const authConfig = {
         session.user.role = token.role as import("@prisma/client").Role;
         session.user.organizationId = token.organizationId as string;
         session.user.platformRole = token.platformRole as import("@prisma/client").PlatformRole | undefined;
-        session.user.sessionVersion = (token.sessionVersion as number | undefined) ?? 0;
+        // No ?? 0 coercion: a token with no version claim must stay undefined so
+        // the platform path fails closed (see lib/session-rules.ts).
+        session.user.sessionVersion = token.sessionVersion as number | undefined;
         session.user.firstName = token.firstName as string;
         session.user.lastName = token.lastName as string;
       }

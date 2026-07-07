@@ -1,11 +1,13 @@
 import { db } from "@/lib/db";
 import { SCENARIOS } from "@/lib/simulation";
 import { SimulationClient } from "./simulation-client";
+import { requirePlatformSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Live Simulation" };
 
 export default async function SimulationPage() {
+  await requirePlatformSession();
   const [orgs, running] = await Promise.all([
     db.organization.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.simulationRun.findFirst({

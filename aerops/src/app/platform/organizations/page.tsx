@@ -5,11 +5,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
+import { requirePlatformSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Organizations" };
 
 export default async function OrganizationsPage() {
+  await requirePlatformSession();
   const orgs = await db.organization.findMany({
     include: { plan: true, _count: { select: { users: true, aircraft: true, locations: true } } },
     orderBy: { createdAt: "asc" },

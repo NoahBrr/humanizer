@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/utils";
 import { PlatformRollbackButton } from "./rollback-button";
+import { requirePlatformSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Import Jobs" };
@@ -17,6 +18,7 @@ export const metadata = { title: "Import Jobs" };
  * organizations with the Demo Data Generator, and monitor/roll back here.
  */
 export default async function PlatformImportsPage() {
+  await requirePlatformSession();
   const jobs = await db.importJob.findMany({
     orderBy: { createdAt: "desc" },
     take: 100,

@@ -35,6 +35,17 @@ describe("platform session revocation (platformClaimsValid)", () => {
   it("version 0 tokens still validate against version 0 rows (fresh accounts)", () => {
     expect(platformClaimsValid({ isActive: true, sessionVersion: 0 }, 0)).toBe(true);
   });
+
+  it("rejects malformed version claims (NaN, negative, non-integer)", () => {
+    expect(platformClaimsValid(active, NaN)).toBe(false);
+    expect(platformClaimsValid(active, -3)).toBe(false);
+    expect(platformClaimsValid(active, 3.5)).toBe(false);
+  });
+
+  it("the real pipeline carries no ?? 0 coercion that would mask a missing claim", () => {
+    const cfg = readFileSync(path.join(SRC, "auth.config.ts"), "utf8");
+    expect(cfg).not.toMatch(/sessionVersion[^\n]*\?\?\s*0/);
+  });
 });
 
 describe("AUTH_SECRET fail-closed (requireAuthSecret)", () => {
@@ -63,6 +74,14 @@ describe("AUTH_SECRET fail-closed (requireAuthSecret)", () => {
   it("development works without AUTH_SECRET via the documented dev fallback", () => {
     expect(requireAuthSecret(undefined, "development")).toBe(DEV_ONLY_AUTH_SECRET);
     expect(requireAuthSecret(undefined, "test")).toBe(DEV_ONLY_AUTH_SECRET);
+  });
+
+  it("unrecognized NODE_ENV is treated as production (fail closed, never the dev fallback)", () => {
+    // "" stands in for unset: isProduction() treats everything except the
+    // two explicit dev values as production.
+    for (const env of ["staging", "prod", "Production", ""]) {
+      expect(() => requireAuthSecret(undefined, env)).toThrow(/AUTH_SECRET is not set/);
+    }
   });
 
   it("development prefers an explicitly configured secret", () => {
@@ -101,15 +120,41 @@ describe("static enforcement", () => {
 
   it("getSession verifies platform sessions through platformClaimsValid", () => {
     const session = readFileSync(path.join(SRC, "lib", "session.ts"), "utf8");
-    // The platform branch must consult the database row and the shared rule —
-    // removing either reopens the revocation hole this phase closed.
+    // The platform branch must consult the database row, select both
+    // revocation fields, and GATE on the shared rule (not merely call it) —
+    // removing any of these reopens the revocation hole this phase closed.
     expect(session).toMatch(/platformUser\.findUnique/);
-    expect(session).toMatch(/platformClaimsValid\(/);
-    expect(session).toMatch(/isActive: true, sessionVersion: true/);
+    expect(session).toMatch(/if \(!platformClaimsValid\([^)]*\)\) return null/);
+    expect(session).toMatch(/isActive:\s*true/);
+    expect(session).toMatch(/sessionVersion:\s*true/);
   });
 
   it("server startup validates the production environment (instrumentation)", () => {
     const inst = readFileSync(path.join(SRC, "instrumentation.ts"), "utf8");
     expect(inst).toMatch(/assertProductionEnv/);
+  });
+
+  it("every data-bearing /platform page calls requirePlatformSession (layouts don't re-run on soft navigation)", () => {
+    const platformDir = path.join(SRC, "app", "platform");
+    const offenders = walk(platformDir)
+      .filter((p) => p.endsWith("page.tsx"))
+      .filter((p) => {
+        const src = readFileSync(p, "utf8");
+        return src.includes("@/lib/db") && !src.includes("requirePlatformSession(");
+      })
+      .map((p) => path.relative(SRC, p));
+    expect(offenders).toEqual([]);
+  });
+
+  it("auth() is only consumed by getSession and the NextAuth handler (no revocation bypasses)", () => {
+    const ALLOWED = new Set([
+      path.join("lib", "session.ts"), // the single resolution point
+      path.join("app", "api", "auth", "[...nextauth]", "route.ts"), // NextAuth handlers
+    ]);
+    const offenders = walk(SRC)
+      .filter((p) => /from "@\/auth"/.test(readFileSync(p, "utf8")))
+      .map((p) => path.relative(SRC, p))
+      .filter((p) => !ALLOWED.has(p));
+    expect(offenders).toEqual([]);
   });
 });

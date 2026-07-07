@@ -119,10 +119,3 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
-
-/** Server helper: current session or throw (for route handlers / pages). */
-export async function requireSession() {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  return session;
-}
