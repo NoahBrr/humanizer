@@ -76,7 +76,7 @@ export function SiteHeader({ authedHref }: { authedHref: string | null }) {
           )}
         </div>
 
-        <button className="ml-auto cursor-pointer rounded-lg p-2 hover:bg-muted md:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
+        <button className="print-hidden ml-auto cursor-pointer rounded-lg p-2 hover:bg-muted md:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>

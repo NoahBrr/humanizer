@@ -19,7 +19,7 @@ export function ProductTour() {
 
   return (
     <div>
-      <div className="flex gap-1.5 overflow-x-auto pb-2 [scrollbar-width:thin]">
+      <div className="print-hidden flex gap-1.5 overflow-x-auto pb-2 [scrollbar-width:thin]">
         {PRODUCT_TOUR.map((s, i) => (
           <button
             key={s.key}
@@ -44,10 +44,10 @@ export function ProductTour() {
           <span className="ml-3 text-[10px] text-muted-foreground">aerops.io — {stop.title}</span>
         </div>
         <Image key={stop.key} src={stop.image} alt={`AeroOps ${stop.title}`} width={1400} height={875} quality={90} className="w-full animate-fade-up" />
-        <button onClick={() => go(-1)} aria-label="Previous workspace" className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-md hover:bg-card">
+        <button onClick={() => go(-1)} aria-label="Previous workspace" className="print-hidden absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-md hover:bg-card">
           <ChevronLeft className="h-4.5 w-4.5" />
         </button>
-        <button onClick={() => go(1)} aria-label="Next workspace" className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-md hover:bg-card">
+        <button onClick={() => go(1)} aria-label="Next workspace" className="print-hidden absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-md hover:bg-card">
           <ChevronRight className="h-4.5 w-4.5" />
         </button>
       </div>

@@ -96,6 +96,13 @@ export const PRODUCT_TOUR: TourStop[] = [
     href: "/features#intelligence",
   },
   {
+    key: "import",
+    title: "Import Center",
+    description: "Migrate from Flight Circle, Flight Schedule Pro, QuickBooks, or any spreadsheet — map columns, test safely, commit, and roll back if needed.",
+    image: "/marketing/import.png",
+    href: "/features",
+  },
+  {
     key: "platform",
     title: "Platform Administration",
     description: "For owners of multiple operations: organization management, plans, audit trail, and support tooling.",

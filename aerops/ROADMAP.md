@@ -9,8 +9,11 @@ Companion to [ARCHITECTURE.md](./ARCHITECTURE.md) (how to build),
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
-_Last session update: 2026-07-07 — Import Center, weather consistency,
-public website, self-serve onboarding, sidebar fix, production readiness plan._
+_Last session update: 2026-07-07 — Claude Code operating system (CLAUDE.md
+rewrite + 8 role subagents in `.claude/agents/`) and marketing/print visual
+refresh: all 16 screenshots recaptured from the latest UI, Import Center added
+to the product tour, `@media print` styles, in-repo capture script
+(`scripts/capture-marketing.mjs`), stale boilerplate assets removed._
 
 ---
 

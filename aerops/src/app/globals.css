@@ -158,3 +158,20 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Print / export — the marketing site doubles as presentation material.
+   Keep brand colors on paper, avoid splitting product screenshots across
+   pages, and drop purely interactive chrome.
+--------------------------------------------------------------------- */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  header.sticky { position: static; }
+  .print-hidden { display: none !important; }
+  img, figure, .rounded-xl, .rounded-2xl { break-inside: avoid; }
+  section { break-inside: avoid-page; }
+  a { text-decoration: none; }
+}
