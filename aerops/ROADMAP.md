@@ -244,7 +244,9 @@ time zones stored-not-applied — triage next session._
 | Organization FK on all org-owned models (9 added: LoginEvent→SetNull, rest Cascade) | Complete | — | — | Phase 1C; ADR-021, `tests/schema-governance.test.ts`; migration remediates orphans |
 | Tenant-scoped uniqueness (Aircraft.tailNumber, Invoice.number → per-org) | Complete | — | — | Phase 1C; two orgs may share a tail/invoice number; import dup-detection now org-scoped |
 | createdAt on all org-owned models + schema-governance drift tests | Complete | — | — | Phase 1C; 5 models gained createdAt; convention machine-enforced |
-| Per-org invoice-number sequence (replace `Date.now().slice(-8)`) | Not Started | Medium | S | Same-ms within-org collision risk (pre-existing); tenant-scoped unique would then be exact |
+| Per-org invoice-number sequence (replace `Date.now().slice(-8)`) | Not Started | Medium | S | Same-ms within-org collision risk + ~27.7h wraparound (both pre-existing); Financial Reviewer recommendation |
+| Global airframe registry / cross-operator airframe history | Not Started | Low | L | Aviation Reviewer gap: airframe time/logbook follow the airframe, not the operator; consent-gated, keyed on N-number+serial, never per-org tail |
+| Org-scope `demo-generator` tail-collision `findMany` | Not Started | Low | S | Pre-existing unscoped read (harmless — demo seeding only); Security Reviewer follow-up |
 | Platform session revocation (isActive + sessionVersion per request) | Complete | — | — | Phase 1A; `lib/session-rules.ts`, pinned by `tests/auth-security.test.ts` |
 | Bearer-token hashing (invitation + invite-link tokens → `tokenHash` sha256) | Complete | — | — | Phase 1B; `lib/tokens.ts`, ADR-020, pinned by `tests/token-security.test.ts`; safe backfill migration |
 | API-key hashing routed through `lib/tokens.ts` | Complete | — | — | Phase 1B review follow-up; unifies the last inline sha256, shrinks the static allowlist |

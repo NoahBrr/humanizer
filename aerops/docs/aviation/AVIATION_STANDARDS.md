@@ -16,7 +16,7 @@ implemented:
 
 | Term | Meaning | Where in AeroOps |
 |---|---|---|
-| Tail number (N-number) | Aircraft registration — the aircraft's identity | `Aircraft.tailNumber @unique` (globally unique by design, like the registry) |
+| Tail number (N-number) | Aircraft registration — the aircraft's identity | `Aircraft.tailNumber`, unique **per organization** (`@@unique([organizationId, tailNumber])`, ADR-021). The row is an operator's operational record of the airframe (Hobbs/Tach, inspections, squawks), not a civil-registry node — aircraft change hands between tenants and unrelated tenants never collide. A global airframe registry / cross-operator history is a roadmap item. |
 | Part 61 / Part 141 | FAA training frameworks (flexible vs approved-syllabus) | `TrainingPart` enum on `Student` and `Syllabus` |
 | FAR reference | Regulation cite, e.g. `61.87(b)` | `Endorsement.farReference` |
 | DPE | Designated Pilot Examiner — administers checkrides | `Checkride.examinerName` |
