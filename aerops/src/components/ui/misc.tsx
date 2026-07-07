@@ -28,12 +28,17 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={cn("animate-pulse rounded-lg bg-muted", className)} />;
 }
 
-export function EmptyState({ icon, title, description }: { icon?: React.ReactNode; title: string; description?: string }) {
+/**
+ * Canonical empty state: never "No data". Always says what's missing, why,
+ * and offers the next step (optional `action`). See DESIGN_SYSTEM.md.
+ */
+export function EmptyState({ icon, title, description, action }: { icon?: React.ReactNode; title: string; description?: string; action?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
       {icon && <div className="text-muted-foreground/60">{icon}</div>}
       <p className="text-sm font-medium">{title}</p>
       {description && <p className="max-w-sm text-xs text-muted-foreground">{description}</p>}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }

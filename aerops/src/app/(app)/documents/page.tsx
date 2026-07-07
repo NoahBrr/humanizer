@@ -1,7 +1,7 @@
 import { FileText, ShieldCheck } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { PageHeader } from "@/components/ui/misc";
+import { PageHeader, EmptyState } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, daysUntil, fullName } from "@/lib/utils";
@@ -47,11 +47,17 @@ export default async function DocumentsPage() {
     <div className="animate-fade-up mx-auto max-w-3xl">
       <PageHeader
         title="Documents"
-        description="Encrypted document vault. Uploads support digital signatures; storage backends (S3 / Supabase) are configured in Settings."
+        description="One place for aircraft records, insurance, and student paperwork — searchable, and kept with the aircraft and people they belong to."
       />
       <div className="space-y-4">
         {documents.length === 0 && (
-          <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No documents on file.</CardContent></Card>
+          <Card><CardContent className="p-0">
+            <EmptyState
+              icon={<FileText className="h-7 w-7" />}
+              title="No documents yet"
+              description="Keep airworthiness certificates, registrations, insurance, and student records here so they're one search away when an examiner or inspector asks."
+            />
+          </CardContent></Card>
         )}
         {[...grouped.entries()].map(([kind, docs]) => (
           <Card key={kind}>

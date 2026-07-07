@@ -1,7 +1,8 @@
+import { Package } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { fleetHealthOf } from "@/lib/fleet-health";
-import { PageHeader } from "@/components/ui/misc";
+import { PageHeader, EmptyState } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { formatDate, daysUntil } from "@/lib/utils";
@@ -143,7 +144,13 @@ export default async function MaintenancePage() {
             <CardDescription>Stock moves only through the typed movement ledger — receives, installs, scraps — so every quantity is auditable.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-1.5">
-            {parts.length === 0 && <p className="text-xs text-muted-foreground">No parts on file yet.</p>}
+            {parts.length === 0 && (
+              <EmptyState
+                icon={<Package className="h-7 w-7" />}
+                title="No parts tracked yet"
+                description="Add the parts you keep on the shelf — filters, plugs, tires, oil — to see low-stock alerts before a squawk grounds an aircraft."
+              />
+            )}
             {parts.map((p) => {
               const low = p.quantity < p.minQuantity;
               const last = p.movements[0];
