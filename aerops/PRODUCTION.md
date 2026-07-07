@@ -1,13 +1,23 @@
-# AeroOps — Production Readiness Plan
+# AeroOps — Production Launch Plan
 
-A complete, step-by-step plan for taking AeroOps from local development to a
-production SaaS platform. **This is a plan, not a deployment** — nothing here
-has been provisioned. Work items are mirrored in [ROADMAP.md](./ROADMAP.md);
+The step-by-step plan for taking AeroOps from verified local app to
+production SaaS. **This is a plan, not a deployment** — nothing here has been
+provisioned. Work items are mirrored in [ROADMAP.md](./ROADMAP.md);
 architecture context lives in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-Audited on 2026-07-07 against the running codebase: 112 tests green,
-production build green, all app routes dynamic (no stale prerendering), one
-authorization gate, immutable audit trail, tenant-scoped queries throughout.
+Independently verification-audited on 2026-07-07 against the running
+codebase: 112 tests green, lint + production build green, weather
+single-source proven by mutation test, one authorization gate, immutable
+audit trail, tenant-scoped queries throughout.
+
+**Ground rules until explicitly instructed otherwise:** do not deploy, do
+not connect real customers, do not charge cards, do not send production
+email. All implementation lands behind env flags that default to today's
+behavior.
+
+**Start here:** §13 has the implementation plan for each of the five launch
+blockers; §14 is the phase-by-phase checklist (A–F); §15 the sequence and
+risks; §16 the environment-variable matrix.
 
 ---
 
@@ -182,38 +192,218 @@ pricing, which is the number that matters.
 - [ ] Webhook signatures verified end-to-end (already implemented — re-verify in prod)
 - [ ] External penetration test scheduled before GA
 
-## 13. Launch checklist (step-by-step)
 
-**Phase A — Foundations (≈1 week)**
-1. GitHub Actions CI (test + build + audit) as merge gate
-2. Provision Neon (prod + preview branches), set pooled/direct URLs
-3. Vercel project + domain + Cloudflare DNS/SSL
-4. Sentry + BetterStack on `/api/health`
-5. Production bootstrap script (plans, platform staff, no dev seed)
+## 13. Implementation plans — the five launch blockers
 
-**Phase B — Customer readiness (≈2 weeks)**
-6. Resend + email adapter + templates (verify, reset, invite, join decisions)
-7. Email verification + password reset flows
-8. Upstash Redis rate-limit store
-9. R2 + real document uploads (presigned URLs)
-10. Stripe subscriptions (checkout, portal, webhooks, trial expiry)
+Detailed plans in the priority order set by the 2026-07-07 verification
+audit. **Build order differs from priority order**: 3 → 4 → 5 → 1 → 2
+(you need a database and a staging environment before anything else has
+somewhere to run). Every plan splits work into *owner* (accounts, DNS,
+secrets, money, approvals) and *Claude Code* (all code, always behind env
+flags, never touching live keys or production sends).
 
-**Phase C — Hardening (≈1 week)**
-11. Security headers + MFA enforcement + secret rotation runbook
-12. Inngest queue behind `emitDomainEvent`; move >5k-row imports + nightly rollups onto it
-13. Playwright post-deploy smoke suite
-14. Backup restore drill; write the DR runbook result into the repo
-15. Private beta (5–10 friendly operators) → fix list → public beta
+### 13.1 Email — provider, verification, password reset, invites, notifications
 
-## 14. Remaining high-priority improvements before public beta
+| | |
+|---|---|
+| **Recommended** | **Resend** (simple API, React-friendly templates, good deliverability). Alternatives: Postmark (best transactional reputation), AWS SES (cheapest, most setup) |
+| **Env vars** | `RESEND_API_KEY` · `EMAIL_FROM` (e.g. `AeroOps <no-reply@mail.aerops.io>`) · `EMAIL_REPLY_TO` · `EMAIL_ENABLED` (`false` → console transport, today's behavior) · `APP_BASE_URL` (link generation) |
+| **Files** | New `src/lib/email.ts` (single adapter: resend / console / noop) + `src/lib/email-templates/` (verify, reset, invitation, join-request decision, demo-request ack). Changed: `api/auth/register` (issue token + send); new `api/auth/verify-email`, `api/auth/forgot-password`, `api/auth/reset-password`; invitation create route (send on create); join-request decision route; demo-request route; sign-up UI (verify notice); `tests/constitution.test.ts` (catalogue the three new PUBLIC routes with reasons); new `tests/email.test.ts` |
+| **DB migration** | Additive `email_tokens`: `User.emailVerifiedAt DateTime?` + model `EmailToken { id, userId, purpose VERIFY_EMAIL\|RESET_PASSWORD, tokenHash @unique, expiresAt, usedAt, createdAt }` — store a SHA-256 hash, never the raw token (tighter than `Invitation.token`, which should migrate to the same pattern later) |
+| **Security** | Single-use hashed tokens (verify 24 h, reset 45 min); identical response on forgot-password whether or not the account exists (no enumeration); all three routes rate-limited via `lib/rate-limit.ts`; `sessionVersion++` on successful reset (revokes every session); DKIM/SPF/DMARC on a **mail subdomain** so app-domain reputation is isolated; tokens never logged or written to audit metadata |
+| **Testing** | Contract tests: issue → verify → second use fails → expired fails; dev console transport lets e2e read the token from the DB and complete the flow against :3100; unverified user blocked from org creation but not from `/welcome`; constitution scan green |
+| **Rollback** | `EMAIL_ENABLED=false` → registration auto-verifies exactly as today, reset link hidden; migration is additive, nothing to unwind |
+| **Order** | adapter+templates → migration → verify flow → reset flow → invitation/join/demo sends → enforcement gate **last**, flipped only after staging proof |
+| **Owner** | Resend account; add DKIM/SPF/DMARC DNS records; verify domain; choose From/Reply-To; set env vars in Vercel; approve the enforcement flip |
+| **Claude Code** | Everything code-side against console transport + Resend *test* key on staging. Never flips production enforcement, never sends production email |
 
-1. **Email verification & password reset** (Critical — blocks real customers)
-2. **Stripe subscriptions** (Critical — blocks revenue)
-3. **CI pipeline + Sentry + uptime** (Critical — blind otherwise)
-4. **Redis rate limiting** (High — current limiter resets per instance)
-5. **Live METAR/TAF adapter** (High — weather is simulated; consumers ready)
-6. **Real document uploads to R2** (High — module is metadata-only)
-7. **Guided org setup checklist + onboarding emails** (High — activation)
-8. **Playwright E2E in CI** (High — protects the golden paths)
-9. **SEO pass on marketing site** (High — sitemap, OG images, structured data)
-10. **Trial lifecycle + demo-org expiry** (Medium — keeps the tenant list honest)
+### 13.2 Billing — Stripe subscriptions, checkout, portal, webhooks
+
+| | |
+|---|---|
+| **Recommended** | **Stripe Billing + hosted Checkout + Customer Portal** — card data never touches AeroOps, and Stripe Connect (customer-facing invoice payments, ROADMAP Phase 2) stays in the same vendor. Alternatives: Paddle / Lemon Squeezy (merchant-of-record handles tax but forecloses Connect) |
+| **Env vars** | `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` · `BILLING_ENFORCEMENT` (`off` \| `warn` \| `enforce`; default `off`). Price IDs live on `SubscriptionPlan` rows, not env |
+| **Files** | New `src/lib/stripe.ts` (client + plan-sync helper); new `api/billing/checkout` + `api/billing/portal` (org-admin authorized); new `api/webhooks/stripe` (**PUBLIC route — signature-verified; catalogue in the constitution with a written reason**); org settings → billing page (status, subscribe/manage); platform plans page (sync button, price IDs); platform org detail (subscription status); `scripts/bootstrap-production.ts` (plan catalog); new `tests/billing-webhook.test.ts` |
+| **DB migration** | Additive `stripe_billing`: `SubscriptionPlan.stripeProductId/stripePriceId`; `Organization.stripeCustomerId @unique, stripeSubscriptionId, subscriptionStatus (NONE\|TRIALING\|ACTIVE\|PAST_DUE\|CANCELED, default NONE), currentPeriodEnd, trialEndsAt`; model `BillingEvent { id, stripeEventId @unique, type, payload Json, processedAt }` for idempotency + forensic replay |
+| **Security** | Reject any webhook that fails `constructEvent` signature verification; idempotency by unique insert on `stripeEventId`; org linkage **only** via `metadata.organizationId` set server-side when the Checkout session is created — never from the client; prices resolved server-side; every subscription state change goes through `recordAudit`; test keys everywhere except the production env |
+| **Testing** | Stripe test mode + Stripe CLI (`stripe listen --forward-to localhost:3100/api/webhooks/stripe`): subscribe (4242), upgrade, `payment_failed`, cancel, trial expiry via test clocks; contract tests drive the webhook reducer with fixture payloads (event → org state transition table); duplicate-event test; cross-tenant test (org A cannot open org B's portal) |
+| **Rollback** | `BILLING_ENFORCEMENT=off` → app behaves exactly as today (plans informational); webhook route inert without `STRIPE_WEBHOOK_SECRET`; subscriptions cancelable from the Stripe dashboard; migration additive |
+| **Order** | migration → lib/stripe + plan sync → webhook reducer + idempotency (fixtures first) → checkout/portal + UI → trial fields/status surfaces → enforcement mode **last**, post-beta decision |
+| **Owner** | Stripe account + business verification (**takes days — start in week 1**); create/approve products & prices (test, then live); configure Customer Portal + branding; decide trial length (recommend 14 days) and Stripe Tax; register the production webhook URL; hold live keys until Phase F |
+| **Claude Code** | Full implementation and testing in test mode. Never handles live keys, never enables enforcement |
+
+### 13.3 Database — managed Postgres, PITR, pooling
+
+| | |
+|---|---|
+| **Recommended** | **Neon** — serverless Postgres 16, PITR to any second, and **DB branching**: every preview deployment gets a real isolated database, which is also how staging and restore drills work. Alternatives: Supabase (fine; more platform than needed), AWS RDS (revisit when steady load favors provisioned) |
+| **Env vars** | `DATABASE_URL` (pooled `-pooler` host — the app) · `DIRECT_URL` (direct — migrations only) |
+| **Files** | `prisma/schema.prisma` (add `directUrl = env("DIRECT_URL")`); `.env.example`; new `scripts/bootstrap-production.ts` (plan catalog + platform staff + nothing else — **the dev seed never runs in prod**); DR runbook section in this file |
+| **DB migration** | None structural — `prisma migrate deploy` replays the existing history onto the new instance |
+| **Security** | TLS (`sslmode=require`); app uses the pooled URL only; `DIRECT_URL` confined to the migration step (CI/release), not runtime; distinct passwords per environment; platform staff bootstrap forces MFA enrollment on first login |
+| **Testing** | Staging branch: migrate deploy + bootstrap + full smoke; **PITR drill**: restore to a branch, point a preview at it, verify row counts (satisfies §11.4); pooling sanity: 50 concurrent dashboard loads without connection exhaustion (Prisma on serverless is the classic failure — the pooled URL is the fix) |
+| **Rollback** | PITR restore to a fresh branch + repoint `DATABASE_URL` (RPO ≤ 15 min, RTO ≤ 4 h per §3); keep the old branch until verified; the additive-only migration policy (§7.43) keeps app rollbacks DB-safe |
+| **Order** | **First.** Everything else needs a database to point at |
+| **Owner** | Neon account/project (region near first customers — US East default); PITR retention 30 days; copy both URLs into Vercel; approve the restore-drill window |
+| **Claude Code** | Schema `directUrl`, bootstrap script, migration release step, runbook. Never runs destructive SQL against production |
+
+### 13.4 Hosting — Vercel, domain, DNS/SSL, secrets, environment separation
+
+| | |
+|---|---|
+| **Recommended** | **Vercel Pro** (native Next 15, preview per PR, instant rollback) + **Cloudflare** DNS (SPF/DKIM records live here; WAF/CDN per §2). Alternative: Railway/Fly single Docker image — the self-host seam (§7.40) |
+| **Env vars** | Full matrix in §16, entered per Vercel scope: Development / Preview / Production. `AUTH_SECRET` distinct per scope; `AUTH_TRUST_HOST=true`; `APP_BASE_URL` per scope. **Preview scope points at a Neon branch, never at prod** |
+| **Files** | `next.config.ts` (security headers: HSTS, `frame-ancestors 'none'`, nosniff, referrer-policy; CSP in report-only first); new `vercel.json` (region pin); `.env.example` completeness pass; README deploy section. **Vercel "Root Directory" must be `aerops/`** — the repo root is an umbrella |
+| **DB migration** | None |
+| **Security** | Absolute env separation (the Neon-branch-per-preview pattern makes prod-DB bleed structurally impossible — still audit it); secrets only in Vercel encrypted envs, 1Password/Doppler as source of truth (§3.13); secure cookies automatic on https; HSTS starts with a short max-age; rotating `AUTH_SECRET` logs everyone out — do it deliberately, not accidentally |
+| **Testing** | Staging deploy: full smoke (sign-up → org → book → dispatch → invoice → import → platform login → marketing pages); securityheaders.com scan; SSL + cookie-flag audit; explicit check that no preview env carries the prod `DATABASE_URL` |
+| **Rollback** | Vercel instant rollback (previous build stays warm); Cloudflare TTL 300 s during the launch window so DNS can be reverted in minutes |
+| **Order** | Immediately after Neon. Staging first; the production project stays dark until Phase E |
+| **Owner** | Domain purchase/transfer; Vercel team + repo connect + root directory; Cloudflare zone + nameservers; enter all secrets; approve DNS cutover (Phase F only) |
+| **Claude Code** | Headers, `vercel.json`, `.env.example`, runbooks, smoke scripts. Never enters real secrets, never triggers a production deploy |
+
+### 13.5 CI/CD, Sentry, uptime monitoring
+
+| | |
+|---|---|
+| **Recommended** | **GitHub Actions** (repo already on GitHub; suite is DB-free and sub-second) · **Sentry** (`@sentry/nextjs`, client+server+edge) · **BetterStack** (or UptimeRobot) on `/api/health` |
+| **Env vars** | CI: none. Sentry: `SENTRY_DSN` (runtime; absent → all wrappers no-op) · `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` (build-time source maps, GitHub secrets) · `SENTRY_ENVIRONMENT` per scope |
+| **Files** | New `.github/workflows/ci.yml` **at the repo root** (`working-directory: aerops`; `npm ci && npm test && npm run build`, `npm audit --audit-level=high`, later a Playwright smoke job against the preview URL); new `aerops/instrumentation.ts` + Sentry config files; `next.config.ts` wrapped with `withSentryConfig` (conditional on DSN); new `src/app/global-error.tsx`; `src/lib/logger.ts` (forward `error` level); `src/app/api/health/route.ts` (add DB round-trip + build version) |
+| **DB migration** | None |
+| **Security** | `beforeSend` scrubbing — cookies, auth headers, emails stripped; **tenant PII must never land in Sentry**; GitHub secrets least-privilege; pin action versions |
+| **Testing** | A deliberately failing PR proves CI blocks merge; thrown test errors (server + client) on staging arrive in Sentry with correct source maps; kill staging → uptime alert fires → restore |
+| **Rollback** | Unset `SENTRY_DSN` → no-op; delete the workflow file; monitors are external and read-only |
+| **Order** | **CI lands day one** — it needs no infrastructure. Sentry + uptime after staging exists |
+| **Owner** | Enable Actions; Sentry org/project + DSN + auth token; BetterStack monitor + alert contacts; decide who gets paged |
+| **Claude Code** | Workflow, Sentry wiring behind env checks, health-endpoint extension, alerting runbook |
+
+## 14. Launch checklist — Phases A–F
+
+Tag legend: **(owner)** manual console/DNS/money step · **(claude)** safe to
+implement on request · **(both)** paired. Every phase ends with an explicit
+exit criterion; no phase starts production traffic. **Hard rule carried from
+the session brief: no real customers, no live charges, no production email,
+no deploy until each is explicitly instructed.**
+
+### Phase A — Infrastructure Foundation *(blockers 3+4, CI head start · ≈1 week)*
+
+- [ ] A1 (owner) Neon project, PITR 30 d, copy pooled + direct URLs
+- [ ] A2 (claude) `directUrl` in schema · `.env.example` matrix · `scripts/bootstrap-production.ts`
+- [ ] A3 (claude) GitHub Actions CI (test + build per PR) as merge gate — day one
+- [ ] A4 (owner) Vercel team/project, **Root Directory `aerops/`**, staging env vars
+- [ ] A5 (owner) domain + Cloudflare zone (no cutover)
+- [ ] A6 (claude) security headers + `vercel.json`
+- [ ] A7 (both) staging deploy on a Neon branch: `migrate deploy` + bootstrap + smoke
+- [ ] A8 (claude) restore-drill runbook · (owner) schedule the drill
+
+**Exit:** staging URL serves AeroOps on an isolated branch DB; CI blocks red PRs.
+
+### Phase B — Auth & Email *(blocker 1 · ≈1 week)*
+
+- [ ] B1 (owner) Resend account, mail-subdomain DNS (DKIM/SPF/DMARC), domain verified
+- [ ] B2 (claude) `lib/email.ts` adapter + templates (console transport default)
+- [ ] B3 (claude) `email_tokens` migration + verify-email flow
+- [ ] B4 (claude) forgot/reset-password flow + session revocation on reset
+- [ ] B5 (claude) invitation / join-request / demo-request sends through the adapter
+- [ ] B6 (both) staging round-trip with the Resend **test** key
+- [ ] B7 (owner) approve enforcement flip on staging → (claude) flip + regression pass
+
+**Exit:** on staging, new sign-ups must verify; resets work; invites deliver.
+
+### Phase C — Billing *(blocker 2 · ≈1–2 weeks, overlaps D)*
+
+- [ ] C1 (owner) Stripe account + business verification — **start during Phase A**
+- [ ] C2 (claude) `stripe_billing` migration + `lib/stripe.ts` + plan sync
+- [ ] C3 (claude) webhook reducer + `BillingEvent` idempotency + fixture tests
+- [ ] C4 (claude) checkout/portal routes + org billing settings UI
+- [ ] C5 (owner) test-mode products/prices; Customer Portal + branding config
+- [ ] C6 (both) staging E2E: subscribe → upgrade → payment-fail → cancel (Stripe CLI + test clocks)
+- [ ] C7 (owner) decide trial length + Stripe Tax; **live keys stay unentered until Phase F**
+
+**Exit:** full subscription lifecycle green in test mode; `BILLING_ENFORCEMENT=off`.
+
+### Phase D — Observability & CI hardening *(blocker 5 · ≈3–4 days, overlaps C)*
+
+- [ ] D1 (owner) Sentry org/project · (claude) SDK wiring + PII scrubbing + source maps
+- [ ] D2 (claude) `/api/health` DB round-trip · (owner) BetterStack monitor + paging contacts
+- [ ] D3 (claude) `npm audit` in CI + Playwright smoke job against the preview URL
+- [ ] D4 (both) alarm drill: break staging → Sentry event + uptime page both fire
+
+**Exit:** a staging error pages a human with a readable stack trace within minutes.
+
+### Phase E — Pre-Launch Verification *(≈1 week)*
+
+- [ ] E1 security checklist (§12) executed top-to-bottom, boxes ticked in this file
+- [ ] E2 PITR restore drill executed and timed; result recorded (§11.4)
+- [ ] E3 Playwright golden path vs staging: sign-up → verify → create org → invite → book → dispatch → invoice → import → rollback
+- [ ] E4 denial + cross-tenant sweep re-run against staging (constitution behavior under prod config)
+- [ ] E5 load sanity: 50 concurrent users on dashboard/schedule inside ROADMAP p95 budgets
+- [ ] E6 headers/SSL/cookies scanned behind the real domain (test subdomain)
+- [ ] E7 production project stood up dark: envs entered (live keys still absent), prod DB migrated + bootstrapped, DNS staged at TTL 300
+- [ ] E8 rollback rehearsal: deploy → instant rollback → verify
+- [ ] E9 owner sign-off recorded here with date
+
+**Exit:** everything a customer touches is proven on staging; production is standing by, dark.
+
+### Phase F — Controlled Beta Launch *(only on explicit instruction, step by step)*
+
+- [ ] F1 (owner) DNS cutover → (both) immediate production smoke
+- [ ] F2 (owner) live Stripe keys + production webhook; one live checkout with a real card, immediately refunded, to prove the pipe
+- [ ] F3 (owner) enable production email; invite **5–10 friendly operators by hand** — public sign-up stays gated
+- [ ] F4 watch week: daily Sentry triage, uptime review, cost review; fix list worked down
+- [ ] F5 (owner) decision gate: open public sign-up; `BILLING_ENFORCEMENT` `warn` → `enforce`
+- [ ] F6 announce; post-launch cadence per §9 takes over
+
+## 15. Implementation sequence, risks & dependencies
+
+**Calendar shape (≈4 working weeks to "production standing by, dark"):**
+
+| Week | Work |
+|---|---|
+| 1 | Phase A (Neon → staging Vercel → CI day one) · **C1 Stripe verification submitted** |
+| 2 | Phase B (email flows on staging) |
+| 3 | Phase C + Phase D in parallel (billing test-mode; Sentry/uptime) |
+| 4 | Phase E (verification week) → **stop** — Phase F waits for explicit instruction |
+
+**Critical path:** Neon → staging → email → Phase E. Stripe is *off* the
+critical path: a beta can launch free/trial-only and flip enforcement later.
+
+**Dependencies:** B needs A (staging + DNS for DKIM). C needs A (staging,
+webhook URL) + C1 lead time. D needs A (somewhere to monitor). E needs B+C+D.
+F needs E + owner sign-off. CI (A3) depends on nothing — first thing to land.
+
+| Risk | Mitigation |
+|---|---|
+| Stripe business verification takes days–weeks | Submit in week 1 (C1); it's async to all code work |
+| Email deliverability ramp on a fresh domain | Mail subdomain, DMARC `p=none` first, warm gradually with beta invites before any volume |
+| DNS cutover surprises | TTL 300 during launch; test subdomain proven in E6; revert path is a nameserver record |
+| Preview env accidentally reaches prod DB | Neon branch-per-preview makes it structural; E-phase env audit double-checks |
+| Serverless Prisma connection exhaustion | Pooled URL only at runtime; load sanity gate E5; Prisma 6 pin unchanged |
+| Secret sprawl / rotation panic | One source of truth (1Password/Doppler); rotation runbook; `AUTH_SECRET` rotation acknowledged as a global logout |
+| Solo-operator bus factor | Every owner console step gets recorded in the runbook as performed, so it's reproducible |
+
+## 16. Environment variable matrix
+
+| Variable | Needed from | Stage | Secret | Purpose |
+|---|---|---|---|---|
+| `DATABASE_URL` | Phase A | all (per-stage values) | yes | Pooled Postgres URL (runtime) |
+| `DIRECT_URL` | Phase A | CI/release step only | yes | Direct URL for `migrate deploy` |
+| `AUTH_SECRET` | Phase A | all, distinct per stage | yes | NextAuth JWT signing |
+| `AUTH_TRUST_HOST` | Phase A | all | no | `true` behind Vercel/proxy |
+| `APP_BASE_URL` | Phase A | all | no | Absolute links (emails, webhooks) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional | prod | yes | OAuth seam (already env-gated) |
+| `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | optional | prod | yes | OAuth seam (already env-gated) |
+| `ANTHROPIC_API_KEY` | optional | prod | yes | Live LLM narration seam |
+| `RESEND_API_KEY` | Phase B | preview (test key) / prod | yes | Email adapter |
+| `EMAIL_FROM` / `EMAIL_REPLY_TO` | Phase B | preview / prod | no | Sender identity |
+| `EMAIL_ENABLED` | Phase B | all | no | `false` = console transport (rollback lever) |
+| `STRIPE_SECRET_KEY` | Phase C | preview (test) / prod (live, Phase F) | yes | Billing API |
+| `STRIPE_WEBHOOK_SECRET` | Phase C | preview / prod | yes | Webhook signature verification |
+| `BILLING_ENFORCEMENT` | Phase C | all | no | `off` \| `warn` \| `enforce` (rollback lever) |
+| `SENTRY_DSN` / `SENTRY_ENVIRONMENT` | Phase D | preview / prod | no | Error tracking (absent = no-op) |
+| `SENTRY_AUTH_TOKEN` + org/project | Phase D | CI only | yes | Source-map upload |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | post-launch | prod | yes | Distributed rate limiting (ROADMAP) |
+| `R2_*` (account, key, secret, buckets) | post-launch | prod | yes | Document uploads (ROADMAP) |
+
+Variables marked *post-launch* have no consumers in code yet — they land with
+their ROADMAP items and follow the same flag-off-by-default pattern.
