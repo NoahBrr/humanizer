@@ -134,6 +134,7 @@ These are decisions, not omissions ([DECISIONS.md](../architecture/DECISIONS.md)
 [NORTH_STAR.md](./NORTH_STAR.md) ·
 [PRODUCT_PRINCIPLES.md](./PRODUCT_PRINCIPLES.md) ·
 [CUSTOMER_ADVISORY_BOARD.md](./CUSTOMER_ADVISORY_BOARD.md) ·
+[ROLES_AND_WORKSPACES.md](./ROLES_AND_WORKSPACES.md) ·
 [../architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md) ·
 [../aviation/AVIATION_STANDARDS.md](../aviation/AVIATION_STANDARDS.md) ·
 [../../ROADMAP.md](../../ROADMAP.md) · [../../PRODUCTION.md](../../PRODUCTION.md)

@@ -206,25 +206,28 @@ export default async function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-1.5"><Bell className="h-4 w-4" /> Notification Channels</CardTitle>
+            <CardDescription>In-app notifications are live today. External delivery channels are on the roadmap — no configuration is required yet.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
-            <div className="flex items-center justify-between"><span>Email (SendGrid)</span><Badge tone="green">Connected</Badge></div>
-            <div className="flex items-center justify-between"><span>SMS (Twilio)</span><Badge tone="amber">Configure API key</Badge></div>
-            <div className="flex items-center justify-between"><span>Push notifications</span><Badge tone="green">Enabled</Badge></div>
+            <div className="flex items-center justify-between"><span>In-app notifications</span><Badge tone="green">Live</Badge></div>
+            <div className="flex items-center justify-between"><span>Email delivery</span><Badge tone="gray">Planned</Badge></div>
+            <div className="flex items-center justify-between"><span>SMS delivery</span><Badge tone="gray">Planned</Badge></div>
+            <div className="flex items-center justify-between"><span>Web push</span><Badge tone="gray">Planned</Badge></div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-1.5"><KeyRound className="h-4 w-4" /> Integrations & API</CardTitle>
+            <CardDescription>Payment and accounting integrations are on the roadmap. The public API is available today — manage keys under Developers.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-xs text-muted-foreground">
-            <div className="flex items-center justify-between"><span>Stripe payments</span><Badge tone="amber">Add secret key</Badge></div>
-            <div className="flex items-center justify-between"><span>QuickBooks sync</span><Badge tone="gray">Not connected</Badge></div>
-            <div className="flex items-center justify-between"><span>Aviation Weather (METAR/TAF)</span><Badge tone="green">Public feed</Badge></div>
+            <div className="flex items-center justify-between"><span>Stripe payments</span><Badge tone="gray">Planned</Badge></div>
+            <div className="flex items-center justify-between"><span>QuickBooks sync</span><Badge tone="gray">Planned</Badge></div>
+            <div className="flex items-center justify-between"><span>Aviation Weather (METAR/TAF)</span><Badge tone="amber">Simulated</Badge></div>
             <div className="flex items-center justify-between">
-              <span>API key</span>
-              <code className="rounded bg-muted px-2 py-0.5 font-mono text-[10px]">aero_live_••••••••••••</code>
+              <span>API keys</span>
+              <a href="/settings/developers" className="font-medium text-primary hover:underline">Manage in Developers →</a>
             </div>
           </CardContent>
         </Card>

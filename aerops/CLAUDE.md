@@ -201,6 +201,7 @@ territory moves.
 | [docs/engineering/ENGINEERING_HANDBOOK.md](./docs/engineering/ENGINEERING_HANDBOOK.md) | How code gets written, reviewed, released |
 | [docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md) | Eight reviewers + four executive roles (CEO, PM, Financial, Reliability) and their gates |
 | [docs/aviation/AVIATION_STANDARDS.md](./docs/aviation/AVIATION_STANDARDS.md) | Aviation-first domain rules (FAA terms, Hobbs/Tach, weather, compliance) |
+| [docs/company/ROLES_AND_WORKSPACES.md](./docs/company/ROLES_AND_WORKSPACES.md) | Role model, permission/sidebar/dashboard matrices, custom-role templates |
 | [CONSTITUTION.md](./CONSTITUTION.md) | Machine-enforced rules (`tests/constitution.test.ts`) |
 | [PRODUCTION.md](./PRODUCTION.md) | Launch plan, phases A–F, env matrix |
 | [ROADMAP.md](./ROADMAP.md) | Living backlog + session log |

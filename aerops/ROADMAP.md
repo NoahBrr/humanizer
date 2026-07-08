@@ -12,6 +12,39 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-08 — Phase 3: aviation roles & personalized
+workspaces. The dashboard is now role-aware — every section is gated by
+PERMISSION (never role name), so a viewer only receives data they can access:
+Student Pilots get a dedicated my-training workspace (My Upcoming Lessons +
+My Training: hours/next checkride/their own balance + Weather + their own
+notifications — never finance, fleet, org-wide ops, or another member's data);
+Finance Managers see finance and no ops board; Maintenance sees squawks+fleet
+and no finance; Dispatchers see ops+fleet and no finance; Owners/Admins see
+everything. Gating centralized in `lib/dashboard-access.ts` and pinned by
+`tests/role-visibility.test.ts` (nav + dashboard per role). Navigation was
+already permission-personalized; tightened `/mission-control` from
+`notifications.view`→`aircraft.view` so the ops wall no longer shows to Student
+Pilots or Finance. Role-aware framing (per-role dashboard eyebrow). Long-tail
+aviation roles (Assistant Chief, Independent Instructor, Ops Coordinator,
+Maintenance Technician, Registrar, Admissions, Front Office, TA, Safety
+Officer, Marketing, Read-Only Auditor) ship as custom-role TEMPLATES on the
+existing data-driven OrgRole system (`lib/role-templates.ts`) — no enum/auth
+migration. Governance: `docs/company/ROLES_AND_WORKSPACES.md` (Role/Permission/
+Sidebar/Dashboard matrices + CAB review). Settings made honest — unwired
+integrations (email/SMS/Stripe/QuickBooks) now read "Planned", weather
+"Simulated", API keys link to Developers. Verified: 167 tests, lint, tsc,
+build; live per-role dashboards+nav for all 6 base roles (0 console/hydration
+errors), student mobile (no overflow, no cross-member leak), screenshots +
+print + PDF. No schema/auth/tenant/billing change. Not deployed._
+
+_Deferred (Phase 3 follow-ups): dashboard widget drag-reorder + multiple saved
+layouts ("Morning Ops"/"Dispatch"/…) — the customization roadmap; seed
+`ROLE_TEMPLATES` as OrgRoles on org-create + a "add role from template" settings
+action; decouple CRM/Growth + Training from `students.manage` (dedicated
+`crm.*` permission) so Marketing/line-instructor nav is cleaner; give Dispatcher
+`billing.view` (has `billing.record_payments` but can't review Billing); a
+student-scoped billing surface ("what do I owe?")._
+
 _Last session update: 2026-07-07 — Sidebar refinement + app/marketing
 visual alignment. (1) Sidebar categories are now collapsible: each of the
 five section headers toggles its links, state persists per browser
