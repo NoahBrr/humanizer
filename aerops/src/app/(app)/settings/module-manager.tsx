@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Blocks, Workflow, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { apiErrorMessage } from "@/lib/utils";
 
 type ProfileOpt = { key: string; label: string; modules: string[]; active: boolean; inPlan: boolean };
 type AutomationOpt = { key: string; label: string; description: string; trigger: string; enabled: boolean };
@@ -20,12 +21,19 @@ export function ModuleManager({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
-    await fetch("/api/organization/profiles", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    setError(null);
+    const res = await fetch("/api/organization/profiles", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setBusy(false);
-    router.refresh();
+    if (res.ok) {
+      router.refresh();
+    } else {
+      const j = await res.json().catch(() => ({}));
+      setError(apiErrorMessage(j.error, "Could not update your module settings. Please try again."));
+    }
   }
 
   function toggleProfile(key: string, on: boolean) {
@@ -39,6 +47,8 @@ export function ModuleManager({
   }
 
   return (
+    <div className="space-y-3">
+    {error && <p className="text-xs font-medium text-destructive">{error}</p>}
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
@@ -99,6 +109,7 @@ export function ModuleManager({
           ))}
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }

@@ -170,6 +170,13 @@ export async function approveJoinRequest(
   if (request.status === "APPROVED") return { error: "Already approved." };
   if (request.user.organizationId) return { error: "This user already belongs to an organization." };
 
+  // A supplied primary location must belong to the org being joined — never
+  // trust a caller-supplied location id (prevents a dangling cross-org FK).
+  if (opts.locationId) {
+    const loc = await db.location.findFirst({ where: { id: opts.locationId, organizationId: request.organizationId }, select: { id: true } });
+    if (!loc) return { error: "That location is not part of this organization." };
+  }
+
   const role = opts.role ?? request.requestedRole;
   await db.$transaction(async (tx) => {
     await tx.user.update({

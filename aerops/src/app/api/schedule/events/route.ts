@@ -64,6 +64,19 @@ export async function POST(req: Request) {
 
   if (end <= start) return NextResponse.json({ error: "End must be after start" }, { status: 400 });
 
+  // Never trust body-supplied FKs: every referenced resource must belong to
+  // this org, or we'd store a dangling cross-tenant reference and leak the
+  // foreign row's name/tail back through the schedule read (tenant isolation).
+  const [okAircraft, okInstructor, okStudent, okLessonType] = await Promise.all([
+    data.aircraftId ? db.aircraft.findFirst({ where: { id: data.aircraftId, organizationId }, select: { id: true } }) : Promise.resolve(true),
+    data.instructorId ? db.instructor.findFirst({ where: { id: data.instructorId, user: { organizationId } }, select: { id: true } }) : Promise.resolve(true),
+    data.studentId ? db.student.findFirst({ where: { id: data.studentId, user: { organizationId } }, select: { id: true } }) : Promise.resolve(true),
+    data.lessonTypeId ? db.lessonType.findFirst({ where: { id: data.lessonTypeId, organizationId }, select: { id: true } }) : Promise.resolve(true),
+  ]);
+  if (!okAircraft || !okInstructor || !okStudent || !okLessonType) {
+    return NextResponse.json({ error: "One or more selected resources are not part of your organization." }, { status: 400 });
+  }
+
   const conflictInput = { organizationId, start, end, aircraftId: data.aircraftId, instructorId: data.instructorId, studentId: data.studentId };
   const conflicts = await detectConflicts(conflictInput);
   if (conflicts.length > 0) {

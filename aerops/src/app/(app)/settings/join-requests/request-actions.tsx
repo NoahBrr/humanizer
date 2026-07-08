@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { ROLE_LABELS } from "@/lib/rbac";
+import { apiErrorMessage } from "@/lib/utils";
 
 const ASSIGNABLE_ROLES = ["STUDENT", "INSTRUCTOR", "DISPATCHER", "MAINTENANCE", "ACCOUNTANT", "SCHOOL_ADMIN"] as const;
 
@@ -114,6 +115,7 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
   const [busy, setBusy] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // The shareable URL is returned once at creation and never stored, so it is
   // shown here exactly once for the admin to copy (ADR-020).
   const [freshUrl, setFreshUrl] = useState<string | null>(null);
@@ -125,6 +127,7 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
 
   async function create() {
     setBusy(true);
+    setError(null);
     const res = await fetch("/api/invite-links", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -138,16 +141,26 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
     });
     const data = await res.json().catch(() => null);
     setBusy(false);
-    setShowNew(false);
-    if (res.ok && data?.link?.url) setFreshUrl(`${window.location.origin}${data.link.url}`);
-    router.refresh();
+    if (res.ok && data?.link?.url) {
+      setShowNew(false);
+      setFreshUrl(`${window.location.origin}${data.link.url}`);
+      router.refresh();
+    } else {
+      setError(apiErrorMessage(data?.error, "Could not create the invite link. Please review the fields and try again."));
+    }
   }
 
   async function revoke(id: string) {
     setBusy(true);
-    await fetch("/api/invite-links", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    setError(null);
+    const res = await fetch("/api/invite-links", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     setBusy(false);
-    router.refresh();
+    if (res.ok) {
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(apiErrorMessage(data?.error, "Could not revoke this invite link. Please try again."));
+    }
   }
 
   function copyFresh() {
@@ -163,6 +176,8 @@ export function InviteLinksManager({ links }: { links: LinkRow[] }) {
         <p className="text-sm font-semibold">Invite links</p>
         <Button size="sm" variant="outline" onClick={() => setShowNew(!showNew)}><Plus className="h-3.5 w-3.5" /> New link</Button>
       </div>
+
+      {error && <p className="text-xs font-medium text-destructive">{error}</p>}
 
       {freshUrl && (
         <div className="rounded-lg border border-brand-royal/30 bg-brand-royal/5 p-3">

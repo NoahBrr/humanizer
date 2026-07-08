@@ -243,7 +243,10 @@ time zones stored-not-applied — triage next session._
 | Named migrations, deploy via `prisma migrate deploy` | Complete | — | — | |
 | Managed Postgres + point-in-time recovery | Not Started | Critical | S | Neon / Supabase / RDS — PRODUCTION.md compares |
 | Connection pooling for serverless (PgBouncer / Prisma Accelerate) | Not Started | Critical | S | Required on Vercel |
-| Nightly rollups for platform analytics | Not Started | Medium | M | Customer-success reads flagged as future hot path |
+| Nightly rollups for platform analytics | Not Started | Medium | M | Customer-success reads flagged as future hot path; platform dashboard fans out 12×N count/aggregate queries (bug-sweep P4, staff-only) |
+| Indexes for hot date-windowed aggregates: `Payment.paidAt`, `Dispatch(status, closedAt)` | Not Started | Medium | S | Bug-sweep P2: revenue/utilization sums (dashboard/executive/reports/ops/mission-control) filter unindexed date cols; additive, ADR-015-compliant |
+| Bound the maintenance-page work-order read | Not Started | Medium | S | Bug-sweep P3: `maintenanceOrder.findMany` is unbounded (loads full history every load); split into active-status query + `take`-limited history + a MTD-cost `aggregate` (keep the sum exact) |
+| Add `take` to slow-growing detail lists | Not Started | Low | S | Bug-sweep P5: `students/[id]` lessonRecords, `documents`, `aircraft/[id]` documents fetch all-time |
 | Retention/sweeper jobs (soft-deleted orgs, old login events) | Not Started | Low | M | |
 
 ## Production Deployment
@@ -319,6 +322,7 @@ time zones stored-not-applied — triage next session._
 | Tenant-scoped uniqueness (Aircraft.tailNumber, Invoice.number → per-org) | Complete | — | — | Phase 1C; two orgs may share a tail/invoice number; import dup-detection now org-scoped |
 | createdAt on all org-owned models + schema-governance drift tests | Complete | — | — | Phase 1C; 5 models gained createdAt; convention machine-enforced |
 | Per-org invoice-number sequence (replace `Date.now().slice(-8)`) | Not Started | Medium | S | Same-ms within-org collision risk + ~27.7h wraparound (both pre-existing); Financial Reviewer recommendation |
+| Impersonation audit attribution: full-access mutations record the platform operator, not the target user | Not Started | Medium | S | Bug-sweep S2 (needs a decision — see report): mutating routes' `recordAudit(actorUserId: session.userId,…)` uses the impersonated user's identity; centralize actor resolution so writes during a `readOnly:false` support session attribute the operator + "(impersonating X)". Start/stop bracket already carries the operator |
 | Global airframe registry / cross-operator airframe history | Not Started | Low | L | Aviation Reviewer gap: airframe time/logbook follow the airframe, not the operator; consent-gated, keyed on N-number+serial, never per-org tail |
 | Org-scope `demo-generator` tail-collision `findMany` | Not Started | Low | S | Pre-existing unscoped read (harmless — demo seeding only); Security Reviewer follow-up |
 | Extend `wipeOrganizationData` to clear ApiKey/Webhook/MissionControlScene/PlatformNote/LoginEvent on restore | Not Started | Low | S | Phase 1C reviewers (Architect/DB/QA): snapshot restore leaves stale integration config (org row survives → cascade doesn't fire) |

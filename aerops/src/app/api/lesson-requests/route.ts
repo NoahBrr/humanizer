@@ -26,6 +26,15 @@ export async function POST(req: Request) {
   const body = createSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
 
+  // Referenced resources must belong to this org — don't trust body FKs.
+  const [okLessonType, okInstructor] = await Promise.all([
+    body.data.lessonTypeId ? db.lessonType.findFirst({ where: { id: body.data.lessonTypeId, organizationId: session.organizationId }, select: { id: true } }) : Promise.resolve(true),
+    body.data.instructorId ? db.instructor.findFirst({ where: { id: body.data.instructorId, user: { organizationId: session.organizationId } }, select: { id: true } }) : Promise.resolve(true),
+  ]);
+  if (!okLessonType || !okInstructor) {
+    return NextResponse.json({ error: "One or more selected resources are not part of your organization." }, { status: 400 });
+  }
+
   const request = await db.lessonRequest.create({
     data: {
       organizationId: session.organizationId,

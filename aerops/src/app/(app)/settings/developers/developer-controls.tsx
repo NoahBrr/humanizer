@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { apiErrorMessage } from "@/lib/utils";
 
 type KeyRow = { id: string; name: string; prefix: string; scopes: string[]; readOnly: boolean; revoked: boolean; lastUsedAt: string | null };
 type HookRow = { id: string; url: string; events: string[]; isActive: boolean };
@@ -23,36 +24,45 @@ export function DeveloperControls({ keys, hooks, webhookEvents }: { keys: KeyRow
   const [hookEvents, setHookEvents] = useState<string[]>(["flight.closed"]);
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [hookError, setHookError] = useState<string | null>(null);
 
   async function createKey() {
     setBusy(true);
+    setKeyError(null);
     const res = await fetch("/api/developer/keys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: keyName, scopes: readOnly ? DEFAULT_SCOPES : [...DEFAULT_SCOPES, "schedule.create", "schedule.edit"], readOnly }),
     });
-    const j = await res.json();
+    const j = await res.json().catch(() => ({}));
     setBusy(false);
     if (res.ok) { setNewKey(j.key); setKeyName(""); router.refresh(); }
+    else setKeyError(apiErrorMessage(j.error, "Could not create the API key. Please try again."));
   }
 
   async function createHook() {
     setBusy(true);
+    setHookError(null);
     const res = await fetch("/api/developer/webhooks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: hookUrl, events: hookEvents }),
     });
-    const j = await res.json();
+    const j = await res.json().catch(() => ({}));
     setBusy(false);
     if (res.ok) { setNewSecret(j.secret); setHookUrl(""); router.refresh(); }
+    else setHookError(apiErrorMessage(j.error, "Could not register the webhook. Please check the URL and try again."));
   }
 
   async function del(url: string, id: string) {
+    const setErr = url.includes("/webhooks") ? setHookError : setKeyError;
     setBusy(true);
-    await fetch(url, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    setErr(null);
+    const res = await fetch(url, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     setBusy(false);
-    router.refresh();
+    if (res.ok) { router.refresh(); }
+    else { const j = await res.json().catch(() => ({})); setErr(apiErrorMessage(j.error, "Could not remove this. Please try again.")); }
   }
 
   function copy(text: string, tag: string) {
@@ -92,6 +102,7 @@ export function DeveloperControls({ keys, hooks, webhookEvents }: { keys: KeyRow
               )}
             </div>
           ))}
+          {keyError && <p className="text-xs font-medium text-destructive">{keyError}</p>}
         </CardContent>
       </Card>
 
@@ -131,6 +142,7 @@ export function DeveloperControls({ keys, hooks, webhookEvents }: { keys: KeyRow
               <Button variant="ghost" size="sm" className="h-6 px-1.5 text-destructive" disabled={busy} onClick={() => del("/api/developer/webhooks", h.id)}><Trash2 className="h-3 w-3" /></Button>
             </div>
           ))}
+          {hookError && <p className="text-xs font-medium text-destructive">{hookError}</p>}
         </CardContent>
       </Card>
     </div>

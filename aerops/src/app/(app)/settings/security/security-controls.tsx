@@ -6,6 +6,7 @@ import { ShieldCheck, KeyRound, MonitorOff, Loader2, Copy, Check } from "lucide-
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { apiErrorMessage } from "@/lib/utils";
 
 /** Self-service security controls: MFA enrollment, password change, logout-all. */
 export function SecurityControls({ mfaEnabled }: { mfaEnabled: boolean }) {
@@ -23,7 +24,12 @@ export function SecurityControls({ mfaEnabled }: { mfaEnabled: boolean }) {
     setMsg(null);
     const res = await fetch("/api/security/mfa", { method: "POST" });
     setBusy(false);
-    if (res.ok) setEnroll(await res.json());
+    if (res.ok) {
+      setEnroll(await res.json());
+    } else {
+      const j = await res.json().catch(() => ({}));
+      setMsg({ kind: "err", text: apiErrorMessage(j.error, "Could not start MFA enrollment. Please try again.") });
+    }
   }
 
   async function confirmEnroll() {

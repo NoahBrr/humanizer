@@ -17,6 +17,11 @@ const closeSchema = z.object({
   squawk: z.object({ title: z.string().min(3), description: z.string().optional(), severity: z.enum(["GROUNDING", "MAJOR", "MINOR"]) }).nullish(),
 });
 
+/** Thrown inside the closeout transaction when the atomic RELEASED→CLOSED
+ *  claim matches no row — i.e. a concurrent request already closed it. It
+ *  aborts the transaction so nothing is billed or metered a second time. */
+class DispatchAlreadyClosed extends Error {}
+
 /**
  * Close out a flight: compute billable time from hobbs, roll the aircraft
  * meters forward, log pilot time, generate the invoice, and update the
@@ -57,9 +62,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
 
   try {
-    const [closed] = await db.$transaction([
-      db.dispatch.update({
-        where: { id },
+    const closed = await db.$transaction(async (tx) => {
+      // Atomic claim: flip RELEASED→CLOSED as a guarded updateMany. Only the
+      // request that actually transitions the row proceeds; a concurrent
+      // double-submit matches zero rows here and aborts the transaction, so
+      // the invoice, balance decrement, and meter increments happen exactly
+      // once (idempotent closeout — do-not-break rule 5).
+      const claim = await tx.dispatch.updateMany({
+        where: { id, status: "RELEASED" },
         data: {
           status: "CLOSED",
           closedAt: new Date(),
@@ -73,10 +83,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           dualReceived: isDual ? flightTime : null,
           dualGiven: isDual ? flightTime : null,
           picTime: isDual ? null : flightTime,
-          scheduleEvent: { update: { status: "COMPLETED" } },
         },
-      }),
-      db.aircraft.update({
+      });
+      if (claim.count === 0) throw new DispatchAlreadyClosed();
+
+      if (dispatch.scheduleEvent) {
+        await tx.scheduleEvent.update({ where: { id: dispatch.scheduleEvent.id }, data: { status: "COMPLETED" } });
+      }
+
+      await tx.aircraft.update({
         where: { id: dispatch.aircraftId },
         data: {
           currentHobbs: data.hobbsIn,
@@ -84,65 +99,66 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           engineTimeSmoh: { increment: flightTime },
           propTimeSpoh: { increment: flightTime },
         },
-      }),
-      ...(dispatch.studentId
-        ? [
-            db.student.update({
-              where: { id: dispatch.studentId },
-              data: {
-                totalHours: { increment: flightTime },
-                ...(isDual ? {} : { soloHours: { increment: flightTime } }),
-                accountBalance: { decrement: charges.total },
-              },
-            }),
-            db.invoice.create({
-              data: {
-                organizationId: session.organizationId,
-                studentId: dispatch.studentId,
-                number: invoiceNumber,
-                status: "OPEN",
-                dueAt: new Date(Date.now() + 14 * 86_400_000),
-                lines: {
-                  create: [
-                    {
-                      kind: "AIRCRAFT_RENTAL",
-                      description: `${dispatch.aircraft.tailNumber} rental (wet) — ${flightTime.toFixed(1)} hrs`,
-                      quantity: flightTime,
-                      unitPrice: dispatch.aircraft.hourlyRateWet,
-                    },
-                    ...(isDual
-                      ? [{
-                          kind: "INSTRUCTOR_TIME" as const,
-                          description: `Flight instruction — ${charges.instructorHours.toFixed(1)} hrs`,
-                          quantity: charges.instructorHours,
-                          unitPrice: dispatch.instructor!.hourlyRate,
-                        }]
-                      : []),
-                  ],
+      });
+
+      if (dispatch.studentId) {
+        await tx.student.update({
+          where: { id: dispatch.studentId },
+          data: {
+            totalHours: { increment: flightTime },
+            ...(isDual ? {} : { soloHours: { increment: flightTime } }),
+            accountBalance: { decrement: charges.total },
+          },
+        });
+        await tx.invoice.create({
+          data: {
+            organizationId: session.organizationId,
+            studentId: dispatch.studentId,
+            number: invoiceNumber,
+            status: "OPEN",
+            dueAt: new Date(Date.now() + 14 * 86_400_000),
+            lines: {
+              create: [
+                {
+                  kind: "AIRCRAFT_RENTAL",
+                  description: `${dispatch.aircraft.tailNumber} rental (wet) — ${flightTime.toFixed(1)} hrs`,
+                  quantity: flightTime,
+                  unitPrice: dispatch.aircraft.hourlyRateWet,
                 },
-              },
-            }),
-          ]
-        : []),
-      ...(data.squawk
-        ? [
-            db.squawk.create({
-              data: { aircraftId: dispatch.aircraftId, title: data.squawk.title, description: data.squawk.description, severity: data.squawk.severity },
-            }),
-            db.notification.create({
-              data: {
-                organizationId: session.organizationId,
-                kind: "SQUAWK_REPORTED",
-                title: `New squawk on ${dispatch.aircraft.tailNumber}`,
-                body: data.squawk.title,
-              },
-            }),
-            ...(data.squawk.severity === "GROUNDING"
-              ? [db.aircraft.update({ where: { id: dispatch.aircraftId }, data: { status: "GROUNDED" } })]
-              : []),
-          ]
-        : []),
-    ]);
+                ...(isDual
+                  ? [{
+                      kind: "INSTRUCTOR_TIME" as const,
+                      description: `Flight instruction — ${charges.instructorHours.toFixed(1)} hrs`,
+                      quantity: charges.instructorHours,
+                      unitPrice: dispatch.instructor!.hourlyRate,
+                    }]
+                  : []),
+              ],
+            },
+          },
+        });
+      }
+
+      if (data.squawk) {
+        await tx.squawk.create({
+          data: { aircraftId: dispatch.aircraftId, title: data.squawk.title, description: data.squawk.description, severity: data.squawk.severity },
+        });
+        await tx.notification.create({
+          data: {
+            organizationId: session.organizationId,
+            kind: "SQUAWK_REPORTED",
+            title: `New squawk on ${dispatch.aircraft.tailNumber}`,
+            body: data.squawk.title,
+          },
+        });
+        if (data.squawk.severity === "GROUNDING") {
+          await tx.aircraft.update({ where: { id: dispatch.aircraftId }, data: { status: "GROUNDED" } });
+        }
+      }
+
+      // Return the freshly-closed row for the response payload.
+      return tx.dispatch.findUniqueOrThrow({ where: { id } });
+    });
 
     await recordAudit({
       organizationId: session.organizationId,
@@ -163,6 +179,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     return NextResponse.json({ dispatch: closed, flightTime, total: charges.total });
   } catch (e) {
+    if (e instanceof DispatchAlreadyClosed) {
+      return NextResponse.json({ error: "This dispatch has already been closed." }, { status: 409 });
+    }
     logger.error("dispatch close failed", { dispatchId: id, error: String(e) });
     return NextResponse.json({ error: "The closeout could not be saved. Nothing was billed — please try again." }, { status: 500 });
   }
