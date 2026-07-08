@@ -253,7 +253,17 @@ npm run seed            # reset demo data (TRUNCATE CASCADE — wipes runtime ro
 npm start -- -p 3100    # production server used for verification
 node scripts/capture-marketing.mjs  # refresh marketing/print screenshots
 node scripts/verify-print.mjs       # verify homepage print render + PDF export
+node scripts/verify-portal.mjs      # assert the RENDERED authed app matches the build (stale-server guard)
 ```
+
+**Confirming a UI change reached the portal:** `next start` never hot-reloads,
+and a leftover `next-server` process (whose name doesn't match
+`pkill -f "next start"`) will silently serve *old* code — the #1 cause of
+"the change was committed but the portal looks unchanged." After a UI change:
+`rm -rf .next && npm run build`, kill every `next-server`/`next start` PID (not
+just `next start`), start fresh, then run `node scripts/verify-portal.mjs`. It
+prints the on-disk BUILD_ID and asserts the rendered sidebar/dashboard/settings
+markers, failing loudly on stale output rather than passing a false positive.
 
 `next start` runs in production mode, so the :3100 verification server needs
 a real `AUTH_SECRET` in `.env` (`openssl rand -base64 32`) — the committed
