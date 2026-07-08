@@ -8,6 +8,11 @@ Built with Next.js 15 (App Router), TypeScript, Tailwind CSS 4, Prisma, and
 PostgreSQL. UI patterned after modern enterprise tools: command palette (⌘K),
 dark/light mode, keyboard-friendly, responsive.
 
+**New contributor?** Read [CONTRIBUTING.md](./CONTRIBUTING.md) and
+[docs/engineering/DEVELOPER_ONBOARDING.md](./docs/engineering/DEVELOPER_ONBOARDING.md)
+first — clone/install/run, the commands that must stay green, branch/PR rules,
+and the no-deploy rule.
+
 **Working on the code?** Start with [CLAUDE.md](./CLAUDE.md) (session
 operating system), [CONSTITUTION.md](./CONSTITUTION.md) (enforced rules),
 and the governance library in [docs/](./docs/) — architecture, ADRs,

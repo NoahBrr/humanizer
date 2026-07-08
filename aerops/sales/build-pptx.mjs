@@ -5,7 +5,7 @@ import { SLIDES, VARIANTS } from "./deck-slides.mjs";
 
 import { fileURLToPath } from "url";
 const APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const NAVY = "0B2447", ROYAL = "1E63D0", SKY = "38A1E8", SLATE = "5B6B7E", INK = "0B2447", LINE = "E4E9F1";
+const NAVY = "0B2447", ROYAL = "1E63D0", SKY = "38A1E8", SLATE = "5B6B7E", LINE = "E4E9F1";
 const FONT = "Arial";
 
 function imgPath(ref) {
