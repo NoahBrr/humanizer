@@ -1,0 +1,81 @@
+<!doctype html><html><head><meta charset="utf-8"/><style>
+*{box-sizing:border-box;}
+@page{size:letter;margin:0;}
+html,body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0b2447;font-size:11.2px;line-height:1.5;}
+.page{padding:0 0 60px;}
+.band{background:radial-gradient(120% 160% at 0% 0%,#143063,#0b2447);color:#fff;padding:26px 54px 22px;display:flex;align-items:center;justify-content:space-between;}
+.band .wm{font-size:19px;font-weight:800;letter-spacing:1.5px;}
+.band .wm span{color:#38a1e8;}
+.band .doc{font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#9fc0e8;}
+.body{padding:30px 54px 0;}
+h1{font-size:26px;font-weight:800;letter-spacing:-.5px;margin:2px 0 4px;}
+h2{font-size:17px;font-weight:750;color:#0b2447;margin:20px 0 6px;}
+h3{font-size:13px;font-weight:700;color:#1e63d0;margin:16px 0 4px;letter-spacing:.2px;}
+p{margin:7px 0;color:#243247;}
+strong{color:#0b2447;font-weight:700;}
+ul{margin:7px 0 7px 2px;padding-left:18px;}
+li{margin:4px 0;color:#243247;}
+li::marker{color:#38a1e8;}
+hr{border:none;border-top:1px solid #e4e9f1;margin:16px 0;}
+code{background:#eef2f8;border-radius:4px;padding:1px 5px;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#154aa0;}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:10.4px;}
+th{background:#0b2447;color:#fff;text-align:left;padding:8px 10px;font-weight:600;font-size:10px;}
+td{border:1px solid #e4e9f1;padding:7px 10px;vertical-align:top;}
+tbody tr:nth-child(even){background:#f7f9fc;}
+.foot{position:fixed;bottom:0;left:0;right:0;padding:12px 54px;display:flex;justify-content:space-between;font-size:9.5px;color:#8b98a9;border-top:1px solid #eef2f8;background:#fff;}
+.foot b{color:#0b2447;}
+</style></head><body>
+  <div class="page">
+    <div class="band"><span class="wm">AERO<span>OPS</span></span><span class="doc">Objection Handling</span></div>
+    <div class="body"><h1>AeroOps — Objection-Handling Guide</h1>
+<p><strong>For:</strong> anyone in a sales conversation with a flight school, club, university, FBO, maintenance shop, or corporate flight department.</p>
+<p><strong>The one rule:</strong> never overclaim. A six-figure buyer tests claims, and one caught exaggeration discounts everything else you said. When a capability is on the roadmap, say <strong>"on the roadmap"</strong> and show the seam. Honesty is not a weakness in this deck — it's the differentiator, because our whole pitch is <em>a system you can trust.</em></p>
+<p><strong>How to use each entry:</strong> understand the <em>real</em> concern under the objection, respond in 2–4 sentences grounded in a capability that actually ships, then <strong>show the proof</strong> in the live demo.</p>
+<hr/>
+<h2>1. "We already use Flight Circle / Flight Schedule Pro."</h2>
+<p><strong>The real concern:</strong> switching cost and risk. They've invested time; the incumbent works "well enough."</p>
+<p><strong>Response:</strong> &gt; "Good — then you already know what a scheduler feels like, and we're not asking you to relearn that. The question is what happens <em>after</em> the flight: does your current tool turn a closeout into an invoice, a logbook entry, and a squawk in one motion, or do those live in separate places where things fall through the cracks? That gap is where un-billed flights and lapsed inspections come from. And you don't have to guess — our Import Center reads Flight Circle and FSP exports directly, so you can trial us on your real data and roll it back if you don't like it."</p>
+<p><strong>Proof to show:</strong> The dispatch closeout (<code>/dispatch</code>) generating the invoice on <code>/billing</code> and the squawk on <code>/maintenance</code> without touching either — then <code>/import</code> showing the Flight Circle / FSP source presets and the rollback.</p>
+<hr/>
+<h2>2. "It costs too much."</h2>
+<p><strong>The real concern:</strong> they can't see the ROI, or they're comparing a price to $0 (the spreadsheet).</p>
+<p><strong>Response:</strong> &gt; "The honest frame isn't features versus price — it's leakage versus price. One dual instructional flight a week that flies and never gets billed is more revenue than a subscription costs, and our closeout makes that specific leak <em>structurally impossible</em> — the flight can't close without producing the invoice. Add the inspection you don't overrun and the checkride you don't lose to a missing endorsement, and the tool pays for itself before it's convenient."</p>
+<p><strong>Proof to show:</strong> The atomic closeout on <code>/dispatch</code> (invoice + meters + hours + balance in one transaction), and the <code>/executive</code> view where revenue and AR aging are visible at a glance.</p>
+<hr/>
+<h2>3. "Our instructors won't learn a new system."</h2>
+<p><strong>The real concern:</strong> change fatigue and lost billable time during a rollout.</p>
+<p><strong>Response:</strong> &gt; "Your instructors learn exactly one screen: dispatch. Release a flight with a checklist, close it out with the Hobbs reading — that's their entire interaction, and it's fewer steps than juggling a scheduling app, a paper dispatch binder, and a separate invoice. Everything downstream — billing, the logbook hours, the squawk — happens off that one closeout. And because students self-serve their own schedule and progress, your CFIs actually field <em>fewer</em> interruptions, not more."</p>
+<p><strong>Proof to show:</strong> The single closeout action on <code>/dispatch</code>, then the student's self-service world (log in as <code>student@aerops.demo</code>) so they see the CFI isn't the help desk.</p>
+<hr/>
+<h2>4. "We don't want another piece of software."</h2>
+<p><strong>The real concern:</strong> tool sprawl — they already stitch together three apps and a spreadsheet, and dread a fourth.</p>
+<p><strong>Response:</strong> &gt; "That's exactly the problem we exist to end — AeroOps is meant to <em>remove</em> software, not add to the pile. Scheduling, dispatch, maintenance, training, and billing are one data model here, so the schedule already knows the airplane is grounded and the invoice already knows the flight closed. The goal is that you retire the scheduling app, the maintenance spreadsheet, and the billing workaround, and run the operation from one place where the parts actually talk to each other."</p>
+<p><strong>Proof to show:</strong> The dashboard's single "Needs attention" triage (<code>/dashboard</code>) pulling squawks, maintenance, checkrides, and activity from one system — and the closeout proving those surfaces share data, not sync it.</p>
+<hr/>
+<h2>5. "We've always done it this way."</h2>
+<p><strong>The real concern:</strong> the current process feels safe because it's known; change feels like risk to a working operation.</p>
+<p><strong>Response:</strong> &gt; "Respect for that — a process that's kept you flying safely is worth something, and we're not asking you to change how you <em>operate</em>, only where the record lives. The risk in 'the way it's always been done' is the information that exists but isn't connected: the squawk that didn't reach the scheduler, the endorsement nobody checked before the checkride. AeroOps makes the <em>connected</em> version the easy version — the safe, compliant path becomes the path of least resistance, not extra work."</p>
+<p><strong>Proof to show:</strong> The airworthiness gate blocking a release on <code>/dispatch</code> (the system enforcing what a person used to have to remember), and the audit trail underneath every action.</p>
+<hr/>
+<h2>6. "What about our existing data?"</h2>
+<p><strong>The real concern:</strong> the incumbent is holding their data hostage; migration horror stories.</p>
+<p><strong>Response:</strong> &gt; "This is the fear we built directly into the product, because it's the number-one reason people stay on a tool they've outgrown. The Import Center takes exports from Flight Circle, Flight Schedule Pro, FlightLogger, QuickBooks and more — students, aircraft with Hobbs/Tach and rates, schedules, maintenance, invoices, and balances. You map the columns once, run a <em>test</em> import that uses the identical code path but rolls itself back so the preview is the truth, then commit — and every record we create is tracked, so a full rollback is one action. Nothing is silent: any row that can't import comes back with a reason and a downloadable failed-row file."</p>
+<p><strong>Proof to show:</strong> <code>/import</code> — the source presets, the test/commit/rollback flow, and the failed-row handling.</p>
+<p><em>(Honesty note: importing endorsements, training records, and document metadata is on the roadmap; the core operational and financial data types ship today.)</em></p>
+<hr/>
+<h2>7. "Is our data secure? Who can see what?"</h2>
+<p><strong>The real concern:</strong> multi-tenant anxiety (can another org see us?) and internal access control (can a student see the P&amp;L?).</p>
+<p><strong>Response:</strong> &gt; "Two separate guarantees, both enforced by construction. Tenant isolation: your organization's scope comes from the authenticated session, never from the browser, so one org's data cannot be queried by another — it's not a policy, it's how every query is built. Internal access: the app authorizes on <em>permissions</em>, not job titles, on every page and every API route — a student literally cannot load the billing route, and a dispatcher sees operations but not the org's finances. And every change is written to an immutable audit trail: who did what, when, never rewritten."</p>
+<p><strong>Proof to show:</strong> Log in as <code>student@aerops.demo</code> vs. <code>admin@aerops.demo</code> side by side — the student's dedicated workspace with no finance, fleet, or other-student data — then reference the audit trail behind the closeout you ran earlier.</p>
+<hr/>
+<h2>8. "What if you go out of business?"</h2>
+<p><strong>The real concern:</strong> vendor risk — they don't want to be stranded with their operation trapped in a dead product.</p>
+<p><strong>Response:</strong> &gt; "Fair question, and the answer is that your data is never hostage to us the way it is to your current vendor — which is exactly why we built export and rollback in from day one. You can pull your data out in clean, structured form, and the audit trail and records are yours. We'd rather earn the renewal every year by being the system you <em>want</em> to run on than lock you in by making leaving painful. The honest posture is: we're an early-stage company in a controlled beta, we tell you that plainly, and we de-risk it by never trapping your data."</p>
+<p><strong>Proof to show:</strong> The Import Center's export/rollback mechanics on <code>/import</code> (the same machinery that gets data <em>in</em> respects getting it <em>out</em>), and be candid about company stage — buyers trust the vendor who volunteers the risk.</p>
+<hr/>
+<h2>Quick-reference: objection → anchor capability</h2>
+<table><thead><tr><th>Objection</th><th>Anchor (all shipped unless noted)</th></tr></thead><tbody><tr><td>Already use a competitor</td><td>Import Center with rollback + dispatch→invoice atomicity</td></tr><tr><td>Costs too much</td><td>Closeout makes billing leakage structurally impossible</td></tr><tr><td>Instructors won't learn it</td><td>One screen (dispatch); student self-service reduces CFI load</td></tr><tr><td>Don't want more software</td><td>One data model replacing 3 apps + a spreadsheet</td></tr><tr><td>Always done it this way</td><td>Airworthiness gate + audit trail enforce the safe path</td></tr><tr><td>Existing data</td><td>Import Center: map → test (rolled back) → commit → rollback manifest</td></tr><tr><td>Security / who sees what</td><td>Session-scoped tenant isolation + permission-gated RBAC + audit trail</td></tr><tr><td>What if you fold</td><td>Structured export + rollback; data never held hostage; honest about stage</td></tr></tbody></table>
+<p><strong>Roadmap items to never misrepresent:</strong> customer card payments online (Stripe Connect), live METAR/TAF weather (simulated today), transactional email (invites shown in-app today), document file uploads (metadata-only today), cross-location/cohort reporting roll-ups. Say <strong>"on the roadmap"</strong> — and show the seam where it plugs in.</p></div>
+  </div>
+  <div class="foot"><span>AeroOps — The Operating System for Aviation</span><span><b>aerops.io</b> · Request a demo</span></div>
+  </body></html>

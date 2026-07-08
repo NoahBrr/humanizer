@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="wbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7f9fc"/>
+      <stop offset="100%" stop-color="#eef2f8"/>
+    </linearGradient>
+    <linearGradient id="atomic" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e63d0"/>
+      <stop offset="100%" stop-color="#154aa0"/>
+    </linearGradient>
+    <filter id="wsoft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#0b2447" flood-opacity="0.14"/>
+    </filter>
+    <marker id="arw" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#38a1e8"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="420" rx="20" fill="url(#wbg)"/>
+  <text x="48" y="58" fill="#0b2447" font-size="24" font-weight="800">One motion, not five tools</text>
+  <text x="48" y="86" fill="#5b6b7e" font-size="15" font-weight="500">Closing a flight moves the meters, the ledger, and the invoice — in a single transaction.</text>
+
+  <!-- steps -->
+  <g font-weight="700" font-size="15" text-anchor="middle">
+    <g filter="url(#wsoft)"><rect x="48" y="150" width="150" height="86" rx="14" fill="#ffffff" stroke="#dbe3ee"/></g>
+    <text x="123" y="188" fill="#0b2447">Book</text>
+    <text x="123" y="210" fill="#7186a0" font-size="12" font-weight="500">conflict-checked</text>
+
+    <g filter="url(#wsoft)"><rect x="246" y="150" width="150" height="86" rx="14" fill="#ffffff" stroke="#dbe3ee"/></g>
+    <text x="321" y="188" fill="#0b2447">Release</text>
+    <text x="321" y="210" fill="#7186a0" font-size="12" font-weight="500">pre-flight check</text>
+
+    <g filter="url(#wsoft)"><rect x="444" y="150" width="150" height="86" rx="14" fill="#ffffff" stroke="#dbe3ee"/></g>
+    <text x="519" y="188" fill="#0b2447">Fly</text>
+    <text x="519" y="210" fill="#7186a0" font-size="12" font-weight="500">Hobbs / Tach</text>
+
+    <g filter="url(#wsoft)"><rect x="642" y="150" width="150" height="86" rx="14" fill="#ffffff" stroke="#dbe3ee"/></g>
+    <text x="717" y="188" fill="#0b2447">Close out</text>
+    <text x="717" y="210" fill="#7186a0" font-size="12" font-weight="500">one screen</text>
+  </g>
+
+  <!-- atomic result block -->
+  <g filter="url(#wsoft)">
+    <rect x="856" y="128" width="296" height="200" rx="16" fill="url(#atomic)"/>
+  </g>
+  <text x="1004" y="162" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="800" letter-spacing="0.5">ONE TRANSACTION</text>
+  <g font-size="14" font-weight="600">
+    <circle cx="892" cy="196" r="4" fill="#7fd0ff"/><text x="908" y="201" fill="#eaf3ff">Meters roll forward</text>
+    <circle cx="892" cy="230" r="4" fill="#7fd0ff"/><text x="908" y="235" fill="#eaf3ff">Student ledger updates</text>
+    <circle cx="892" cy="264" r="4" fill="#7fd0ff"/><text x="908" y="269" fill="#eaf3ff">Invoice is generated</text>
+    <circle cx="892" cy="298" r="4" fill="#7fd0ff"/><text x="908" y="303" fill="#eaf3ff">Audit trail recorded</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#38a1e8" stroke-width="2.5" marker-end="url(#arw)" fill="none">
+    <line x1="200" y1="193" x2="242" y2="193"/>
+    <line x1="398" y1="193" x2="440" y2="193"/>
+    <line x1="596" y1="193" x2="638" y2="193"/>
+    <line x1="794" y1="193" x2="852" y2="193"/>
+  </g>
+
+  <text x="48" y="388" fill="#0b2447" font-size="14" font-weight="600">Revenue leakage becomes structurally impossible — a flight can't close without billing.</text>
+</svg>

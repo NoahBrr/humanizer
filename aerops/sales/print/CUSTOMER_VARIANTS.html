@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"/><style>
+*{box-sizing:border-box;}
+@page{size:letter;margin:0;}
+html,body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0b2447;font-size:11.2px;line-height:1.5;}
+.page{padding:0 0 60px;}
+.band{background:radial-gradient(120% 160% at 0% 0%,#143063,#0b2447);color:#fff;padding:26px 54px 22px;display:flex;align-items:center;justify-content:space-between;}
+.band .wm{font-size:19px;font-weight:800;letter-spacing:1.5px;}
+.band .wm span{color:#38a1e8;}
+.band .doc{font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#9fc0e8;}
+.body{padding:30px 54px 0;}
+h1{font-size:26px;font-weight:800;letter-spacing:-.5px;margin:2px 0 4px;}
+h2{font-size:17px;font-weight:750;color:#0b2447;margin:20px 0 6px;}
+h3{font-size:13px;font-weight:700;color:#1e63d0;margin:16px 0 4px;letter-spacing:.2px;}
+p{margin:7px 0;color:#243247;}
+strong{color:#0b2447;font-weight:700;}
+ul{margin:7px 0 7px 2px;padding-left:18px;}
+li{margin:4px 0;color:#243247;}
+li::marker{color:#38a1e8;}
+hr{border:none;border-top:1px solid #e4e9f1;margin:16px 0;}
+code{background:#eef2f8;border-radius:4px;padding:1px 5px;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#154aa0;}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:10.4px;}
+th{background:#0b2447;color:#fff;text-align:left;padding:8px 10px;font-weight:600;font-size:10px;}
+td{border:1px solid #e4e9f1;padding:7px 10px;vertical-align:top;}
+tbody tr:nth-child(even){background:#f7f9fc;}
+.foot{position:fixed;bottom:0;left:0;right:0;padding:12px 54px;display:flex;justify-content:space-between;font-size:9.5px;color:#8b98a9;border-top:1px solid #eef2f8;background:#fff;}
+.foot b{color:#0b2447;}
+</style></head><body>
+  <div class="page">
+    <div class="band"><span class="wm">AERO<span>OPS</span></span><span class="doc">Customer Playbooks</span></div>
+    <div class="body"><h1>AeroOps — Customer Deck Variants</h1>
+<p>How to tailor the deck for each buyer. Each section names the workflows and outcomes to emphasize, the three hero screens to lead with, and a one-line value proposition. Feeds customer-specific variants of <code>DECK_CONTENT.md</code>.</p>
+<hr/>
+<h2>Part 61 Flight School</h2>
+<p><strong>Buyer:</strong> owner-operator who flies, instructs, and runs the business — often the entire operations department.</p>
+<p><strong>Emphasize:</strong></p>
+<ul><li><strong>Adopt it in an afternoon</strong> — no consultant, no back office, no manual.</li><li><strong>Billing that happens by itself</strong> — Hobbs/Tach closeout produces the invoice atomically; nothing closed goes unbilled.</li><li><strong>"What needs me today?"</strong> — the dashboard's Needs-Attention triage as the single morning glance.</li><li><strong>"What did today make?"</strong> — revenue and receivables visible before you leave.</li><li><strong>Onboard the next CFI in minutes</strong> — role-based access without an IT project.</li></ul>
+<p><strong>Three hero screens:</strong> <code>dashboard.png</code> · <code>billing.png</code> · <code>schedule.png</code></p>
+<p><strong>Value proposition:</strong> <em>Everything your school touches in one place — and billing that reconciles itself the moment a flight closes.</em></p>
+<hr/>
+<h2>Part 141 Flight School</h2>
+<p><strong>Buyer:</strong> chief flight instructor / school operator accountable for an approved syllabus, stage checks, and FAA-auditable training records.</p>
+<p><strong>Emphasize:</strong></p>
+<ul><li><strong>The pipeline out of your head and into the system</strong> — who's ready for a stage check, whose endorsements are missing, who's cleared to test.</li><li><strong>Readiness with reasons</strong> — every checkride-readiness answer shows its factors, not a bare yes/no.</li><li><strong>Endorsements and currency on the record</strong> — not the morning-of-checkride spreadsheet scramble.</li><li><strong>Defensible records on demand</strong> — an immutable audit trail under every training action for the FSDO conversation.</li><li><strong>Instructor turnover survivable</strong> — students and records don't get orphaned.</li></ul>
+<p><strong>Three hero screens:</strong> <code>training.png</code> · <code>students.png</code> · <code>executive.png</code></p>
+<p><strong>Value proposition:</strong> <em>Your training pipeline — readiness, endorsements, and checkride clearance — as an explained, auditable record instead of tribal knowledge.</em></p>
+<hr/>
+<h2>University Aviation Program</h2>
+<p><strong>Buyer:</strong> collegiate program director running a degree program that flies — cohorts of students, a large fleet, and an accreditor who wants an audit trail.</p>
+<p><strong>Emphasize:</strong></p>
+<ul><li><strong>Accreditation-grade audit trails</strong> — defensible records at every term boundary, without a week of prep.</li><li><strong>Fleet utilization that survives a provost's scrutiny</strong> — executive reporting with the reasons behind every number.</li><li><strong>Scale that stays fast</strong> — multi-tenant architecture built for hundreds of students and a large fleet.</li><li><strong>Program-wide visibility</strong> — executive and reports views across the operation.</li><li><em>Honest roadmap note:</em> cohort/term grouping depth and cross-location roll-up are on the roadmap (1.5) — position them as coming, not shipped.</li></ul>
+<p><strong>Three hero screens:</strong> <code>executive.png</code> · <code>reports.png</code> · <code>training.png</code></p>
+<p><strong>Value proposition:</strong> <em>A defensible, auditable system of record for a degree-scale flight program — where fleet utilization and training records withstand accreditation and a provost's review.</em></p>
+<hr/>
+<h3>Cross-variant guidance</h3>
+<ul><li>Keep the core narrative identical (Slides 1–5, 13, 20–24) — only the hero module slides and the closing emphasis change per buyer.</li><li>Never present roadmap items as shipped; when a buyer's need touches a roadmap item (card payments, live METAR, cohort reporting, native mobile), name it as roadmap and pivot to the shipped capability that covers the need today.</li><li>Lead every variant with <strong>atomic dispatch → invoice</strong> and <strong>explainable by construction</strong> — they are the two claims no incumbent can match.</li></ul></div>
+  </div>
+  <div class="foot"><span>AeroOps — The Operating System for Aviation</span><span><b>aerops.io</b> · Request a demo</span></div>
+  </body></html>
