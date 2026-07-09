@@ -1,0 +1,425 @@
+# AeroOps Roadmap — Living Product Backlog
+
+The single source of truth for where AeroOps stands and what gets built next.
+Companion to
+[docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
+(how to build), [CONSTITUTION.md](./CONSTITUTION.md) +
+[CLAUDE.md](./CLAUDE.md) (the rules and the session OS),
+[PRODUCTION.md](./PRODUCTION.md) (how to launch), and the [README](./README.md)
+(how to run). **Update this file after every major development session.**
+
+**Statuses:** `Complete` · `In Progress` · `Not Started` · `Blocked` · `Needs Review`
+**Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
+**Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
+
+_Last session update: 2026-07-08 — Phase 3: aviation roles & personalized
+workspaces. The dashboard is now role-aware — every section is gated by
+PERMISSION (never role name), so a viewer only receives data they can access:
+Student Pilots get a dedicated my-training workspace (My Upcoming Lessons +
+My Training: hours/next checkride/their own balance + Weather + their own
+notifications — never finance, fleet, org-wide ops, or another member's data);
+Finance Managers see finance and no ops board; Maintenance sees squawks+fleet
+and no finance; Dispatchers see ops+fleet and no finance; Owners/Admins see
+everything. Gating centralized in `lib/dashboard-access.ts` and pinned by
+`tests/role-visibility.test.ts` (nav + dashboard per role). Navigation was
+already permission-personalized; tightened `/mission-control` from
+`notifications.view`→`aircraft.view` so the ops wall no longer shows to Student
+Pilots or Finance. Role-aware framing (per-role dashboard eyebrow). Long-tail
+aviation roles (Assistant Chief, Independent Instructor, Ops Coordinator,
+Maintenance Technician, Registrar, Admissions, Front Office, TA, Safety
+Officer, Marketing, Read-Only Auditor) ship as custom-role TEMPLATES on the
+existing data-driven OrgRole system (`lib/role-templates.ts`) — no enum/auth
+migration. Governance: `docs/company/ROLES_AND_WORKSPACES.md` (Role/Permission/
+Sidebar/Dashboard matrices + CAB review). Settings made honest — unwired
+integrations (email/SMS/Stripe/QuickBooks) now read "Planned", weather
+"Simulated", API keys link to Developers. Verified: 167 tests, lint, tsc,
+build; live per-role dashboards+nav for all 6 base roles (0 console/hydration
+errors), student mobile (no overflow, no cross-member leak), screenshots +
+print + PDF. No schema/auth/tenant/billing change. Not deployed._
+
+_Deferred (Phase 3 follow-ups): dashboard widget drag-reorder + multiple saved
+layouts ("Morning Ops"/"Dispatch"/…) — the customization roadmap; seed
+`ROLE_TEMPLATES` as OrgRoles on org-create + a "add role from template" settings
+action; decouple CRM/Growth + Training from `students.manage` (dedicated
+`crm.*` permission) so Marketing/line-instructor nav is cleaner; give Dispatcher
+`billing.view` (has `billing.record_payments` but can't review Billing); a
+student-scoped billing surface ("what do I owe?")._
+
+_Last session update: 2026-07-07 — Sidebar refinement + app/marketing
+visual alignment. (1) Sidebar categories are now collapsible: each of the
+five section headers toggles its links, state persists per browser
+(`aerops-sidebar-groups`), and the active page's section auto-opens on
+navigation — hydration-safe (default all-open on server + first render, prefs
+after mount), independent from the icon-rail collapse. Footer simplified to a
+single clean "Collapse" control; active accent bar, spacing, and org-name
+truncation refined. The mobile "More" drawer is now grouped by the same
+sections. (2) App visual language brought closer to the marketing site
+("same brand, operator mode"): navy-tinted card elevation, `PageHeader` gains
+brand-navy titles + an optional marketing eyebrow, a more intentional
+`EmptyState` (icon in a soft tinted circle), a marketing-family top bar
+(bg/85 + backdrop-blur, role micro-kicker, avatar divider), a subtle
+brand-primary app-shell background wash, and dashboard polish (eyebrow +
+brand-navy headings, AeroOps-blue KPI icons, EmptyState primitive). Tokens
+only; DESIGN_SYSTEM.md updated to govern the decisions. Verified: 155 tests,
+lint, tsc, build; light + dark, desktop + mobile (no overflow), category
+collapse + persistence, all 16 marketing screenshots regenerated, print + PDF
+(zero failed assets). No schema/auth/RBAC/query change. Not deployed._
+
+_Last session update: 2026-07-07 — Immediate UI cleanup pass (shell,
+dashboard, settings, roles). (1) Sidebar navigation is grouped by domain
+(Command Center · Flight Operations · Training · Business · Organization);
+`nav-config.ts` NAV_GROUPS is the source of truth, NAV_ITEMS is the flat
+projection kept for mobile nav / command palette / constitution scan; active
+items get a clean accent bar. (2) Sidebar collapse hardened against hydration
+mismatch — server and first client render both use collapsed=false, the
+persisted preference is read only after mount; `tests/shell-nav.test.ts`
+guards render-body purity and group→SECTION_PERMISSIONS coverage. (3)
+Dashboard simplified further (single-source weather — the duplicate header
+box removed; calmer spacing; fewer badges) and made customizable: a
+`Customize` popover toggles sections (Today's Flights, Needs Attention +
+Maintenance/Checkrides/Notifications children, Weather, Finance Snapshot,
+Fleet Status), persisted hydration-safely to `localStorage`
+(`aerops-dashboard-layout`); zero query changes. (4) Editable org Settings:
+School Branding is a live form (name, brand color, IANA time zone; slug
+locked with a support-to-change note) plus managed `/settings/locations` and
+`/settings/lesson-types` subpages, backed by three
+`authorize("settings.manage",{mutating:true})` routes under
+`/api/organization/{settings,locations,lesson-types}` — org scope from the
+session, per-row tenant-ownership check on every PATCH, audited
+(`org.settings_change`, `location.create/update`, `lesson_type.create/update`);
+time zones centralized in `lib/timezones.ts`. (5) Aviation-native role
+display labels (Account Owner, Operations Director, Flight Dispatcher, Flight
+Instructor, Student Pilot, Maintenance Manager, Finance Manager) — display
+language only; enum and permission bundles untouched. (6) All 16 marketing
+screenshots regenerated on the new UI; print + PDF re-verified (zero failed
+assets). Verified: 155 tests, lint, tsc, build; live settings round-trip
+(edit→persist→restore) + denial path; no hydration/console errors, no mobile
+overflow. No schema/auth/RBAC change. Not deployed._
+
+_Last session update: 2026-07-07 — Phase 2 product-experience pass
+(second increment): simplified the org dashboard — three operational KPIs
+(Today's Flights, Aircraft Available with a maintenance subline, Students
+Flying Today), a full-width "Today's Flights" centerpiece, and a
+consolidated "Needs attention" row (squawks, upcoming maintenance,
+checkrides, recent activity); Finance moved lower and the duplicated Fleet
+Utilization KPI + its dead code removed. Presentational only — zero query
+changes. AI Review Board: UX review fixed a non-responsive KPI grid
+(`grid-cols-1 sm:grid-cols-3`) and a raw-hex fallback (→ `var(--color-primary)`),
+verified in a live 390px render; Documentation review corrected a
+misattributed "simple case" quote (→ PRODUCT_PRINCIPLES #11 / roadmap 1.5)
+and completed VISION persona coverage. Authored
+`docs/company/CUSTOMER_ADVISORY_BOARD.md` (12 operator personas) and linked it
+from VISION. Regenerated all 16 marketing screenshots on the new UI; print +
+PDF re-verified (zero failed asset requests). No backend change; not deployed._
+
+_Prior increment (Phase 2/2.5, first): added an action slot to the
+`EmptyState` primitive; converted bare operational empties on Documents and
+Parts to helpful why+next-step states; corrected developer-terminology copy
+on Documents. Authored `docs/operations/PLAYBOOKS.md` (24 operational
+playbooks) and `docs/company/PRODUCT_ROADMAP.md` (Beta→Long-term + a Product
+Intelligence roadmap)._
+
+_Last session update: 2026-07-07 — Phase 1C database integrity & tenant
+safety: added a real Organization FK to all 9 org-owned models that lacked
+one (LoginEvent SetNull to preserve the security log, the rest Cascade),
+moved Aircraft.tailNumber and Invoice.number from global to per-organization
+uniqueness (two tenants may now share them; import duplicate detection
+corrected to org-scoped, closing a latent cross-tenant read), added createdAt
+to 5 org-owned models, and added `tests/schema-governance.test.ts` enforcing
+FK/uniqueness/timestamp conventions (ADR-021). Migration remediates
+pre-existing orphans idempotently. Verified: 146 tests, lint, build,
+migrate, reseed, snapshot round-trip, and DB-level two-org proofs. Not
+deployed._
+
+_Last session update: 2026-07-07 — Phase 1B token security hardening:
+invitation and invite-link tokens now stored only as sha256 hashes
+(`tokenHash`), mirroring the API-key pattern, via a shared `lib/tokens.ts`;
+raw tokens are shown once and never persisted (ADR-020). Safe in-place
+backfill migration preserves every existing link (no invalidation). Static
+enforcement (`tests/token-security.test.ts`) bans raw `token` columns and
+raw-value lookups. Invite-link admin UX moved to one-time reveal (redeemer
+experience unchanged). Full token inventory documented; `Webhook.secret`
+kept raw as a documented signing-key exception. 5 AI reviews. Suite 141
+tests. Not deployed._
+
+_Last session update: 2026-07-07 — Phase 1A auth & session security
+hardening, the governance framework's first execution: platform-session
+revocation verified per request (isActive + sessionVersion + role from the
+row; `lib/session-rules.ts`), `requirePlatformSession()` guard on every
+data-bearing /platform page (layouts don't re-run on soft navigation —
+Security Board finding), AUTH_SECRET fail-closed (`lib/env.ts` +
+`instrumentation.ts`; unrecognized NODE_ENV treated as production), `?? 0`
+version-claim coercion removed, dead `requireSession()` bypass deleted,
+auth docs corrected (no phantom HIBP/reset claims). Formal AI reviews:
+Architect, Security, Reliability, QA — all findings fixed or roadmapped.
+Not deployed._
+
+_Last session update: 2026-07-07 — Phase 0.5 company operating system:
+`docs/company/` (VISION, PRODUCT_PRINCIPLES, NORTH_STAR), `docs/design/`
+(DESIGN_SYSTEM), 4 executive roles added to the AI Review Board (CEO, PM,
+Financial, Reliability), CLAUDE.md 9-step governance sequence, and a full
+governance audit — one substantive contradiction found and fixed everywhere
+(route pipeline is authorize→validate, matching the code), CONSTITUTION.md
+and README.md refreshed, cross-links completed. UI deviations recorded in
+DESIGN_SYSTEM for later cleanup (chart hex palette, weather-tone duplication,
+missing error.tsx). Docs only; not deployed. Next: implement the
+governance-audit security findings (platform session revocation,
+AUTH_SECRET fallback) through the review board._
+
+_Phase 0 (same day) — engineering governance: created
+`docs/architecture/` (ARCHITECTURE source of truth + 19 ADRs in DECISIONS +
+API/DATABASE/SECURITY standards), `docs/engineering/` (ENGINEERING_HANDBOOK
++ AI_REVIEW_BOARD with 8 reviewers and gate matrix), `docs/aviation/`
+(AVIATION_STANDARDS), CLAUDE.md v2 (§13 governance index + quality gates),
+new `performance-reviewer` subagent. Documentation only — no product code,
+schema, or dependency changes; not deployed. Governance review surfaced
+codebase inconsistencies (recorded in the docs' conflict/gap sections):
+platform-session revocation gap, AUTH_SECRET dev fallback, FK-less
+organizationId columns, global tail-number/invoice uniques, LIFR missing,
+time zones stored-not-applied — triage next session._
+
+---
+
+## Public Website
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Marketing shell (header/footer/nav, brand system) | Complete | — | — | `(marketing)` route group, separate from app |
+| Homepage with 13-workspace product tour (real screenshots) | Complete | — | — | Screenshots regenerate via capture script after UI changes |
+| /features, /solutions (+6 verticals), /pricing, /about, /contact, /demo | Complete | — | — | Solutions catalog in `components/marketing/solutions-data.ts` |
+| Demo/contact intake → Founder Platform | Complete | — | — | `DemoRequest` model, rate-limited public API |
+| SEO pass (sitemap.xml, robots.txt, OG images, structured data) | Not Started | High | S | Before public beta |
+| Screenshot refresh automation in CI | Not Started | Medium | S | Re-run capture script on release |
+| Blog / changelog | Not Started | Low | M | Content strategy needed |
+
+## Navigation
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Permission-mapped sidebar (constitution-tested) | Complete | — | — | `NAV_ITEMS` ⊆ `SECTION_PERMISSIONS` enforced by tests |
+| Collapsible sidebar that can't get stuck (edge handle, `[` shortcut, tooltips, persisted) | Complete | — | — | Phase 1 fix |
+| Mobile bottom navigation + "More" sheet | Complete | — | — | |
+| Command palette (⌘K) | Complete | — | — | |
+| Per-user pinned/reordered nav items | Not Started | Low | M | |
+
+## Onboarding
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Public sign-up → individual accounts (org-less users) | Complete | — | — | `User.organizationId` nullable; session kind `individual` |
+| /welcome chooser + pending request tracking | Complete | — | — | |
+| Self-serve create-company wizard (business activities → modules) | Complete | — | — | Creator becomes owner; Starter plan |
+| Join requests (search, request, admin approve/reject/more-info) | Complete | — | — | `/settings/join-requests`, audited |
+| Shareable invite links (role, expiry, max uses, auto-approve) | Complete | — | — | `/join/<token>` |
+| Email verification on sign-up | Not Started | Critical | M | Blocked on email provider (see Production Deployment) |
+| Self-serve password reset | Not Started | Critical | M | Blocked on email provider |
+| Guided in-app setup checklist for new orgs | Not Started | High | M | "Add aircraft → invite team → first booking" |
+| Import prompt inside the create-company wizard | Not Started | Medium | S | Link wizard → Import Center |
+
+## Weather Consistency
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Single source of truth (`lib/weather.ts`) keyed to active org + active location | Complete | — | — | Top bar, dashboard, operations, Mission Control all consume it |
+| Hardcoded airports/METAR strings removed, regression-tested | Complete | — | — | `tests/weather.test.ts` statically forbids them |
+| Live METAR/TAF adapter (Aviation Weather API) | Not Started | High | M | Consumers unchanged — swap generator for fetcher + cache |
+| TAF-based scheduling risk hints | Not Started | Medium | M | Depends on live adapter |
+
+## Import Center
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| `/import` wizard: source → type → upload/paste → preview → map → validate → test → commit → summary | Complete | — | — | 9 sources incl. Flight Circle / FSP / FlightLogger / Aviatize / QuickBooks / Stripe presets |
+| 12 data types: students, members, instructors, aircraft (+Hobbs/Tach/rates), locations, lesson types, schedule & flight history, maintenance/work orders, squawks, invoices (+payments/balances), CRM leads (+discovery flights), parts/inventory (+vendors field) | Complete | — | — | Spec-driven: `lib/import/spec.ts` |
+| CSV / Excel (.xlsx) / copy-paste parsing with limits (5 MB / 5,000 rows) | Complete | — | — | exceljs; RFC-4180 CSV |
+| Column mapping with per-source aliases + remembered mappings | Complete | — | — | Remembered per (org, source, data type) |
+| Duplicate strategies (skip / update / create) + detection by email, tail, invoice #, part #, name+phone, in-file external ID | Complete | — | — | |
+| Row-level errors with row numbers, failed-row CSV download, nothing silent | Complete | — | — | |
+| Test import = real code path in a rolled-back transaction | Complete | — | — | Dry-run numbers match commit exactly |
+| Import history (user, source, file, counts, mapping, errors) + rollback via created-records manifest | Complete | — | — | Updates are irreversible → `ROLLBACK_PARTIAL` |
+| Downloadable templates for all 12 types (required/optional, examples, notes) | Complete | — | — | Template↔parser round-trip is tested |
+| Platform staff view of all import jobs + rollback | Complete | — | — | `/platform/imports`; staff run customer migrations via impersonated Import Center |
+| More data types: endorsements, training records, documents metadata, inspections/components, vendor directory, dues schedules, dispatch closeouts | Not Started | High | M | Same spec pattern; add engine writers |
+| Background processing for >5k-row files + progress streaming | Not Started | High | L | Needs queue/worker (see Production); capped with clear messaging today |
+| Review-one-by-one duplicate resolution UI | Not Started | Medium | M | Bulk strategies cover most migrations |
+| Saved customer migration packages (files + mappings bundle) | Not Started | Medium | M | Founder tooling |
+
+## Founder Platform
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Dashboard (orgs, MRR, success metrics, health, demo requests) | Complete | — | — | |
+| Organization management (wizard, plans, suspend, modules, notes) | Complete | — | — | |
+| Impersonation (signed cookie, read-only mode, audited, customer-notified) | Complete | — | — | |
+| Demo Data Generator (8 business templates × 5–500 aircraft) | Complete | — | — | |
+| Live Simulation engine (8 scenarios) | Complete | — | — | |
+| Organization snapshots (capture/restore) | Complete | — | — | |
+| Import jobs oversight + rollback | Complete | — | — | |
+| Demo-request pipeline states (assigned, contacted, closed) | Not Started | Medium | S | List-only today |
+| Billing operations (Stripe sync, dunning console) | Not Started | High | L | Depends on Payments |
+
+## Payments
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| In-app invoicing, payments, ledgers, receivables aging | Complete | — | — | Processor not attached (by design, adapter seam) |
+| Stripe subscriptions for AeroOps plans (checkout, portal, webhooks) | Not Started | Critical | L | The revenue gate — see PRODUCTION.md |
+| Customer-facing card payments on invoices (Stripe Connect) | Not Started | High | XL | Per-org connected accounts; pricing/fees decision needed |
+| Dunning + failed-payment handling | Not Started | High | M | After subscriptions |
+| QuickBooks Online export/sync | Not Started | Medium | L | Import exists; sync is the ask |
+
+## Database
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Multi-tenant schema (60+ models), FK-safe, indexed scheduling axes | Complete | — | — | Prisma 6 (pinned) on PostgreSQL 16 |
+| Named migrations, deploy via `prisma migrate deploy` | Complete | — | — | |
+| Managed Postgres + point-in-time recovery | Not Started | Critical | S | Neon / Supabase / RDS — PRODUCTION.md compares |
+| Connection pooling for serverless (PgBouncer / Prisma Accelerate) | Not Started | Critical | S | Required on Vercel |
+| Nightly rollups for platform analytics | Not Started | Medium | M | Customer-success reads flagged as future hot path; platform dashboard fans out 12×N count/aggregate queries (bug-sweep P4, staff-only) |
+| Indexes for hot date-windowed aggregates: `Payment.paidAt`, `Dispatch(status, closedAt)` | Not Started | Medium | S | Bug-sweep P2: revenue/utilization sums (dashboard/executive/reports/ops/mission-control) filter unindexed date cols; additive, ADR-015-compliant |
+| Bound the maintenance-page work-order read | Not Started | Medium | S | Bug-sweep P3: `maintenanceOrder.findMany` is unbounded (loads full history every load); split into active-status query + `take`-limited history + a MTD-cost `aggregate` (keep the sum exact) |
+| Add `take` to slow-growing detail lists | Not Started | Low | S | Bug-sweep P5: `students/[id]` lessonRecords, `documents`, `aircraft/[id]` documents fetch all-time |
+| Retention/sweeper jobs (soft-deleted orgs, old login events) | Not Started | Low | M | |
+
+## Production Deployment
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Production readiness plan & audit | Complete | — | — | [PRODUCTION.md](./PRODUCTION.md): infra, security, costs, launch checklist |
+| CI pipeline (tests + build on every PR) | Not Started | Critical | S | GitHub Actions; suite runs in <1s |
+| Hosting (Vercel) + managed DB + domain/DNS/SSL | Not Started | Critical | M | Step-by-step in PRODUCTION.md |
+| Error tracking (Sentry) + uptime monitoring | Not Started | Critical | S | `/api/health` endpoint exists |
+| Email provider (Resend/Postmark) + transactional templates | Not Started | Critical | M | Unblocks verification, resets, invites, join/demo notifications |
+| Object storage for documents (S3/R2) with signed URLs | Not Started | High | M | Documents are metadata-only today |
+| Queue/worker (Inngest / Upstash QStash) | Not Started | High | M | Unblocks big imports, digests, scheduled automations |
+| Redis (Upstash) for rate limits + cache | Not Started | High | S | Rate limiter is per-instance in-memory today |
+| Docker image for self-host/enterprise | Not Started | Medium | M | Vercel-first |
+
+## Mission Control
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Live wall (SSE), scenes, TV mode, intelligence panels | Complete | — | — | |
+| Weather panels from the shared weather source | Complete | — | — | Phase 1B |
+| Demo Mode via simulation engine | Complete | — | — | Founder-driven |
+| Multi-wall layouts per location | Not Started | Low | M | |
+
+## AI
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Insight engine with reasons/confidence + NL ask endpoint | Complete | — | — | AI never mutates — constitution rule |
+| Live LLM narration (Claude adapter seam) | Blocked | High | S | Needs `ANTHROPIC_API_KEY` in production env |
+| LLM-assisted import column mapping | Not Started | Medium | M | Fallback for unrecognizable headers |
+| Schedule optimization suggestions | Not Started | Future | XL | |
+
+## Mobile / PWA
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Responsive app, bottom nav, installable PWA (manifest, SW, icons) | Complete | — | — | |
+| Web push notifications | Not Started | High | M | VAPID keys + fan-out from the notification bus |
+| Offline read-cache for the schedule | Not Started | Medium | L | SW exists; needs a data caching strategy |
+| Native wrappers (Capacitor) | Not Started | Future | XL | Only if app-store presence matters |
+
+## Marketplace
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Public API v1 (scoped keys) + signed webhooks | Complete | — | — | |
+| Developer portal (`/settings/developers`) | Complete | — | — | |
+| Published TypeScript SDK | Not Started | Medium | M | Generate from route contracts |
+| Third-party app marketplace + install flow | Not Started | Future | XL | Module flag already exists |
+
+## Integrations
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| File imports: Flight Circle, FSP, FlightLogger, Aviatize, QuickBooks, Stripe | Complete | — | — | Import Center source presets |
+| Live METAR/TAF | Not Started | High | M | See Weather Consistency |
+| Stripe (subscriptions + Connect) | Not Started | Critical | L | See Payments |
+| QuickBooks Online sync | Not Started | Medium | L | |
+| iCal feeds (per user / per aircraft) | Not Started | Medium | S | High delight, low effort |
+| SSO (Google / Microsoft Entra) | Blocked | Medium | S | Built and env-gated; needs OAuth credentials |
+
+## Security
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| MFA (TOTP), password policy + breach list, session revocation, rate limits | Complete | — | — | |
+| Data-driven RBAC, custom roles, single authorize() gate (constitution-tested) | Complete | — | — | |
+| Immutable audit trail (org + platform + imports + impersonation) | Complete | — | — | |
+| Tenant isolation (org scope from session only, never the client) | Complete | — | — | |
+| Organization FK on all org-owned models (9 added: LoginEvent→SetNull, rest Cascade) | Complete | — | — | Phase 1C; ADR-021, `tests/schema-governance.test.ts`; migration remediates orphans |
+| Tenant-scoped uniqueness (Aircraft.tailNumber, Invoice.number → per-org) | Complete | — | — | Phase 1C; two orgs may share a tail/invoice number; import dup-detection now org-scoped |
+| createdAt on all org-owned models + schema-governance drift tests | Complete | — | — | Phase 1C; 5 models gained createdAt; convention machine-enforced |
+| Per-org invoice-number sequence (replace `Date.now().slice(-8)`) | Not Started | Medium | S | Same-ms within-org collision risk + ~27.7h wraparound (both pre-existing); Financial Reviewer recommendation |
+| Impersonation audit attribution: full-access mutations record the platform operator, not the target user | Not Started | Medium | S | Bug-sweep S2 (needs a decision — see report): mutating routes' `recordAudit(actorUserId: session.userId,…)` uses the impersonated user's identity; centralize actor resolution so writes during a `readOnly:false` support session attribute the operator + "(impersonating X)". Start/stop bracket already carries the operator |
+| Global airframe registry / cross-operator airframe history | Not Started | Low | L | Aviation Reviewer gap: airframe time/logbook follow the airframe, not the operator; consent-gated, keyed on N-number+serial, never per-org tail |
+| Org-scope `demo-generator` tail-collision `findMany` | Not Started | Low | S | Pre-existing unscoped read (harmless — demo seeding only); Security Reviewer follow-up |
+| Extend `wipeOrganizationData` to clear ApiKey/Webhook/MissionControlScene/PlatformNote/LoginEvent on restore | Not Started | Low | S | Phase 1C reviewers (Architect/DB/QA): snapshot restore leaves stale integration config (org row survives → cascade doesn't fire) |
+| DB-backed import contract test (runImport/importAircraft/importInvoice) | Not Started | Medium | M | QA Phase 1C gap #1: engine DB paths verified only by runtime e2e; needs a Postgres integration suite separate from the DB-free `npm test` |
+| Migration patterns for scale: `RAISE NOTICE` orphan counts, `CREATE INDEX CONCURRENTLY` + `ADD CONSTRAINT NOT VALID`/`VALIDATE` split | Not Started | Low | S | Reliability Phase 1C: current constraint migrations take an ACCESS EXCLUSIVE write-window; fine at current size, revisit before large-table migrations |
+| Platform session revocation (isActive + sessionVersion per request) | Complete | — | — | Phase 1A; `lib/session-rules.ts`, pinned by `tests/auth-security.test.ts` |
+| Bearer-token hashing (invitation + invite-link tokens → `tokenHash` sha256) | Complete | — | — | Phase 1B; `lib/tokens.ts`, ADR-020, pinned by `tests/token-security.test.ts`; safe backfill migration |
+| API-key hashing routed through `lib/tokens.ts` | Complete | — | — | Phase 1B review follow-up; unifies the last inline sha256, shrinks the static allowlist |
+| Self-serve wizard team invites surface redeemable links | Complete | — | — | Phase 1B review fix; engine returns `/invite/<token>` URLs (were dead hash-only rows consuming seats) |
+| Encryption-at-rest for `mfaSecret` (TOTP shared secret) | Not Started | Medium | M | Envelope/KMS; documented raw exception today (`lib/totp.ts`) |
+| Team-invite email delivery in create-company wizard | Not Started | High | M | Blocked on email provider (Phase B); links shown once at creation today |
+| AUTH_SECRET fail-closed startup validation | Complete | — | — | Phase 1A; `lib/env.ts` + `instrumentation.ts`; production refuses placeholder/short/missing secrets |
+| HaveIBeenPwned k-anonymity breach-check adapter | Not Started | Medium | S | Local blocklist only today (`lib/password.ts`); adapter slots behind `validatePassword` |
+| Production secret management + env separation | Not Started | Critical | S | PRODUCTION.md §Security |
+| Distributed rate limiting (Redis-backed) | Not Started | High | S | Per-instance memory today |
+| Security headers (CSP, HSTS) + `npm audit` in CI | Not Started | High | S | |
+| External penetration test before GA | Not Started | High | M | After beta |
+| `React.cache()` memoization of `getSession()` | Not Started | Low | S | One DB read per render pass today (org + platform); pre-dates Phase 1A |
+| Dev warn + revocation log line for platform sessions | Not Started | Low | S | `console.warn` when `DEV_ONLY_AUTH_SECRET` engages; `lib/logger.ts` line on revocation-reject (3 AM correlation) — Phase 1A reviewer nice-to-haves |
+| SOC 2 groundwork | Not Started | Future | XL | Audit trail + RBAC are the foundation |
+
+## Testing
+
+| Item | Status | Priority | Effort | Notes |
+|---|---|---|---|---|
+| Engine contracts + constitution + security suites | Complete | — | — | 112 tests, sub-second |
+| Weather consistency suite | Complete | — | — | Includes static hardcoding guards |
+| Import engine suite (parse/map/validate/dedupe/template round-trip) | Complete | — | — | |
+| Playwright E2E in CI (sign-up → create org → book → dispatch → invoice) | Not Started | High | M | Verification scripts exist; formalize into CI |
+| DB-backed integration tests (import commit/rollback round-trip) | Not Started | Medium | M | Needs a CI test database |
+| Load test: scheduling writes + Mission Control SSE fan-out | Not Started | Medium | M | Before the first large tenant |
+
+---
+
+## Future ideas (unprioritized)
+
+- White-label theming per organization (brand color exists; full theme engine later)
+- Multi-region deployment & data residency (PRODUCTION.md §Long-Term)
+- Examiner/DPE portal for checkride scheduling
+- Line-service / fuel-truck dispatch module
+- Insurance certificate feeds
+- Logbook export in ForeFlight/LogTen formats
+- Marketplace revenue share
+
+---
+
+## Definition of done (every slice, already practiced)
+
+1. `npm test` green (engine contracts pinned in `tests/`).
+2. `npm run build` green; migration applied and reviewed.
+3. Verified against the running app — permission denials, tenant isolation,
+   and the happy path exercised with real requests, not assumed.
+4. Screenshot for anything user-facing.
+5. Honest deferrals recorded in the section report / this file.
+
+## Release cadence (target)
+
+Internal builds weekly · beta monthly · production every 6–8 weeks · majors
+twice a year. Branch model: `main` (releasable) ← PRs from `feature/*`;
+`hotfix/*` straight to `main` with backports. This repo currently develops on
+a single feature branch by instruction.
+
+## Performance targets
+
+Dashboard < 2s · scheduling < 500ms · search < 250ms · Mission Control
+real-time (5s stream ticks) · 10k concurrent users (requires the queue/Redis
+seams before horizontal scale-out).

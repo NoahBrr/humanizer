@@ -1,0 +1,337 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><title>AeroOps — Sales Deck</title><style>
+:root{--navy:#0b2447;--royal:#1e63d0;--sky:#38a1e8;--silver:#c6cfd8;--slate:#5b6b7e;--line:#e4e9f1;--bg:#f7f9fc;}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+html,body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--navy);background:#c9d2df;}
+@page{size:1280px 720px;margin:0;}
+.slide{position:relative;width:1280px;height:720px;background:#fff;overflow:hidden;page-break-after:always;display:flex;}
+.slide-dark{background:var(--navy);}
+.slide>*{flex:1;}
+h2{font-size:52px;line-height:1.03;font-weight:800;letter-spacing:-1.2px;color:var(--navy);}
+.eyebrow{font-size:15px;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:var(--royal);margin-bottom:18px;}
+.subhead{font-size:22px;line-height:1.4;color:var(--slate);margin-top:18px;font-weight:450;max-width:38ch;}
+.bullets{list-style:none;margin-top:26px;display:flex;flex-direction:column;gap:14px;}
+.bullets li{position:relative;padding-left:26px;font-size:20px;line-height:1.35;color:#243247;font-weight:500;}
+.bullets li::before{content:"";position:absolute;left:0;top:10px;width:8px;height:8px;border-radius:99px;background:var(--sky);}
+.footnote{margin-top:26px;font-size:14px;color:#8b98a9;font-style:italic;}
+.foot{position:absolute;left:64px;right:64px;bottom:34px;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#9aa7b8;}
+.foot .wm{font-weight:800;letter-spacing:1.5px;color:var(--navy);}
+.foot .wm b{color:var(--sky);font-weight:800;}
+
+/* split */
+.split{display:flex;align-items:center;gap:56px;padding:88px 64px 96px;}
+.split .col-text{flex:0 0 44%;}
+.split .col-visual{flex:1;display:flex;justify-content:center;align-items:center;}
+.split-dark{background:var(--navy);}
+.split-dark h2{color:#fff;}.split-dark .subhead{color:#a9bcd8;}.split-dark .bullets li{color:#dbe6f5;}.split-dark .eyebrow{color:var(--sky);}
+.frame{width:100%;max-width:640px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#fff;box-shadow:0 30px 60px -28px rgba(11,36,71,.45);}
+.frame-dark{border-color:#20365c;}
+.frame-bar{height:30px;background:#eef2f8;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;padding:0 14px;}
+.frame-bar span{width:10px;height:10px;border-radius:99px;background:#cfd8e6;}
+.frame img{display:block;width:100%;}
+.col-visual-phone .phone{width:240px;border:9px solid #2e3a46;border-radius:34px;overflow:hidden;box-shadow:0 30px 60px -25px rgba(11,36,71,.5);background:#2e3a46;}
+.phone img{display:block;width:100%;border-radius:24px;}
+
+/* diagram */
+.diagram{display:flex;flex-direction:column;padding:72px 64px 88px;}
+.diagram-head{max-width:70%;}
+.diagram-head h2{font-size:46px;}
+.diagram-head .bullets{margin-top:18px;}.diagram-head .bullets li{font-size:18px;}
+.diagram-art{flex:1;display:flex;align-items:center;justify-content:center;margin-top:20px;}
+.diagram-art img{max-width:100%;max-height:360px;}
+
+/* section + cards */
+.section{padding:66px 64px 92px;display:flex;flex-direction:column;}
+.cards{display:grid;gap:20px;margin-top:40px;}
+.cards-4{grid-template-columns:repeat(4,1fr);}
+.cards-3{grid-template-columns:repeat(3,1fr);}
+.card{border:1px solid var(--line);border-radius:16px;padding:28px;background:linear-gradient(180deg,#fff, #fafcff);box-shadow:0 2px 4px rgba(11,36,71,.05);}
+.card-t{font-size:21px;font-weight:750;color:var(--navy);margin-bottom:10px;}
+.card-d{font-size:16px;line-height:1.45;color:var(--slate);}
+.card-hi{border-color:#cfe0f6;background:linear-gradient(180deg,#f5f9ff,#eef4fc);}
+.price-cta{margin-top:34px;font-size:22px;font-weight:750;color:var(--royal);}
+
+/* roles */
+.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 24px;margin-top:26px;}
+.role-shot{border:1px solid var(--line);border-radius:12px;overflow:hidden;height:132px;box-shadow:0 10px 24px -14px rgba(11,36,71,.4);}
+.role-shot img{width:100%;height:100%;object-fit:cover;object-position:top left;}
+.role p{margin-top:9px;font-size:15px;font-weight:650;color:var(--navy);}
+
+/* roadmap */
+.tiers{margin-top:34px;display:flex;flex-direction:column;gap:14px;}
+.tier{display:flex;align-items:center;gap:20px;border:1px solid var(--line);border-radius:14px;padding:18px 22px;background:#fafcff;}
+.badge{flex:0 0 auto;font-size:12px;font-weight:750;letter-spacing:1px;text-transform:uppercase;color:var(--royal);background:#e9f1fd;border:1px solid #cfe0f6;border-radius:99px;padding:6px 12px;}
+.tier-t{font-size:19px;font-weight:700;color:var(--navy);}
+.tier-d{font-size:15px;color:var(--slate);margin-top:2px;}
+
+/* cover + close */
+.cover{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(120% 100% at 50% 0%,#143063,#0b2447);}
+.cover-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.10;filter:saturate(.6);}
+.cover-inner{position:relative;text-align:center;padding:0 80px;}
+.cover-eyebrow{color:var(--sky);font-size:17px;font-weight:700;letter-spacing:4px;text-transform:uppercase;margin-bottom:26px;}
+.cover-mark{font-size:104px;font-weight:850;letter-spacing:-2px;color:#fff;}
+.cover-mark span{color:var(--sky);}
+.cover-sub{margin-top:22px;font-size:26px;color:#c6cfd8;font-weight:450;}
+.cover-variant{position:absolute;bottom:40px;left:0;right:0;text-align:center;color:#7f9dc4;font-size:15px;font-weight:600;letter-spacing:1px;}
+.close-h{font-size:60px;font-weight:800;color:#fff;letter-spacing:-1.5px;max-width:20ch;margin:0 auto;line-height:1.05;}
+.close-sub{margin-top:22px;font-size:26px;color:#c6cfd8;}
+.cta{display:inline-block;margin-top:38px;background:#fff;color:var(--navy);font-weight:750;font-size:20px;padding:16px 34px;border-radius:12px;}
+</style></head><body><section class="slide slide-dark"><div class="cover">
+      <img class="cover-bg" src="../../public/marketing/dashboard.png" alt=""/>
+      <div class="cover-inner">
+        <p class="cover-eyebrow">The Operating System for Aviation</p>
+        <h1 class="cover-mark">AERO<span>OPS</span></h1>
+        <p class="cover-sub">Run the operation, not the paperwork.</p>
+      </div>
+      
+    </div></section>
+<section class="slide "><div class="diagram">
+      <div class="diagram-head">
+        <p class="eyebrow">Mission</p>
+        <h2>One system. One truth.</h2>
+        <p class="subhead">Small aviation runs on whiteboards, dispatch binders, and five tools that don't talk to each other. AeroOps makes the connected version the easy version.</p>
+        <ul class="bullets"><li>The schedule doesn't know the airplane is grounded.</li><li>The invoice doesn't know the flight closed.</li><li>The chief instructor recalls checkride readiness from memory.</li></ul>
+      </div>
+      <div class="diagram-art"><img src="../assets/ecosystem.svg" alt=""/></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">2 / 24</span></div></section>
+<section class="slide "><div class="section">
+      <p class="eyebrow">The problem</p>
+      <h2>Fragmentation is the enemy</h2>
+      <p class="subhead">Every seam between tools is where money and safety leak out.</p>
+      <div class="cards cards-4">
+        <div class="card"><p class="card-t">Revenue leaks</p><p class="card-d">Flights that closed but were never billed.</p></div><div class="card"><p class="card-t">Airworthiness by memory</p><p class="card-d">The overdue inspection no spreadsheet flagged.</p></div><div class="card"><p class="card-t">Training opacity</p><p class="card-d">Readiness as tribal knowledge, not a record.</p></div><div class="card"><p class="card-t">Compliance anxiety</p><p class="card-d">The FSDO conversation starts from recollection.</p></div>
+      </div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">3 / 24</span></div></section>
+<section class="slide "><div class="diagram">
+      <div class="diagram-head">
+        <p class="eyebrow">Why AeroOps</p>
+        <h2>An operating system, not an app</h2>
+        <p class="subhead">Scheduling, dispatch, maintenance, training, and money as one continuous, auditable motion — what airlines have had for decades.</p>
+        <ul class="bullets"><li>One data model, not five products and a spreadsheet.</li><li>Every computed answer carries its reasons.</li><li>An immutable audit trail under every action.</li></ul>
+      </div>
+      <div class="diagram-art"><img src="../assets/ecosystem.svg" alt=""/></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">4 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Platform overview</p>
+        <h2>Everything the operation touches</h2>
+        <p class="subhead">One login. One picture. One record.</p>
+        <ul class="bullets"><li>Fly — Scheduling · Dispatch · Operations · Mission Control</li><li>Maintain — Squawks · Work orders · Return-to-service · Parts</li><li>Teach — Students · Instructors · Checkride readiness</li><li>Bill — Invoices · Payments · Receivables</li><li>Know — Reports · Executive view · Explainable insights</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/dashboard.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">5 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Dashboard</p>
+        <h2>What needs me today</h2>
+        <p class="subhead">The morning triage, answered before the first click.</p>
+        <ul class="bullets"><li>Today's flights, at a glance.</li><li>Needs Attention — squawks, inspections, checkrides, activity.</li><li>Fleet status and weather for the active location.</li><li>Personalized: every viewer sees only what their role should.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/dashboard.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">6 / 24</span></div></section>
+<section class="slide "><div class="split split-dark">
+      <div class="col-text">
+        <p class="eyebrow">Mission Control</p>
+        <h2>The operation on the wall</h2>
+        <p class="subhead">A live, full-screen operations picture for the front desk and the ops room.</p>
+        <ul class="bullets"><li>Real-time flight, fleet, and weather panels.</li><li>The audit timeline as a first-class surface — not a log file.</li><li>TV mode and scenes for the dispatch wall.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame frame-dark">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/mission-control.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">7 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Scheduling</p>
+        <h2>Book it once, everywhere</h2>
+        <p class="subhead">The schedule that knows the airplane, the instructor, and the student.</p>
+        <ul class="bullets"><li>Conflicts caught before they're saved.</li><li>Aircraft, instructor, student, and resource on one axis.</li><li>Grounded aircraft can't quietly stay on the schedule.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/schedule.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">8 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Training</p>
+        <h2>The training pipeline, in the system</h2>
+        <p class="subhead">Readiness with reasons — not reconstructed from memory.</p>
+        <ul class="bullets"><li>Students, instructors, stage checks, and checkride queue in one place.</li><li>Endorsements and currency on the record, not in a spreadsheet.</li><li>Lesson records that follow the student through the syllabus.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/training.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">9 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Fleet &amp; Maintenance</p>
+        <h2>Airworthiness the system enforces</h2>
+        <p class="subhead">Squawk → work order → return-to-service, with parts you can audit.</p>
+        <ul class="bullets"><li>Squawks ranked by airworthiness impact.</li><li>Signed return-to-service on the record.</li><li>Parts movement as a typed, traceable ledger.</li><li>Ground an aircraft and see the blast radius.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/maintenance.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">10 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Operations</p>
+        <h2>The day, in motion</h2>
+        <p class="subhead">Release, watch, resolve, close out — without phone-tag.</p>
+        <ul class="bullets"><li>Live releases and returns from one board.</li><li>Status that's always truthful across schedule and maintenance.</li><li>Conflicts and grounding impact surfaced before they bite.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/operations.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">11 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Billing</p>
+        <h2>Money that reconciles itself</h2>
+        <p class="subhead">Invoices, payments, and receivables built into the operation — not bolted on.</p>
+        <ul class="bullets"><li>One invoice per flight, generated at closeout.</li><li>Money is exact by construction (Decimal, never float).</li><li>Receivables aging and payment records in the tenant.</li></ul>
+        <p class="footnote">Card processing on invoices is on the roadmap (Stripe adapter).</p>
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/billing.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">12 / 24</span></div></section>
+<section class="slide "><div class="diagram">
+      <div class="diagram-head">
+        <p class="eyebrow">The feature moment</p>
+        <h2>One motion. No leak.</h2>
+        <p class="subhead">The flight closes. The meters move. The invoice exists — atomically. If any step fails, none of it commits.</p>
+        
+      </div>
+      <div class="diagram-art"><img src="../assets/workflow.svg" alt=""/></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">13 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Reports</p>
+        <h2>Numbers you can defend</h2>
+        <p class="subhead">Executive reporting with the reasons behind every figure.</p>
+        <ul class="bullets"><li>Revenue, utilization, and instructor productivity.</li><li>Executive view for the owner and the board.</li><li>An immutable audit trail underneath every number.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/executive.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">14 / 24</span></div></section>
+<section class="slide "><div class="section">
+      <p class="eyebrow">Role-based experience</p>
+      <h2>One product. Every seat.</h2>
+      <p class="subhead">Personalized by permission — never hardcoded by title. No one sees data their role shouldn't.</p>
+      <div class="roles">
+        <div class="role"><div class="role-shot"><img src="../assets/screens/role-owner.png" alt=""/></div><p>Account Owner</p></div><div class="role"><div class="role-shot"><img src="../assets/screens/role-dispatcher.png" alt=""/></div><p>Operations Director</p></div><div class="role"><div class="role-shot"><img src="../assets/screens/role-instructor.png" alt=""/></div><p>Chief / Flight Instructor</p></div><div class="role"><div class="role-shot"><img src="../assets/screens/role-dispatcher.png" alt=""/></div><p>Flight Dispatcher</p></div><div class="role"><div class="role-shot"><img src="../assets/screens/role-maintenance.png" alt=""/></div><p>Maintenance Manager</p></div><div class="role"><div class="role-shot"><img src="../assets/screens/role-student.png" alt=""/></div><p>Student Pilot</p></div>
+      </div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">15 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Customization</p>
+        <h2>Fits your operation</h2>
+        <p class="subhead">Configure the product to the operation without a consultant.</p>
+        <ul class="bullets"><li>Toggle dashboard widgets per user.</li><li>Role-driven navigation and custom-role templates (Registrar, Front Office, Safety Officer…).</li><li>School branding, time zone, and multiple locations.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../assets/screens/role-finance.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">16 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Migration</p>
+        <h2>Bring your data. Roll it back.</h2>
+        <p class="subhead">The Import Center is why switching isn't scary.</p>
+        <ul class="bullets"><li>Presets for Flight Circle, Flight Schedule Pro, FlightLogger, QuickBooks.</li><li>Map → test (a real, rolled-back run) → commit → rollback manifest.</li><li>Public API v1 and signed webhooks for what comes next.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/import.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">17 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Mobile</p>
+        <h2>The operation in your pocket</h2>
+        <p class="subhead">A responsive, installable app — for the ramp, the desk, and the couch.</p>
+        <ul class="bullets"><li>Installable PWA: add to home screen, works on phone and tablet.</li><li>Bottom navigation and full light/dark parity.</li><li>Every role's view, sized for the device.</li></ul>
+        <p class="footnote">Installable PWA today; native app-store wrappers are on the roadmap.</p>
+      </div>
+      <div class="col-visual col-visual-phone"><div class="phone"><img src="../../public/marketing/mobile-dashboard.png" alt=""/></div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">18 / 24</span></div></section>
+<section class="slide "><div class="section">
+      <p class="eyebrow">Why schools choose AeroOps</p>
+      <h2>Adopt it in an afternoon</h2>
+      <p class="subhead">Built for the owner who is also the operations department.</p>
+      <div class="cards cards-4">
+        <div class="card"><p class="card-t">One place</p><p class="card-d">No re-entering a flight into three systems.</p></div><div class="card"><p class="card-t">Billing by itself</p><p class="card-d">Invoices happen at closeout, automatically.</p></div><div class="card"><p class="card-t">Know tonight</p><p class="card-d">What today made, before you go home.</p></div><div class="card"><p class="card-t">No overhead</p><p class="card-d">No manual, no consultant, no back office.</p></div>
+      </div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">19 / 24</span></div></section>
+<section class="slide "><div class="split ">
+      <div class="col-text">
+        <p class="eyebrow">Proof &amp; trust</p>
+        <h2>Explainable by construction</h2>
+        <p class="subhead">Trust is the product.</p>
+        <ul class="bullets"><li>Every conflict, readiness score, and insight shows its reasons.</li><li>The audit trail is immutable — never rewritten, never skipped.</li><li>AI advises; it never acts. Mutations require a permissioned human.</li><li>Multi-tenant isolation enforced from the session, never the client.</li></ul>
+        
+      </div>
+      <div class="col-visual "><div class="frame ">
+    <div class="frame-bar"><span></span><span></span><span></span></div>
+    <img src="../../public/marketing/intelligence.png" alt=""/>
+  </div></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">20 / 24</span></div></section>
+<section class="slide "><div class="diagram">
+      <div class="diagram-head">
+        <p class="eyebrow">Security &amp; architecture</p>
+        <h2>Enterprise-grade underneath</h2>
+        <p class="subhead">Multi-tenant by construction, one authorization gate, an immutable audit trail, and an atomic money path.</p>
+        
+      </div>
+      <div class="diagram-art"><img src="../assets/architecture.svg" alt=""/></div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">21 / 24</span></div></section>
+<section class="slide "><div class="section">
+      <p class="eyebrow">Roadmap — clearly future</p>
+      <h2>The seams are already built</h2>
+      <p class="subhead">We're plugging adapters into existing seams. Everything here is roadmap.</p>
+      <div class="tiers">
+        <div class="tier"><span class="badge">Roadmap</span><div><p class="tier-t">Delivery</p><p class="tier-d">Email &amp; SMS notifications, web push.</p></div></div><div class="tier"><span class="badge">Roadmap</span><div><p class="tier-t">Payments</p><p class="tier-d">Stripe subscriptions and card-on-invoice.</p></div></div><div class="tier"><span class="badge">Roadmap</span><div><p class="tier-t">Live weather</p><p class="tier-d">Real METAR/TAF (simulated today).</p></div></div><div class="tier"><span class="badge">Roadmap</span><div><p class="tier-t">Documents</p><p class="tier-d">Cloud file storage with signed URLs.</p></div></div><div class="tier"><span class="badge">Roadmap</span><div><p class="tier-t">Operational intelligence</p><p class="tier-d">Airworthiness forecasting, currency guards, live AI narration.</p></div></div>
+      </div>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">22 / 24</span></div></section>
+<section class="slide "><div class="section">
+      <p class="eyebrow">Pricing philosophy</p>
+      <h2>Priced for the operation you are</h2>
+      <p class="subhead">Modern SaaS economics — no consultant, no hostage fees.</p>
+      <div class="cards cards-3">
+        <div class="card card-hi"><p class="card-t">Transparent</p><p class="card-d">Per-aircraft / per-seat, published — not negotiated in the dark.</p></div><div class="card card-hi"><p class="card-t">Self-serve</p><p class="card-d">Onboard in an afternoon; a real import path out of any competitor.</p></div><div class="card card-hi"><p class="card-t">Grows with you</p><p class="card-d">Scale shouldn't punish you — pricing grows with the operation.</p></div>
+      </div>
+      <p class="price-cta">Transparent pricing — contact us.</p>
+    </div><div class="foot"><span class="wm">AERO<b>OPS</b></span><span class="pg">23 / 24</span></div></section>
+<section class="slide slide-dark"><div class="cover close">
+      <img class="cover-bg" src="../../public/marketing/mission-control.png" alt=""/>
+      <div class="cover-inner">
+        <h1 class="close-h">Run the operation, not the paperwork.</h1>
+        <p class="close-sub">See your school on AeroOps.</p>
+        <div class="cta">Request a demo · aerops.io</div>
+      </div>
+    </div></section></body></html>

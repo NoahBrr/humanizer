@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="abg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7f9fc"/><stop offset="100%" stop-color="#eef2f8"/>
+    </linearGradient>
+    <linearGradient id="gate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e63d0"/><stop offset="100%" stop-color="#154aa0"/>
+    </linearGradient>
+    <filter id="asoft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="9" flood-color="#0b2447" flood-opacity="0.16"/>
+    </filter>
+    <marker id="aarw" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8aa3c4"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="640" rx="20" fill="url(#abg)"/>
+  <text x="48" y="56" fill="#0b2447" font-size="24" font-weight="800">Built like modern infrastructure</text>
+  <text x="48" y="84" fill="#5b6b7e" font-size="15" font-weight="500">Multi-tenant by construction. Every request passes one authorization gate.</text>
+
+  <!-- clients -->
+  <g filter="url(#asoft)"><rect x="48" y="130" width="200" height="380" rx="16" fill="#ffffff" stroke="#dbe3ee"/></g>
+  <text x="148" y="164" text-anchor="middle" fill="#0b2447" font-size="15" font-weight="700">Any device</text>
+  <g font-size="13" font-weight="600" text-anchor="middle">
+    <rect x="72" y="188" width="152" height="52" rx="10" fill="#eef4fc" stroke="#cfe0f6"/><text x="148" y="219" fill="#154aa0">Web app</text>
+    <rect x="72" y="256" width="152" height="52" rx="10" fill="#eef4fc" stroke="#cfe0f6"/><text x="148" y="287" fill="#154aa0">Installable PWA</text>
+    <rect x="72" y="324" width="152" height="52" rx="10" fill="#eef4fc" stroke="#cfe0f6"/><text x="148" y="355" fill="#154aa0">Public API + webhooks</text>
+    <rect x="72" y="392" width="152" height="52" rx="10" fill="#eef4fc" stroke="#cfe0f6"/><text x="148" y="423" fill="#154aa0">Mission Control wall</text>
+  </g>
+
+  <!-- gate -->
+  <g filter="url(#asoft)"><rect x="330" y="240" width="180" height="160" rx="16" fill="url(#gate)"/></g>
+  <text x="420" y="300" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="800">authorize()</text>
+  <text x="420" y="326" text-anchor="middle" fill="#cfe4ff" font-size="12" font-weight="600">one gate — every route</text>
+  <text x="420" y="352" text-anchor="middle" fill="#cfe4ff" font-size="12" font-weight="500">RBAC · session · MFA</text>
+
+  <!-- app -->
+  <g filter="url(#asoft)"><rect x="590" y="130" width="230" height="380" rx="16" fill="#0b2447"/></g>
+  <text x="705" y="164" text-anchor="middle" fill="#ffffff" font-size="15" font-weight="700">AeroOps engines</text>
+  <g font-size="13" font-weight="600" text-anchor="middle" fill="#dfe9f6">
+    <rect x="612" y="186" width="186" height="44" rx="9" fill="#12305b" stroke="#274d86"/><text x="705" y="213">Scheduling · Dispatch</text>
+    <rect x="612" y="240" width="186" height="44" rx="9" fill="#12305b" stroke="#274d86"/><text x="705" y="267">Maintenance · Training</text>
+    <rect x="612" y="294" width="186" height="44" rx="9" fill="#12305b" stroke="#274d86"/><text x="705" y="321">Billing · Reporting</text>
+    <rect x="612" y="348" width="186" height="44" rx="9" fill="#12305b" stroke="#274d86"/><text x="705" y="375">Event bus · Insights</text>
+    <rect x="612" y="402" width="186" height="44" rx="9" fill="#12305b" stroke="#274d86"/><text x="705" y="429">Immutable audit trail</text>
+  </g>
+
+  <!-- data -->
+  <g filter="url(#asoft)"><rect x="900" y="200" width="250" height="240" rx="16" fill="#ffffff" stroke="#dbe3ee"/></g>
+  <text x="1025" y="234" text-anchor="middle" fill="#0b2447" font-size="15" font-weight="700">PostgreSQL</text>
+  <text x="1025" y="256" text-anchor="middle" fill="#7186a0" font-size="12" font-weight="500">tenant-isolated</text>
+  <g>
+    <ellipse cx="1025" cy="300" rx="80" ry="18" fill="#eef4fc" stroke="#cfe0f6"/>
+    <path d="M945 300 v56 a80 18 0 0 0 160 0 v-56" fill="#eef4fc" stroke="#cfe0f6"/>
+    <ellipse cx="1025" cy="300" rx="80" ry="18" fill="#dbe9fb"/>
+    <text x="1025" y="352" text-anchor="middle" fill="#154aa0" font-size="12" font-weight="700">Org A · Org B · Org C</text>
+    <text x="1025" y="392" text-anchor="middle" fill="#7186a0" font-size="11" font-weight="500">org scope from the session,</text>
+    <text x="1025" y="408" text-anchor="middle" fill="#7186a0" font-size="11" font-weight="500">never the client</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#8aa3c4" stroke-width="2.5" marker-end="url(#aarw)" fill="none">
+    <line x1="250" y1="320" x2="326" y2="320"/>
+    <line x1="512" y1="320" x2="586" y2="320"/>
+    <line x1="822" y1="320" x2="896" y2="320"/>
+  </g>
+
+  <g font-size="14" font-weight="700" text-anchor="middle">
+    <rect x="330" y="470" width="490" height="40" rx="10" fill="#eaf6ee" stroke="#bfe4ca"/>
+    <text x="575" y="495" fill="#1f7a44">Every mutation is audited · money moves atomically · nothing leaks across tenants</text>
+  </g>
+</svg>

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="70%">
+      <stop offset="0%" stop-color="#122f5c"/>
+      <stop offset="100%" stop-color="#0b2447"/>
+    </radialGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e63d0"/>
+      <stop offset="100%" stop-color="#154aa0"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#04122b" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="760" rx="24" fill="url(#bg)"/>
+
+  <!-- connecting spokes -->
+  <g stroke="#38a1e8" stroke-width="2" opacity="0.35">
+    <line x1="600" y1="380" x2="300" y2="180"/>
+    <line x1="600" y1="380" x2="600" y2="150"/>
+    <line x1="600" y1="380" x2="900" y2="180"/>
+    <line x1="600" y1="380" x2="255" y2="380"/>
+    <line x1="600" y1="380" x2="945" y2="380"/>
+    <line x1="600" y1="380" x2="300" y2="580"/>
+    <line x1="600" y1="380" x2="600" y2="610"/>
+    <line x1="600" y1="380" x2="900" y2="580"/>
+  </g>
+
+  <!-- core -->
+  <circle cx="600" cy="380" r="96" fill="url(#core)" filter="url(#soft)"/>
+  <circle cx="600" cy="380" r="96" fill="none" stroke="#38a1e8" stroke-width="1.5" opacity="0.6"/>
+  <text x="600" y="368" text-anchor="middle" fill="#ffffff" font-size="26" font-weight="800" letter-spacing="1">AERO<tspan fill="#38a1e8">OPS</tspan></text>
+  <text x="600" y="398" text-anchor="middle" fill="#c6cfd8" font-size="13" font-weight="500">One system</text>
+  <text x="600" y="416" text-anchor="middle" fill="#c6cfd8" font-size="13" font-weight="500">of record</text>
+
+  <!-- module nodes -->
+  <g font-size="16" font-weight="600" text-anchor="middle">
+    <g>
+      <circle cx="300" cy="180" r="64" fill="#0e2a52" stroke="#2b5aa8" stroke-width="1.5" filter="url(#soft)"/>
+      <text x="300" y="176" fill="#ffffff">Scheduling</text>
+      <text x="300" y="198" fill="#8fb4e6" font-size="12" font-weight="500">conflict-free</text>
+    </g>
+    <g>
+      <circle cx="600" cy="150" r="64" fill="#0e2a52" stroke="#2b5aa8" stroke-width="1.5" filter="url(#soft)"/>
+      <text x="600" y="146" fill="#ffffff">Dispatch</text>
+      <text x="600" y="168" fill="#8fb4e6" font-size="12" font-weight="500">release &amp; closeout</text>
+    </g>
+    <g>
+      <circle cx="900" cy="180" r="64" fill="#0e2a52" stroke="#2b5aa8" stroke-width="1.5" filter="url(#soft)"/>
+      <text x="900" y="176" fill="#ffffff">Maintenance</text>
+      <text x="900" y="198" fill="#8fb4e6" font-size="12" font-weight="500">airworthiness</text>
+    </g>
+    <g>
+      <circle cx="255" cy="380" r="64" fill="#0e2a52" stroke="#2b5aa8" stroke-width="1.5" filter="url(#soft)"/>
+      <text x="255" y="376" fill="#ffffff">Training</text>
+      <text x="255" y="398" fill="#8fb4e6" font-size="12" font-weight="500">records</text>
+    </g>
+    <g>
+      <circle cx="945" cy="380" r="64" fill="#0e2a52" stroke="#2b5aa8" stroke-width="1.5" filter="url(#soft)"/>
+      <text x="945" y="376" fill="#ffffff">Billing</text>
+      <text x="945" y="398" fill="#8fb4e6" font-size="12" font-weight="500">auto-invoice</text>
+    </g>
+    <g>
+      <circle cx="300" cy="580" r="64" fill="#0e2a52" stroke="#2b5aa8" stroke-width="1.5" filter="url(#soft)"/>
+      <text x="300" y="576" fill="#ffffff">CRM</text>
+      <text x="300" y="598" fill="#8fb4e6" font-size="12" font-weight="500">admissions</text>
+    </g>
+    <g>
+      <circle cx="600" cy="610" r="64" fill="#0e2a52" stroke="#2b5aa8" stroke-width="1.5" filter="url(#soft)"/>
+      <text x="600" y="606" fill="#ffffff">Reporting</text>
+      <text x="600" y="628" fill="#8fb4e6" font-size="12" font-weight="500">executive</text>
+    </g>
+    <g>
+      <circle cx="900" cy="580" r="64" fill="#0e2a52" stroke="#2b5aa8" stroke-width="1.5" filter="url(#soft)"/>
+      <text x="900" y="576" fill="#ffffff">Mission</text>
+      <text x="900" y="596" fill="#ffffff">Control</text>
+    </g>
+  </g>
+
+  <text x="600" y="716" text-anchor="middle" fill="#7f9dc4" font-size="15" font-weight="500">Every workspace shares the same data, permissions, and audit trail.</text>
+</svg>

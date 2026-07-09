@@ -1,0 +1,276 @@
+# AeroOps — Claude Code Operating System
+
+Read this first, every session. AeroOps is a **production SaaS aviation
+operations platform** — treat every change as customer-facing.
+[CONSTITUTION.md](./CONSTITUTION.md) is law (machine-enforced),
+[docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
+is the system source of truth, [ROADMAP.md](./ROADMAP.md) is the living
+backlog, [PRODUCTION.md](./PRODUCTION.md) is the launch plan. The full
+governance library lives in [`docs/`](./docs/) — see §13.
+
+## 1. Project overview
+
+Multi-tenant operating system for aviation organizations (flight schools,
+flying clubs, rental, FBOs, maintenance, charter, corporate, universities):
+scheduling, dispatch, maintenance, training, billing, CRM, Mission Control,
+AI insights — plus a public marketing site, self-serve onboarding, an Import
+Center, and an internal Founder Platform for AeroOps staff.
+
+Surfaces: `(marketing)` public site · `(auth)` sign-in/up · `/welcome`
+(individual accounts) · `(app)` tenant app · `/platform` internal staff
+portal · `/mission-control` full-screen wall · `/api/v1` public API.
+
+## 2. Tech stack
+
+Next.js 15 App Router · TypeScript · Tailwind 4 (design tokens in
+`globals.css`) · **Prisma 6 pinned — never upgrade to 7** · PostgreSQL 16 ·
+NextAuth v5 · vitest · Playwright for verification. No new dependencies
+without a strong reason — prefer what's already here.
+
+## 3. Architecture rules
+
+- Business logic lives in `src/lib` engines; pages/routes stay thin.
+  Computed answers carry their reasons (factors/basis/confidence).
+- Every API route authorizes through `authorize()` / `authorizePlatform()`
+  (`src/lib/session.ts`) — one gate, no exceptions (constitution-tested).
+- Domain events go through `emitDomainEvent` (`src/lib/events.ts`); never
+  call `emitWebhook` outside `src/lib`.
+- RBAC is data (`src/lib/permissions.ts`); never hardcode role checks.
+  Nav items must map to `SECTION_PERMISSIONS` (tested).
+- Extend existing modules and idioms; do not invent parallel abstractions.
+  Simple beats clever — this codebase optimizes for maintainability.
+
+## 4. UI/UX standards
+
+- Design system only: components from `src/components/ui`, brand marks from
+  `src/components/brand/logo.tsx`, colors from tokens (`bg-primary`,
+  `text-brand-sky`, `bg-sidebar`…) — never raw hex in components.
+- Status colors come exclusively from `src/lib/status-colors.ts`
+  (`STATUS_TONE` defined exactly once — tested).
+- Every page works in light + dark, desktop + tablet + mobile (bottom nav
+  below `lg`). Loading, empty, and error states are part of the feature.
+- Tone: aviation-professional, enterprise-calm. No flashy gradients or
+  trendy effects. Errors tell the user what to do next.
+- Marketing pages use real product screenshots from `public/marketing/` —
+  regenerate them after UI changes (see §12) so print/presentation surfaces
+  never show an outdated interface.
+
+## 5. Database standards
+
+- Multi-tenant by construction: every operational record hangs off
+  `Organization`; org scope comes **from the session, never the client**.
+- Schema changes = named migration (`npx prisma migrate dev --name x`),
+  additive-only within a release (rollback safety). Money = `Decimal`,
+  never float.
+- Wherever money moves or multiple rows must agree: `db.$transaction`.
+- Mind FK actions: instructor-linked records (lesson records, endorsements)
+  are RESTRICT — deletion helpers order children first (see
+  `lib/org-snapshot.ts` for the canonical wipe order).
+
+## 6. Authentication, organization & location rules
+
+- Session kinds: `org` (tenant member), `platform` (AeroOps staff — separate
+  `PlatformUser` identity table), `individual` (signed up, no org yet →
+  `/welcome` only). Resolve via `getSession()` — never `auth()` directly.
+- Impersonation is a signed, expiring cookie; read-only blocks mutations;
+  start/stop are audited and customer-notified. Never weaken this.
+- Users join orgs only via join-request approval, invite link, email
+  invitation, or import. `User.organizationId` may be null (individual).
+- The **active location** is the per-user `aerops-location` cookie, falling
+  back to the org's first active location. Anything location-sensitive
+  (weather, ops boards, filters) must respect it.
+
+## 7. Weather source-of-truth rules
+
+All weather comes from `src/lib/weather.ts` (`airportWeather`,
+`activeLocationWeather`, `weatherSummary`) keyed to the active org/location.
+**Never hardcode an airport identifier or METAR string in the UI** —
+`tests/weather.test.ts` statically rejects it. The generator is a
+deterministic simulated METAR; the production METAR/TAF adapter will replace
+its internals without touching any consumer.
+
+## 8. Testing requirements
+
+- `npm test` green before any commit (engine contracts, constitution
+  compliance, security, weather, import suites — sub-second).
+- New engine → new contract test. New API route → it must pass the
+  constitution authorization scan (add to the catalogued PUBLIC /
+  SELF_SERVICE lists only with a written reason).
+- Verify against the running app (`npm start -- -p 3100`): real requests for
+  APIs **including denial and cross-tenant paths**, Playwright + screenshots
+  for UI. Never claim verification you didn't perform.
+
+## 9. Deployment readiness expectations
+
+Follow [PRODUCTION.md](./PRODUCTION.md). **Do not deploy unless explicitly
+asked.** Production adapters (email, Stripe, METAR, storage, queue) plug
+into existing seams — build behind env flags and degrade gracefully when
+unset. Additive migrations only; secrets never in the repo.
+
+## 10. Code quality rules
+
+- `npm run build` green (lint + types) before every commit; no `any`
+  escape-hatches, no unused exports, no dead code left behind.
+- Comments state constraints the code can't express (never narrate a diff).
+- Mutations are audited (`recordAudit`); AI never mutates on its own;
+  user-facing errors are actionable; rows/records never fail silently
+  (the Import Center is the reference pattern).
+- Small slices, each deployable. Update docs (this file, ROADMAP,
+  ARCHITECTURE) when the architecture moves — docs are part of the feature.
+
+## 11. Do-not-break rules
+
+1. Tenant isolation — no query without org scope from the session.
+2. The `authorize()` gate — no route bypasses it.
+3. The audit trail — never rewritten, never skipped for mutations.
+4. The Prisma 6 pin, and the seeded demo logins (`demo1234` accounts).
+5. Dispatch closeout atomicity (meters + ledger + invoice in one tx).
+6. Weather single-source rule (§7) and status-color single-source rule.
+7. Sidebar reopenability, mobile bottom nav, light/dark parity.
+8. Marketing ↔ app separation (no org data on public pages).
+9. Import rollback manifests (every created record tracked).
+10. Existing tests — fix the code, not the test, unless the contract truly
+    changed (say so explicitly when it did).
+
+## 12. Instructions for future Claude Code sessions
+
+1. Start: read this file → skim ROADMAP's "Last session update" → `npm test`.
+2. **Before any significant implementation, run this sequence in order**
+   (skip for typo-tier fixes, per the review-board gate matrix):
+   1. Read [docs/company/VISION.md](./docs/company/VISION.md) — does this
+      serve a named persona and the current market?
+   2. Read [docs/company/NORTH_STAR.md](./docs/company/NORTH_STAR.md) —
+      does it weaken anything under "What must never change"? If yes, stop.
+   3. Review [docs/company/PRODUCT_PRINCIPLES.md](./docs/company/PRODUCT_PRINCIPLES.md)
+      — which principles apply, and which wins where they conflict?
+   4. Verify compliance with
+      [docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md)
+      and read the engine you're touching.
+   5. Check [docs/architecture/DECISIONS.md](./docs/architecture/DECISIONS.md)
+      — if an ADR decided the pattern, write a superseding ADR first,
+      never a silent edit.
+   6. Apply [docs/engineering/ENGINEERING_HANDBOOK.md](./docs/engineering/ENGINEERING_HANDBOOK.md)
+      (and [docs/design/DESIGN_SYSTEM.md](./docs/design/DESIGN_SYSTEM.md)
+      for anything with a screen).
+   7. Evaluate against
+      [docs/aviation/AVIATION_STANDARDS.md](./docs/aviation/AVIATION_STANDARDS.md).
+   8. Complete all required AI reviews
+      ([docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md),
+      including the executive gates at feature-slice scope and above).
+   9. Update documentation in the same PR when behavior or architecture
+      changes — docs are part of the feature.
+
+   Any intentional deviation from architecture or principles gets explained
+   (in the plan, the ADR, and the commit) *before* the code is written —
+   shortcuts that violate architecture are refused, not smuggled in.
+3. Work in slices using the roles below; keep the constitution green. No
+   feature is complete until it passes the quality gates in §13.
+4. DB down? `pg_ctlcluster 16 main start`; reseed with `npm run seed`
+   (wipes runtime-created rows: API keys, webhooks, notes, scenes).
+   Shell cwd resets between commands — run npm/npx from `aerops/`, git from
+   the repo root.
+5. UI changed? Rebuild, serve on :3100, and refresh the marketing/print
+   visuals: `node scripts/capture-marketing.mjs` — then eyeball the homepage.
+6. Playwright: `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'`;
+   Mission Control holds an SSE connection open — wait for `load` or a
+   selector, never `networkidle`.
+7. Verify page gating by content markers, not status codes (`redirect()`
+   streams a 200 shell); strip SSR comment markers (`<!-- -->`) before
+   grepping rendered HTML.
+8. Record honest deferrals in your report and, if durable, in ROADMAP.md.
+9. Before ending: update ROADMAP.md (statuses + "Last session update"),
+   commit with a clear message, push to the designated branch.
+
+## 13. Governance library & quality gates
+
+The permanent engineering operating system. Read the relevant document
+before working in its territory; update it in the same PR when the
+territory moves.
+
+| Document | Governs |
+|---|---|
+| [docs/company/VISION.md](./docs/company/VISION.md) | Why AeroOps exists — mission, personas, markets, out-of-scope list |
+| [docs/company/NORTH_STAR.md](./docs/company/NORTH_STAR.md) | What must never change — the highest-level tiebreaker |
+| [docs/company/PRODUCT_PRINCIPLES.md](./docs/company/PRODUCT_PRINCIPLES.md) | The 12 principles that decide features |
+| [docs/design/DESIGN_SYSTEM.md](./docs/design/DESIGN_SYSTEM.md) | Tokens, components, states, print, motion — the visual language |
+| [docs/architecture/ARCHITECTURE.md](./docs/architecture/ARCHITECTURE.md) | System source of truth — every implementation complies |
+| [docs/architecture/DECISIONS.md](./docs/architecture/DECISIONS.md) | ADR log — check before changing any established pattern |
+| [docs/architecture/API_STANDARDS.md](./docs/architecture/API_STANDARDS.md) | REST conventions, errors, versioning, idempotency |
+| [docs/architecture/DATABASE_STANDARDS.md](./docs/architecture/DATABASE_STANDARDS.md) | Prisma, migrations, indexes, tenancy, backups |
+| [docs/architecture/SECURITY_STANDARDS.md](./docs/architecture/SECURITY_STANDARDS.md) | Auth, sessions, secrets, OWASP, audit |
+| [docs/engineering/ENGINEERING_HANDBOOK.md](./docs/engineering/ENGINEERING_HANDBOOK.md) | How code gets written, reviewed, released |
+| [docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md) | Eight reviewers + four executive roles (CEO, PM, Financial, Reliability) and their gates |
+| [docs/aviation/AVIATION_STANDARDS.md](./docs/aviation/AVIATION_STANDARDS.md) | Aviation-first domain rules (FAA terms, Hobbs/Tach, weather, compliance) |
+| [docs/company/ROLES_AND_WORKSPACES.md](./docs/company/ROLES_AND_WORKSPACES.md) | Role model, permission/sidebar/dashboard matrices, custom-role templates |
+| [CONSTITUTION.md](./CONSTITUTION.md) | Machine-enforced rules (`tests/constitution.test.ts`) |
+| [PRODUCTION.md](./PRODUCTION.md) | Launch plan, phases A–F, env matrix |
+| [ROADMAP.md](./ROADMAP.md) | Living backlog + session log |
+
+**Quality gates — no feature is complete until ALL eight pass** (scaled to
+change size per the review-board matrix; a typo fix doesn't convene a
+committee):
+
+✓ Architecture Review · ✓ Security Review · ✓ Performance Review ·
+✓ UX Review · ✓ QA Review · ✓ Documentation Review · ✓ Production Review ·
+✓ Aviation Standards Review
+
+Verdicts are recorded in the commit/PR description. Reviewer definitions,
+checklists, pass criteria, and automatic-rejection criteria:
+[docs/engineering/AI_REVIEW_BOARD.md](./docs/engineering/AI_REVIEW_BOARD.md).
+
+## Engineering roles (Claude Code subagents)
+
+Specialized subagents live in `.claude/agents/` (symlinked from the repo
+root's `.claude/agents/` so they're discovered from either anchor). Use them
+so work runs like a coordinated team — but don't ceremonialize small fixes; a typo doesn't
+need a committee. Typical flow for a feature slice:
+
+**architect (CTO + PM lenses) → engineer (+ ui-engineer / db-architect
+where touched) → security-reviewer + performance-reviewer + qa-engineer +
+ui-engineer in parallel → docs-engineer → production-reviewer before
+release-sized merges** (the board's gate matrix scales this down for small
+fixes).
+
+| Role | Agent | Use when |
+|---|---|---|
+| AI CTO / Product Architect | `architect` | Scoping a feature, choosing between designs, sequencing a phase |
+| Senior Full-Stack Engineer | `engineer` | Implementing slices end-to-end (the default builder) |
+| UI/UX Engineer | `ui-engineer` | New screens, design-system changes, responsive/dark-mode passes |
+| Database Architect | `db-architect` | Schema changes, migrations, query performance, FK safety |
+| QA/Test Engineer | `qa-engineer` | Contract tests, running-app verification, regression hunts |
+| Security Reviewer | `security-reviewer` | Auth/tenancy changes, new public or self-service routes, pre-beta audits |
+| Performance Reviewer | `performance-reviewer` | Query shape, latency, React/bundle cost, caching, scale seams |
+| Documentation Engineer | `docs-engineer` | CLAUDE/ROADMAP/ARCHITECTURE/README updates after changes land |
+| Production Readiness Reviewer | `production-reviewer` | Pre-release audit against PRODUCTION.md checklists |
+
+## Commands
+
+```bash
+npm test                # vitest — contracts + constitution (must be green)
+npm run build           # lint + types + build (must be green)
+npx tsc --noEmit        # quick typecheck
+npx prisma migrate dev  # schema changes (always name the migration)
+npm run seed            # reset demo data (TRUNCATE CASCADE — wipes runtime rows)
+npm start -- -p 3100    # production server used for verification
+node scripts/capture-marketing.mjs  # refresh marketing/print screenshots
+node scripts/verify-print.mjs       # verify homepage print render + PDF export
+node scripts/verify-portal.mjs      # assert the RENDERED authed app matches the build (stale-server guard)
+```
+
+**Confirming a UI change reached the portal:** `next start` never hot-reloads,
+and a leftover `next-server` process (whose name doesn't match
+`pkill -f "next start"`) will silently serve *old* code — the #1 cause of
+"the change was committed but the portal looks unchanged." After a UI change:
+`rm -rf .next && npm run build`, kill every `next-server`/`next start` PID (not
+just `next start`), start fresh, then run `node scripts/verify-portal.mjs`. It
+prints the on-disk BUILD_ID and asserts the rendered sidebar/dashboard/settings
+markers, failing loudly on stale output rather than passing a false positive.
+
+`next start` runs in production mode, so the :3100 verification server needs
+a real `AUTH_SECRET` in `.env` (`openssl rand -base64 32`) — the committed
+placeholder is rejected by the fail-closed guard (`src/lib/env.ts`).
+
+Local DB: `postgresql://aerops:aerops@localhost:5432/aerops`.
+Demo logins (password `demo1234`): `admin@aerops.demo` (org admin),
+`founder@aerops.io` (platform founder); more in README.md, complete set in
+`prisma/seed.ts`.

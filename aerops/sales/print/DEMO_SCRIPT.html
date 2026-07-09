@@ -1,0 +1,96 @@
+<!doctype html><html><head><meta charset="utf-8"/><style>
+*{box-sizing:border-box;}
+@page{size:letter;margin:0;}
+html,body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0b2447;font-size:11.2px;line-height:1.5;}
+.page{padding:0 0 60px;}
+.band{background:radial-gradient(120% 160% at 0% 0%,#143063,#0b2447);color:#fff;padding:26px 54px 22px;display:flex;align-items:center;justify-content:space-between;}
+.band .wm{font-size:19px;font-weight:800;letter-spacing:1.5px;}
+.band .wm span{color:#38a1e8;}
+.band .doc{font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#9fc0e8;}
+.body{padding:30px 54px 0;}
+h1{font-size:26px;font-weight:800;letter-spacing:-.5px;margin:2px 0 4px;}
+h2{font-size:17px;font-weight:750;color:#0b2447;margin:20px 0 6px;}
+h3{font-size:13px;font-weight:700;color:#1e63d0;margin:16px 0 4px;letter-spacing:.2px;}
+p{margin:7px 0;color:#243247;}
+strong{color:#0b2447;font-weight:700;}
+ul{margin:7px 0 7px 2px;padding-left:18px;}
+li{margin:4px 0;color:#243247;}
+li::marker{color:#38a1e8;}
+hr{border:none;border-top:1px solid #e4e9f1;margin:16px 0;}
+code{background:#eef2f8;border-radius:4px;padding:1px 5px;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#154aa0;}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:10.4px;}
+th{background:#0b2447;color:#fff;text-align:left;padding:8px 10px;font-weight:600;font-size:10px;}
+td{border:1px solid #e4e9f1;padding:7px 10px;vertical-align:top;}
+tbody tr:nth-child(even){background:#f7f9fc;}
+.foot{position:fixed;bottom:0;left:0;right:0;padding:12px 54px;display:flex;justify-content:space-between;font-size:9.5px;color:#8b98a9;border-top:1px solid #eef2f8;background:#fff;}
+.foot b{color:#0b2447;}
+</style></head><body>
+  <div class="page">
+    <div class="band"><span class="wm">AERO<span>OPS</span></span><span class="doc">20-Minute Demo Script</span></div>
+    <div class="body"><h1>AeroOps — 20-Minute Live Demo Script</h1>
+<p><strong>Audience:</strong> owner-operators, chief instructors, DOMs, club boards, university program directors, corporate flight-department managers. <strong>Goal of the demo:</strong> land one idea — <em>AeroOps is one operating system where the schedule, the airplane, the training, and the money are a single connected motion.</em> <strong>Format:</strong> live, in the running app on the demo org <strong>Golden Gate Aviation Academy</strong>.</p>
+<p><strong>Before you start (2 min, off the clock):</strong></p>
+<ul><li>Have the app open and signed in as <code>admin@aerops.demo</code> (password <code>demo1234</code>), on <code>/dashboard</code>.</li><li>Have five more tabs ready to log in as: <code>dispatch@aerops.demo</code>, <code>sarah.cfi@aerops.demo</code>, <code>student@aerops.demo</code>, <code>maintenance@aerops.demo</code>, <code>accounting@aerops.demo</code> (all <code>demo1234</code>).</li><li>Know your prospect's seat. If they're a DOM, lean on Maintenance; if a club board, lean on Executive + role-based access.</li><li><strong>Do not narrate the UI.</strong> Narrate <em>their operation.</em> Every click should answer a question they actually have at 7 AM.</li></ul>
+<p><strong>Honesty guardrails for the presenter:</strong> if asked about card payments, live weather, email, or file uploads — say <strong>"on the roadmap"</strong> and show the seam. Never imply simulated weather is live METAR. A buyer who catches one overclaim discounts everything else you said.</p>
+<hr/>
+<h2>0:00–2:00 — Cold open: "What needs you today?"</h2>
+<p><strong>Where:</strong> <code>/dashboard</code> (logged in as <code>admin@aerops.demo</code>).</p>
+<p><strong>Do:</strong> Don't tour the nav. Land on the dashboard and let the "Needs attention" row carry it — squawks, upcoming maintenance, checkrides due, recent activity — next to today's flights and fleet status.</p>
+<p><strong>Say:</strong> &gt; "This is the first screen the owner of Golden Gate sees with their coffee. Not a menu — a triage. Before anyone's phoned in, the system has already told them what needs a human today: which airplane is about to need an inspection, who's ready for a checkride, what closed out overnight. Nothing here was typed by hand. It's the operation, explaining itself."</p>
+<p><strong>Wow beat:</strong> Point out that <em>every</em> number on this screen is a live read of the same data the invoice, the logbook, and the maintenance board use — "there's no spreadsheet behind this."</p>
+<hr/>
+<h2>2:00–4:30 — The schedule that knows the airplane</h2>
+<p><strong>Where:</strong> <code>/schedule</code>.</p>
+<p><strong>Do:</strong> Show the day's bookings — aircraft, instructors, students on one board. Mention conflict detection (double-booked aircraft caught before save).</p>
+<p><strong>Say:</strong> &gt; "This is where most tools stop — a calendar. Watch what makes ours different: this schedule is wired to the airplane's real airworthiness status and to billing. When we release a flight from here, the system checks the aircraft is actually flyable — and when it comes back, the money takes care of itself. Let me show you the part nobody else does cleanly."</p>
+<p><strong>Wow beat:</strong> Tease the closeout. "Keep your eye on that 172 — we're about to fly it and close it out, and I'm not going to touch an invoice to bill it."</p>
+<hr/>
+<h2>4:30–9:00 — The one motion: dispatch → closeout → invoice</h2>
+<p><strong>Where:</strong> <code>/dispatch</code> (this is the centerpiece — give it the time).</p>
+<p><strong>Do, part 1 — Release:</strong> Open a pending flight. Walk the <strong>release checklist</strong>: fuel, oil, weather acknowledged, documents verified. Point out the airworthiness gate.</p>
+<p><strong>Say:</strong> &gt; "Before this airplane is released, AeroOps confirms it's airworthy — inspections current, no grounding squawk. If it weren't, the release would be <em>blocked</em>, right here, with the reason. That's not a reminder you can click past. The system won't dispatch a grounded airplane."</p>
+<p><strong>Do, part 2 — Closeout:</strong> Take a released flight and close it out. Enter <strong>Hobbs in / Tach in</strong>, landings, and — this is the moment — capture a squawk with a severity (say, MINOR) on the way.</p>
+<p><strong>Say (slowly, this is the whole demo):</strong> &gt; "Watch one button. When I close this out, in a <em>single transaction</em>: billable time is computed from the Hobbs delta; the aircraft meters roll forward — Hobbs, Tach, engine and prop time; the student's flight hours and solo time are logged; the invoice is generated with the wet rate and the instructor time as line items; the student's balance is decremented; and this squawk I just noted lands on the maintenance board. Either <em>all</em> of that happens, or <em>none</em> of it does. I never opened the billing screen."</p>
+<p><strong>Wow beat:</strong> Now navigate to <code>/billing</code> and show the invoice that just appeared — with the correct line items — and <code>/maintenance</code> to show the squawk waiting for the DOM. "Two screens I never typed into. That flight cannot fly and not get billed. Revenue leakage isn't discouraged here — it's structurally impossible."</p>
+<p><strong>Objection pre-empt:</strong> "And yes — every one of those steps just wrote an audit entry. We'll come back to that."</p>
+<hr/>
+<h2>9:00–11:00 — Maintenance: airworthiness the system enforces</h2>
+<p><strong>Where:</strong> <code>/maintenance</code>, then <code>/aircraft</code> (log in as <code>maintenance@aerops.demo</code> in a second tab if it lands better for a DOM in the room).</p>
+<p><strong>Do:</strong> Show the squawk that arrived from closeout moving through the work-order queue → return-to-service. Show fleet health with the <em>reasons</em> for each aircraft's status.</p>
+<p><strong>Say:</strong> &gt; "This is where that squawk landed. From here it's a work order, and when it's fixed, a signed return-to-service — the same signature you'd stand behind for the FAA. And notice the fleet health score explains itself: every deduction has a reason. You're never told an airplane is 'yellow' without being told <em>why</em>."</p>
+<p><strong>Wow beat:</strong> "The scheduler couldn't dispatch this airplane if I ground it — and I can see the blast radius of which bookings that would kill before I do it. The schedule and the maintenance status can never silently disagree, because they're the same system."</p>
+<hr/>
+<h2>11:00–13:30 — Training: readiness with its reasons</h2>
+<p><strong>Where:</strong> <code>/training</code>, <code>/students</code>.</p>
+<p><strong>Do:</strong> Open a student. Show hours logged (the ones that just came from closeout), stage progress, endorsements, checkride readiness.</p>
+<p><strong>Say:</strong> &gt; "For the chief instructor, the pipeline that used to live in your head and a spreadsheet lives here — who's stage-check ready and <em>why</em>, whose endorsement is missing before Friday's checkride, who's cleared to solo. The hours on this screen are the same hours the flight closeout logged twenty minutes ago. One number, one place."</p>
+<p><strong>Wow beat:</strong> "No student appears 'ready' without the factors behind it. When the FAA or your accreditor asks how you knew, the answer is on the screen, not in a memory."</p>
+<hr/>
+<h2>13:30–16:30 — The role-based dashboard reveal (log in as a Student, then an Owner)</h2>
+<p><strong>Where:</strong> two tabs — <code>student@aerops.demo</code> and back to <code>admin@aerops.demo</code>.</p>
+<p><strong>Do:</strong> This is the trust beat. Log in as <strong>Taylor Nguyen, the student</strong>. Show their world: <em>My upcoming lessons, my training progress, my own balance, weather, my notifications.</em> Then point out what is <strong>not</strong> there — no finance for the whole school, no fleet, no other students, no operations wall.</p>
+<p><strong>Say:</strong> &gt; "Same platform, completely different screen. Taylor sees her next lesson, her progress toward the checkride, and what <em>she</em> owes. She cannot see another student's record, the school's revenue, or the fleet. This isn't a setting someone remembered to switch on — the app authorizes on <em>permissions</em>, not on a job title, on every page and every route. There is no 'oops, the student could see the P&amp;L.'"</p>
+<p><strong>Do:</strong> Flip back to the <strong>owner</strong> tab — the full 19-item sidebar, executive view, billing, settings. Same product, personalized by permission.</p>
+<p><strong>Say:</strong> &gt; "And the owner sees everything, because they hold the account and the liability. Between these two seats sit the dispatcher, the DOM, the finance manager, the CFI — each gets exactly their surface. You can even build custom roles — Assistant Chief Instructor, Front Office, a read-only Auditor for your board — without us shipping new code."</p>
+<p><strong>Wow beat:</strong> Two logins, side by side. "That's your insurer's question, your accreditor's question, and your board's question — answered by construction."</p>
+<hr/>
+<h2>16:30–18:30 — Executive + audit trail: the numbers you can defend</h2>
+<p><strong>Where:</strong> <code>/executive</code> (as owner), then <code>/mission-control</code> for the "wow," then reference the audit trail.</p>
+<p><strong>Do:</strong> Show the executive view — utilization, revenue, receivables. Then open <code>/mission-control</code> full-screen for the live operations wall (it holds a live connection — give it a second to load). Mention every mutation you did today is in the immutable audit trail.</p>
+<p><strong>Say:</strong> &gt; "For the owner, the board, the CFO: what did today make, what's overdue, is the fleet earning its keep. And underneath all of it is an audit trail that's never rewritten — every release, every closeout, every grounding, with who and when. When the FSDO, the insurer, or the accreditor asks, you start from records, not recollection. Mission Control here is the wall for the front desk or the ops room — live, and it makes a heck of a lobby screen."</p>
+<p><strong>Wow beat:</strong> The Mission Control wall on a big screen. Let it breathe for five seconds of silence.</p>
+<hr/>
+<h2>18:30–20:00 — Close: "and you're not trapped by your current tool"</h2>
+<p><strong>Where:</strong> <code>/import</code> (as owner).</p>
+<p><strong>Do:</strong> Land the switching-cost close. Show the Import Center — sources include Flight Circle, Flight Schedule Pro, FlightLogger. Emphasize: map → <strong>test in a rolled-back transaction</strong> → commit → <strong>rollback manifest</strong>.</p>
+<p><strong>Say:</strong> &gt; "The reason people stay on a tool they've outgrown is the fear of moving the data. So we built the answer in. Import Center reads exports from Flight Circle, Flight Schedule Pro, FlightLogger and more — you map the columns, you run a <em>test</em> import that uses the exact same code as the real one but rolls itself back, so the preview numbers are the truth. Then you commit. And if you don't like it, every record we created is tracked — you roll it back. You can try us with your real data and lose nothing."</p>
+<p><strong>Say (the actual close):</strong> &gt; "So here's what you saw: one flight that scheduled, dispatched, closed out, billed itself, logged the training, and flagged a squawk — in one motion, on one system, with an audit trail underneath and a different safe view for every seat. That's the difference between software that digitized your <em>forms</em> and a system that runs your <em>operation</em>. What would it take to run your next week of flying on this?"</p>
+<p><strong>Honesty note if it comes up in the close:</strong> card payments online, live METAR, and emailed invoices are on the roadmap; everything you saw today is live. Say it plainly — it's the reason they'll trust the rest.</p>
+<hr/>
+<h2>Sidebar: Answering objections live (3 fast rebuttals)</h2>
+<p><strong>"We already use [Flight Circle / FSP] and it's fine."</strong> &gt; "Then you already have a scheduler — keep the muscle memory. What I'd ask you to price is the flight that flew and never got billed, and the morning you find out an inspection lapsed. Those come from data that lives in separate places. Show me your current tool binding the closeout to the invoice in one step — if it does, we're a UI upgrade. If it doesn't, that gap is money."</p>
+<p><strong>"This looks like it costs more / is more than we need."</strong> &gt; "The question isn't features, it's leakage. One un-billed dual flight a week is more than a seat costs, and our closeout makes that leak structurally impossible. And the simple case stays simple — a four-airplane school runs on the dashboard and the dispatch screen; the depth is there when you grow into it, not in your way on day one."</p>
+<p><strong>"My instructors will never learn a new system."</strong> &gt; "They'll learn one screen: dispatch. Release with a checklist, close out with the Hobbs — that's their whole day, and it's fewer taps than what they do now across three apps and a paper binder. And the student self-serves their own progress and schedule, so your CFIs field fewer 'when do I fly next' texts, not more."</p></div>
+  </div>
+  <div class="foot"><span>AeroOps — The Operating System for Aviation</span><span><b>aerops.io</b> · Request a demo</span></div>
+  </body></html>

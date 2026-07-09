@@ -1,0 +1,1 @@
+../../aerops/.claude/agents/engineer.md
