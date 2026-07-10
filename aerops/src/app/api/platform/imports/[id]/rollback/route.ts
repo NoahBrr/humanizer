@@ -9,7 +9,7 @@ import { rollbackImport } from "@/lib/import/engine";
  * AeroOps staff running customer migrations.
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN", "SUPPORT_ENGINEER"]);
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN", "SUPPORT_ENGINEER"], { mutating: true });
   if (error) return error;
   const { id } = await params;
 

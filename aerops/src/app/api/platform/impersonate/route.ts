@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { authorizePlatform, encodeImpersonation, decodeImpersonation, impersonationTtlMs, IMPERSONATION_COOKIE } from "@/lib/session";
+import { authorizePlatform } from "@/lib/session";
+import { encodeImpersonation, impersonationTtlMs, readActiveImpersonation, IMPERSONATION_COOKIE } from "@/lib/impersonation";
 import { recordAudit } from "@/lib/audit";
-
-const IMPERSONATION_ROLES = ["FOUNDER", "PLATFORM_ADMIN", "CUSTOMER_SUCCESS", "SUPPORT_ENGINEER"] as const;
+import { platformRolesWith } from "@/lib/platform-permissions";
 
 const startSchema = z.object({
   userId: z.string(),
   readOnly: z.boolean().default(true),
+  // A recorded reason is required for every support session (ADR-023).
+  reason: z.string().trim().min(3, "A reason is required").max(500),
 });
 
-/** Start an impersonation session. Always audited; org is notified at session end. */
+/**
+ * Start an impersonation session. A durable ImpersonationSession row anchors the
+ * support session; the signed cookie carries its id so every subsequent audit
+ * links back to it. Nested impersonation is impossible — authorizePlatform
+ * `{ mutating: true }` refuses to start while already impersonating. Always
+ * audited; the org is notified at session end.
+ */
 export async function POST(req: Request) {
-  const { session, error } = await authorizePlatform([...IMPERSONATION_ROLES]);
+  const { session, error } = await authorizePlatform(platformRolesWith("platform.impersonate"), { mutating: true });
   if (error) return error;
 
   const body = startSchema.safeParse(await req.json());
@@ -22,24 +29,43 @@ export async function POST(req: Request) {
 
   const target = await db.user.findUnique({ where: { id: body.data.userId }, include: { organization: true } });
   if (!target || !target.isActive || target.deletedAt) return NextResponse.json({ error: "Target user not found" }, { status: 404 });
-  if (!target.organization) return NextResponse.json({ error: "This user does not belong to an organization yet" }, { status: 400 });
+  if (!target.organization || !target.organizationId) return NextResponse.json({ error: "This user does not belong to an organization yet" }, { status: 400 });
   if (target.organization.status === "DELETED") return NextResponse.json({ error: "Organization is deleted" }, { status: 400 });
+
+  const expiresAt = new Date(Date.now() + impersonationTtlMs());
+  const platformLabel = `${session.firstName} ${session.lastName}`;
+
+  const impSession = await db.impersonationSession.create({
+    data: {
+      platformUserId: session.userId,
+      targetUserId: target.id,
+      organizationId: target.organizationId,
+      reason: body.data.reason,
+      readOnly: body.data.readOnly,
+      expiresAt,
+    },
+  });
 
   const value = encodeImpersonation({
     platformUserId: session.userId,
+    platformLabel,
     targetUserId: target.id,
+    organizationId: target.organizationId,
+    sessionId: impSession.id,
     readOnly: body.data.readOnly,
-    exp: Date.now() + impersonationTtlMs(),
+    exp: expiresAt.getTime(),
   });
 
   await recordAudit({
     organizationId: target.organizationId,
     actorPlatformUserId: session.userId,
-    actorLabel: `${session.firstName} ${session.lastName} (AeroOps)`,
+    impersonatedUserId: target.id,
+    impersonationSessionId: impSession.id,
+    actorLabel: `${platformLabel} (AeroOps)`,
     action: "platform.impersonation_start",
-    entityType: "User",
-    entityId: target.id,
-    newValue: { targetEmail: target.email, readOnly: body.data.readOnly },
+    entityType: "ImpersonationSession",
+    entityId: impSession.id,
+    newValue: { targetEmail: target.email, targetUserId: target.id, readOnly: body.data.readOnly, reason: body.data.reason },
   });
 
   const res = NextResponse.json({ ok: true, redirect: "/dashboard" });
@@ -53,27 +79,30 @@ export async function POST(req: Request) {
   return res;
 }
 
-/** End the impersonation session; audits and notifies the organization. */
+/** End the impersonation session; closes the session row, audits, and notifies
+ *  the organization. Passes without `{ mutating }` so it works while impersonating. */
 export async function DELETE() {
-  const { session, error } = await authorizePlatform();
+  const { error } = await authorizePlatform();
   if (error) return error;
 
-  const cookieStore = await cookies();
-  const raw = cookieStore.get(IMPERSONATION_COOKIE)?.value;
-  const payload = raw ? decodeImpersonation(raw) : null;
+  const payload = await readActiveImpersonation();
 
   if (payload) {
     const target = await db.user.findUnique({ where: { id: payload.targetUserId } });
+    // Close the durable session row (idempotent) — expiry would also end it.
+    await db.impersonationSession.updateMany({ where: { id: payload.sessionId, endedAt: null }, data: { endedAt: new Date() } });
     if (target) {
-      // While impersonating, session.userId is the TARGET user — the real
-      // actor is the platform user recorded in the signed cookie.
+      // While impersonating, session.userId is the TARGET user — the real actor
+      // is the platform user recorded in the signed cookie.
       await recordAudit({
-        organizationId: target.organizationId,
+        organizationId: payload.organizationId ?? target.organizationId,
         actorPlatformUserId: payload.platformUserId,
-        actorLabel: `${session.impersonation?.platformLabel ?? `${session.firstName} ${session.lastName}`} (AeroOps)`,
+        impersonatedUserId: target.id,
+        impersonationSessionId: payload.sessionId,
+        actorLabel: `${payload.platformLabel} (AeroOps)`,
         action: "platform.impersonation_end",
-        entityType: "User",
-        entityId: target.id,
+        entityType: "ImpersonationSession",
+        entityId: payload.sessionId,
       });
       if (target.organizationId) await db.notification.create({
         data: {

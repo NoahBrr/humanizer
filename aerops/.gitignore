@@ -21,6 +21,11 @@
 # production
 /build
 
+# uploaded objects (LocalStorageAdapter dev backend) — keep the folder, never
+# commit real uploads
+/public/uploads/*
+!/public/uploads/.gitkeep
+
 # misc
 .DS_Store
 *.pem

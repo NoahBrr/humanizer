@@ -17,3 +17,16 @@ export function platformClaimsValid<T extends { isActive: boolean; sessionVersio
   if (tokenSessionVersion === undefined) return false;
   return dbUser.sessionVersion === tokenSessionVersion;
 }
+
+/**
+ * Whether a resolved session is allowed into the /platform console. Only
+ * AeroOps staff (a `platformRole` on the session) qualify — an org member,
+ * an org admin, a student, or an individual account never does. Wired into
+ * requirePlatformSession()/authorizePlatform() so the boundary lives in one
+ * place and is provable without a database (tests/auth-security.test.ts).
+ */
+export function platformAccessAllowed<T extends { platformRole?: unknown }>(
+  session: T | null | undefined,
+): session is T & { platformRole: NonNullable<T["platformRole"]> } {
+  return !!session?.platformRole;
+}

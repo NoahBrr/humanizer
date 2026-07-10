@@ -41,16 +41,22 @@ export function canAccessSection(
   return true;
 }
 
+/** Broad organization administrator (or owner). Owners (ACCOUNT_OWNER) and
+ *  Organization Administrators (SCHOOL_ADMIN) both qualify; SUPER_ADMIN is the
+ *  retained legacy value. Ownership itself keys on Organization.ownerId, never
+ *  on this check (ADR-023). */
 export function isAdmin(role: Role) {
-  return role === "SUPER_ADMIN" || role === "SCHOOL_ADMIN";
+  return role === "ACCOUNT_OWNER" || role === "SCHOOL_ADMIN" || role === "SUPER_ADMIN";
 }
 
 // Display-language only. Keys are the Prisma `Role` enum (the RBAC contract);
 // the strings are the aviation-native labels users see. Renaming a value here
 // never changes a permission — the enum and permission bundles are untouched.
 export const ROLE_LABELS: Record<Role, string> = {
-  SUPER_ADMIN: "Account Owner",
-  SCHOOL_ADMIN: "Operations Director",
+  ACCOUNT_OWNER: "Account Owner",
+  // Deprecated legacy value (ADR-023); no customer holds it after the D2 migration.
+  SUPER_ADMIN: "Account Owner (legacy)",
+  SCHOOL_ADMIN: "Organization Administrator",
   DISPATCHER: "Flight Dispatcher",
   INSTRUCTOR: "Flight Instructor",
   STUDENT: "Student Pilot",

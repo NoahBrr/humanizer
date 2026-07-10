@@ -160,9 +160,13 @@ their bodies parsed. Canonical pipeline:
 [ARCHITECTURE.md §3](../architecture/ARCHITECTURE.md).
 
 - Gate through `authorize(permission, {mutating})` /
-  `authorizePlatform(roles)` — no exceptions; new routes must pass the
-  constitution scan, and PUBLIC / SELF_SERVICE catalog entries require a
-  written reason in `tests/constitution.test.ts`.
+  `authorizePlatform(roles, {mutating})` — no exceptions; new routes must pass
+  the constitution scan, and PUBLIC / SELF_SERVICE catalog entries require a
+  written reason in `tests/constitution.test.ts`. For `/platform` routes, derive
+  the role list from the permission matrix —
+  `authorizePlatform(platformRolesWith("platform.users.manage"), {mutating:true})`
+  — rather than hardcoding role names (`lib/platform-permissions.ts`, ADR-022);
+  pass `{mutating:true}` for any write so it's refused while impersonating.
 - Org scope from the session, never the client.
 - Domain events through `emitDomainEvent` only; `emitWebhook` never outside
   `src/lib` (constitution-tested).

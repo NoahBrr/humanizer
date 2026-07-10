@@ -12,6 +12,79 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-10 — Phase D2 organization ownership, membership,
+and impersonation audit attribution (ADR-023). (1) **Finalized ownership.** New
+`ACCOUNT_OWNER` role; `Organization.ownerId` is the source of truth **and** the
+owner must hold an active `ACCOUNT_OWNER` membership — both move together
+atomically through the ownership-transfer service (`lib/memberships.ts`
+`transferOwnershipTx`/`assignOwnerTx`), never a bare role edit. Legacy
+`SUPER_ADMIN` retired as an org role (migrated to `SCHOOL_ADMIN` for non-owners;
+retained-but-deprecated in the enum since dropping a Postgres enum value is
+destructive); `SCHOOL_ADMIN` is "Organization Administrator", not a synonym for
+ownership. Last-owner safeguards: the current owner cannot be deactivated,
+demoted, role-changed, or membership-removed until ownership transfers, and the
+last active administrator cannot be deactivated. (2) **`Membership` is the new
+source of truth** for org affiliation, roles, and ownership (`(userId,
+organizationId)` unique; role, custom role, status, primary location/department,
+invited/approved-by), supporting one user in many orgs. To land additively on a
+mature single-org app, `User.organizationId`/`role`/`customRoleId`/
+`primaryLocationId`/`departmentId` are kept as a **maintained projection** of the
+active membership (pure `selectActiveMembership`: preferred → home → earliest →
+none); the operational core (tenant scope from the session) is unchanged and
+every mutation re-projects, so the two never drift. Deferred follow-on: collapse
+`User.organizationId` into a derived pointer and make Student/Instructor profiles
+per-membership (they are `@unique userId` today). (3) **Impersonation audit
+attribution** (the security fix): `recordAudit` reads the signed impersonation
+cookie and applies the pure `computeAttribution` — a customer-attributed action
+written during impersonation is re-attributed so the staff member is
+`actorPlatformUserId`, the customer is preserved as `impersonatedUserId`, the
+support session is linked via `impersonationSessionId`, and `actorUserId` is
+cleared. One shared-layer fix covers all ~37 customer routes. A durable
+`ImpersonationSession` row (reason, start, expiry, org, target, `endedAt`)
+anchors each session; the cookie carries its id + platform label; expiry stops
+impersonated access and attribution; nested impersonation is impossible; audit
+rows carry ids/labels only, never cookies/tokens/secrets. (4) Platform authority
+and org ownership stay independently authorized — a Platform Super Admin is never
+an org member/owner, an Account Owner gets no platform permission. (5) Migration:
+additive DDL + a **separate data-only backfill** (a new enum value can't be used
+in the transaction that adds it); deterministic + idempotent, validated against
+fresh/seeded/legacy/missing-owner fixtures, and it **never guesses an owner** for
+an ownerless org — read-only `scripts/migration-report.ts` inventories
+ownerless/ambiguous orgs + legacy roles for explicit remediation. (6) Platform
+org tooling: creation wizard provisions the owner (org + owner + roles in one
+transaction), 360° org profile (legal name, type, contacts, address, billing,
+capacity overrides — subscription limits, not live counts — discoverability),
+org profile editing, and logo upload via a storage adapter (`lib/storage.ts`;
+content-sniffed PNG/JPEG/WebP, SVG rejected; local dev adapter, R2-ready, not
+live). New platform permissions in `platform-permissions.ts` (orgs.edit,
+orgs.suspend, branding.manage, locations.manage, capacity.manage, pricing.view,
+pricing.change). Enforced by `tests/ownership.test.ts`,
+`tests/impersonation-audit.test.ts`, extended `tests/platform-console.test.ts`,
+and the seeded ownership-invariant check. **Not deployed.**_
+
+_Last session update: 2026-07-09 — Phase 4 Platform Console: customer user &
+role management + a data-driven platform permission matrix. (1) New
+`lib/platform-permissions.ts` maps the `PlatformRole` enum to a
+`PlatformPermission` catalog (`platformRolesWith()` derives each route's
+allowed-role list; AUDITOR is provably read-only; adding a role/capability is a
+data edit). The two hardcoded impersonation-role literals and the org-PATCH
+role list now derive from it. (2) `/platform/users` reframed into a cross-org
+customer-user directory (server search, min-2-char, capped) + `/users/staff`
+(the former staff list) + a `/users/[id]` detail page (profile, membership,
+effective permissions, sidebar nav preview, login + audit history). (3) New
+`PATCH /api/platform/users/[id]` — deactivate, reactivate, force-logout,
+set built-in/custom role, transfer Account Owner — each matrix-gated, audited
+with the staff actor, and org-notified on access changes. Guardrails (ADR-022):
+platform mutations refused while impersonating (else the audit actor would be
+the impersonated customer and the row would silently drop); owner + last active
+admin protected from deactivation; cross-org custom roles rejected; promotions
+clear `customRoleId`. `authorizePlatform` gained a `{ mutating }` option and now
+routes through the pure `platformAccessAllowed` boundary (the DB-free proof that
+customers/students/org-admins can't enter `/platform`). No schema/migration —
+existing `isActive`/`deletedAt`/`sessionVersion`/`ownerId`/`role`/`customRoleId`
+fields only. Verified: 180 tests (12 files, +20 new), tsc, lint, `next build`
+all green. Tenant isolation intact; no security shortcuts. **Not deployed.**_
+
 _Last session update: 2026-07-08 — Phase 3: aviation roles & personalized
 workspaces. The dashboard is now role-aware — every section is gated by
 PERMISSION (never role name), so a viewer only receives data they can access:
@@ -44,7 +117,6 @@ action; decouple CRM/Growth + Training from `students.manage` (dedicated
 `crm.*` permission) so Marketing/line-instructor nav is cleaner; give Dispatcher
 `billing.view` (has `billing.record_payments` but can't review Billing); a
 student-scoped billing surface ("what do I owe?")._
-
 _Last session update: 2026-07-07 — Sidebar refinement + app/marketing
 visual alignment. (1) Sidebar categories are now collapsible: each of the
 five section headers toggles its links, state persists per browser
@@ -250,11 +322,23 @@ time zones stored-not-applied — triage next session._
 |---|---|---|---|---|
 | Dashboard (orgs, MRR, success metrics, health, demo requests) | Complete | — | — | |
 | Organization management (wizard, plans, suspend, modules, notes) | Complete | — | — | |
-| Impersonation (signed cookie, read-only mode, audited, customer-notified) | Complete | — | — | |
+| Impersonation (signed cookie, read-only mode, audited, customer-notified) | Complete | — | — | Phase D2: durable `ImpersonationSession` row + centralized audit attribution (ADR-023) |
 | Demo Data Generator (8 business templates × 5–500 aircraft) | Complete | — | — | |
 | Live Simulation engine (8 scenarios) | Complete | — | — | |
 | Organization snapshots (capture/restore) | Complete | — | — | |
 | Import jobs oversight + rollback | Complete | — | — | |
+| Platform permission matrix (role→capability, data-driven, tested) | Complete | — | — | ADR-022, `lib/platform-permissions.ts` |
+| Customer user management (cross-org search, detail, deactivate/reactivate, force-logout) | Complete | — | — | `/platform/users`, audited + org-notified |
+| Role management (assign built-in/custom role, effective-perms + nav preview) | Complete | — | — | Cross-org customRole guarded |
+| Account Owner transfer (final-owner / last-admin protection) | Complete | — | — | Phase D2 finalized: `ownerId` + `ACCOUNT_OWNER` membership move atomically (ADR-023) |
+| Finalized ownership + membership model (`ACCOUNT_OWNER`, `Membership` source of truth, `User` projection) | Complete | — | — | Phase D2, ADR-023; `SUPER_ADMIN` org role retired; staff never an org member/owner, owner has no platform permission |
+| Org creation wizard provisions the owner (`ACCOUNT_OWNER` membership + `ownerId`, atomic) | Complete | — | — | Phase D2; org + owner + roles in one transaction |
+| 360° organization profile (legal name, type, contacts, address, billing, capacity overrides, discoverability) | Complete | — | — | Phase D2; capacity overrides are subscription limits, not live counts |
+| Organization logo upload via storage adapter (`lib/storage.ts`; content-sniffed PNG/JPEG/WebP, SVG rejected) | Complete | — | — | Phase D2; local dev adapter, R2-ready, not live |
+| New platform permissions (orgs.edit/suspend, branding/locations/capacity.manage, pricing.view/change) | Complete | — | — | Phase D2, `platform-permissions.ts` |
+| Dedicated Security / Billing / Support / System pages | Not Started | High | L | Phase 4 follow-on |
+| New-org wizard: multi-location + template presets | Not Started | Medium | M | Owner provisioning, type, branding, and 360° profile landed in D2; these remain |
+| Org profile editing (name/legal name/type/contacts/branding) | Complete | — | — | Phase D2; full org profile editor |
 | Demo-request pipeline states (assigned, contacted, closed) | Not Started | Medium | S | List-only today |
 | Billing operations (Stripe sync, dunning console) | Not Started | High | L | Depends on Payments |
 
@@ -274,6 +358,7 @@ time zones stored-not-applied — triage next session._
 |---|---|---|---|---|
 | Multi-tenant schema (60+ models), FK-safe, indexed scheduling axes | Complete | — | — | Prisma 6 (pinned) on PostgreSQL 16 |
 | Named migrations, deploy via `prisma migrate deploy` | Complete | — | — | |
+| Ownership/membership backfill + read-only `scripts/migration-report.ts` | Complete | — | — | Phase D2, ADR-023; additive DDL + separate data-only backfill (enum value can't be used in the tx that adds it); deterministic/idempotent; never guesses an owner |
 | Managed Postgres + point-in-time recovery | Not Started | Critical | S | Neon / Supabase / RDS — PRODUCTION.md compares |
 | Connection pooling for serverless (PgBouncer / Prisma Accelerate) | Not Started | Critical | S | Required on Vercel |
 | Nightly rollups for platform analytics | Not Started | Medium | M | Customer-success reads flagged as future hot path; platform dashboard fans out 12×N count/aggregate queries (bug-sweep P4, staff-only) |
@@ -281,6 +366,7 @@ time zones stored-not-applied — triage next session._
 | Bound the maintenance-page work-order read | Not Started | Medium | S | Bug-sweep P3: `maintenanceOrder.findMany` is unbounded (loads full history every load); split into active-status query + `take`-limited history + a MTD-cost `aggregate` (keep the sum exact) |
 | Add `take` to slow-growing detail lists | Not Started | Low | S | Bug-sweep P5: `students/[id]` lessonRecords, `documents`, `aircraft/[id]` documents fetch all-time |
 | Retention/sweeper jobs (soft-deleted orgs, old login events) | Not Started | Low | M | |
+| Per-membership Student/Instructor profiles + `User.organizationId` as a derived pointer | Not Started | Medium | L | ADR-023 deferred follow-on; makes operational data genuinely multi-org (single-org until then; profiles are `@unique userId` today) |
 
 ## Production Deployment
 
@@ -355,7 +441,7 @@ time zones stored-not-applied — triage next session._
 | Tenant-scoped uniqueness (Aircraft.tailNumber, Invoice.number → per-org) | Complete | — | — | Phase 1C; two orgs may share a tail/invoice number; import dup-detection now org-scoped |
 | createdAt on all org-owned models + schema-governance drift tests | Complete | — | — | Phase 1C; 5 models gained createdAt; convention machine-enforced |
 | Per-org invoice-number sequence (replace `Date.now().slice(-8)`) | Not Started | Medium | S | Same-ms within-org collision risk + ~27.7h wraparound (both pre-existing); Financial Reviewer recommendation |
-| Impersonation audit attribution: full-access mutations record the platform operator, not the target user | Not Started | Medium | S | Bug-sweep S2 (needs a decision — see report): mutating routes' `recordAudit(actorUserId: session.userId,…)` uses the impersonated user's identity; centralize actor resolution so writes during a `readOnly:false` support session attribute the operator + "(impersonating X)". Start/stop bracket already carries the operator |
+| Impersonation audit attribution: full-access mutations record the platform operator, not the target user | Complete | — | — | Phase D2, ADR-023: `recordAudit` + pure `computeAttribution` re-attribute the operator (`actorPlatformUserId`), preserve the customer as `impersonatedUserId`, link the `ImpersonationSession`; one shared-layer fix covers ~37 routes; expiry stops attribution; no nesting |
 | Global airframe registry / cross-operator airframe history | Not Started | Low | L | Aviation Reviewer gap: airframe time/logbook follow the airframe, not the operator; consent-gated, keyed on N-number+serial, never per-org tail |
 | Org-scope `demo-generator` tail-collision `findMany` | Not Started | Low | S | Pre-existing unscoped read (harmless — demo seeding only); Security Reviewer follow-up |
 | Extend `wipeOrganizationData` to clear ApiKey/Webhook/MissionControlScene/PlatformNote/LoginEvent on restore | Not Started | Low | S | Phase 1C reviewers (Architect/DB/QA): snapshot restore leaves stale integration config (org row survives → cascade doesn't fire) |

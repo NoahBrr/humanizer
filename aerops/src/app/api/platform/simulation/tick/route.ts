@@ -12,7 +12,7 @@ const schema = z.object({ runId: z.string().min(1) });
  * stop are the audited actions, and each run row counts its ticks.
  */
 export async function POST(req: Request) {
-  const { error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"]);
+  const { error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
 
   const body = schema.safeParse(await req.json());

@@ -441,5 +441,164 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
 
 ---
 
+## ADR-022 — Platform permission matrix + platform-staff actions on customer users
+
+**Date:** 2026-07 (Phase 4) · **Status:** Accepted (ownership model refined by ADR-023) · **Extends** ADR-004, ADR-006
+
+> **Refined by [ADR-023](#adr-023--finalized-organization-ownership-membership-and-impersonation-audit-attribution):** the "owner protection keys on `ownerId` + last-active-admin, NOT a role enum; no schema change; promote to `SCHOOL_ADMIN`" decision below is replaced by the finalized model — ownership keys on `ownerId` **and** an active `ACCOUNT_OWNER` membership, and Phase D2 introduces the `Membership` and `ImpersonationSession` schema. The permission-matrix decision (data-driven `PLATFORM_ROLE_PERMISSIONS`, `platformRolesWith()`, mutating-while-impersonating refusal) stands and is extended.
+
+- **Context:** the internal `/platform` console gated every capability by
+  hardcoded `PlatformRole` arrays inlined in each route
+  (`["FOUNDER","PLATFORM_ADMIN",…]`), duplicated across call sites (the
+  impersonation role list existed in two files). There was no explicit model of
+  "what can each platform role do," so the Phase-4 requirement — *each role has
+  clearly defined permissions, future roles are easy to add* — was unmet. And
+  there was **no customer-user management at all**: staff could impersonate a
+  user but could not deactivate, force-logout, change a role, or transfer an
+  Account Owner. The user asked to keep the existing 7-role enum (no migration),
+  not rename it to the six idealized spec names.
+- **Alternatives:** rename the enum to the spec's role names
+  (`PLATFORM_SUPER_ADMIN`, `PLATFORM_SECURITY`, …) — rejected: a Prisma
+  migration plus churn across seed, existing rows, labels, and tests, for a
+  naming change; per-org platform permissions (like customer RBAC) — rejected:
+  platform staff are a fixed internal team, a role→capability matrix is simpler
+  and sufficient; keep hardcoded role arrays — rejected: the whole point is one
+  source of truth.
+- **Why:** `src/lib/platform-permissions.ts` is the single matrix
+  (`PLATFORM_ROLE_PERMISSIONS`) mapping the enum to a `PlatformPermission`
+  catalog; routes gate with `authorizePlatform(platformRolesWith("…"), { mutating })`
+  so the allowed-role list is *derived*, and the literal `authorizePlatform(`
+  still satisfies the constitution scan. The spec's six names are display
+  aliases (`PLATFORM_ROLE_SPEC_ALIAS`), not enum values. Adding a role or
+  capability is now a data edit here.
+- **Consequences / hard decisions** (each was a real trap):
+  - **Owner protection keys on `Organization.ownerId` + last-active-admin, not
+    the `SUPER_ADMIN` enum.** Owners are seeded as `SCHOOL_ADMIN` (which already
+    holds every permission); there are ~zero `SUPER_ADMIN`s, so a SUPER_ADMIN
+    check would be a silent no-op. Deactivating the current owner is refused
+    until ownership is transferred; deactivating the last active administrator
+    (effective `settings.manage`) is refused.
+  - **Platform mutations are forbidden while impersonating.** During
+    impersonation `session.userId` is the *target customer's* id, so a mutating
+    platform write would bypass read-only impersonation **and** write the
+    customer id into `AuditLog.actorPlatformUserId` (a `PlatformUser` FK) — the
+    insert would FK-fail and `recordAudit` swallows it, i.e. a mutation with no
+    audit. `authorizePlatform({ mutating: true })` now refuses when
+    `session.impersonation` is set (the org PATCH route was retrofitted too).
+  - **Promotions/role changes clear `customRoleId`.** `orgSessionFor` resolves a
+    custom role in preference to the built-in role, so setting `role` without
+    clearing `customRoleId` would be cosmetic. `set_role` and `transfer_owner`
+    null it in the same write/transaction.
+  - **`customRoleId` is validated against the target's org** (`orgRole.findFirst`
+    scoped by `organizationId`) — the FK doesn't constrain the org, so an
+    unchecked assignment would grant another tenant's permission bundle.
+  - Every action is audited with the staff actor and, where it changes customer
+    access (deactivate / reactivate / role change / owner transfer), the org is
+    **notified** — extending the impersonation-disclosure precedent (ADR-010).
+- **No schema change.** All actions use existing fields (`isActive`,
+  `deletedAt`, `sessionVersion`, `ownerId`, `role`, `customRoleId`).
+- **Enforced by** `tests/platform-console.test.ts` (matrix invariants —
+  read-only role has zero mutating caps, every capability maps to ≥1 role,
+  `platformRolesWith` throws rather than returning `[]`; owner/transfer rules;
+  the DB-free `platformAccessAllowed` boundary proof) plus the existing
+  constitution and auth-security static scans covering the new route and pages.
+- **Reconsider when:** platform staff need per-person (not per-role)
+  permissions, or the enum is renamed to the spec names in a dedicated
+  migration.
+
+---
+
+## ADR-023 — Finalized organization ownership, membership, and impersonation audit attribution
+
+**Date:** 2026-07 (Phase D2) · **Status:** Accepted · **Refines** ADR-022 · **Extends** ADR-004 (session kinds), ADR-010 (impersonation disclosure)
+
+- **Context:** Two blocking items. (1) Ownership was ambiguous: an owner was the
+  `Organization.ownerId` pointer plus a `SCHOOL_ADMIN` role, and the enum still
+  carried `SUPER_ADMIN` as a legacy "owner" role (ADR-022 keyed protection on
+  `ownerId` alone). The finalized model requires the owner to also hold an
+  explicit, active `ACCOUNT_OWNER` **membership**, and requires a real membership
+  concept because a person may belong to several organizations with different
+  roles (Account Owner at one, Flight Instructor at another). The app was
+  single-org: one `User.organizationId` + one `User.role`. (2) A security defect:
+  during full-access impersonation `session.userId` is the impersonated
+  **customer**, and every customer route records `actorUserId: session.userId`,
+  so ~37 routes attributed staff-initiated actions to the customer — the audit
+  trail lied about who acted.
+- **Platform authority vs organization ownership are separate, and stay
+  separate.** `PlatformUser` (AeroOps staff) and personal `User` remain distinct
+  identity tables with distinct RBAC (`PLATFORM_ROLE_PERMISSIONS` vs org
+  `Permission` bundles). A Platform Super Admin manages orgs through *platform*
+  authorization and is **never** inserted as an org member or owner; an Account
+  Owner gets **no** platform permission. Platform org-creation invites an owner
+  (or assigns an existing user) — it never adds the staff member as a member.
+- **`Organization.ownerId` is the ownership source of truth**, and the referenced
+  user must hold an **active `ACCOUNT_OWNER` membership** in the same org. Both
+  facts are moved together, atomically, by the ownership-transfer service — never
+  a bare role or profile edit. `ownerId` is an ownership pointer, not an
+  authorization shortcut: access still flows through membership role → permission
+  bundle.
+- **`Membership` is the new source of truth for org affiliation and roles**
+  (`(userId, organizationId)` unique; role, custom role, status, primary
+  location/department, invited/approved-by, timestamps) and supports many orgs
+  per user. To do this **additively** in a mature single-org app without
+  rewriting tenant isolation, `User.organizationId`/`role`/`customRoleId`/
+  `primaryLocationId`/`departmentId` are kept as a **maintained projection of the
+  user's active membership**: the operational core (scheduling, dispatch,
+  billing, tenant scope from the session) is untouched, and every membership
+  mutation re-projects (`lib/memberships.ts`), so the two never drift. The active
+  membership is chosen deterministically (preferred org → home org → earliest →
+  none) by the pure, tested `selectActiveMembership`.
+- **Migration treatment.** Additive DDL (new enum value `ACCOUNT_OWNER`, new
+  models, nullable columns) + a **separate data-only migration** (the new enum
+  value cannot be used in the transaction that adds it). The backfill creates one
+  membership per existing org-user, promotes each org's `ownerId` user to
+  `ACCOUNT_OWNER` on both membership and projection, and migrates every remaining
+  customer `SUPER_ADMIN` to `SCHOOL_ADMIN` (non-owners) — deterministic,
+  idempotent, validated against fresh/seeded/legacy/missing-owner fixtures. It
+  **never guesses an owner** for an ownerless org: `scripts/migration-report.ts`
+  inventories ownerless/ambiguous orgs and legacy roles for explicit remediation.
+  `SUPER_ADMIN` is retained in the enum (dropping a Postgres enum value is
+  destructive) but deprecated — no code assigns it to a customer.
+- **Last-owner safeguards.** The current owner cannot be deactivated, demoted,
+  role-changed, or membership-removed until ownership is transferred; deactivating
+  the last active administrator is also refused. Pure rules (`platform-users.ts`)
+  enforced in the platform user route and the ownership service. A former owner
+  is demoted to Organization Administrator (`SCHOOL_ADMIN`) so they keep an
+  authorized role. Ownership creation/transfer/demotion/removal are all audited.
+- **Impersonation audit attribution — fixed in the shared layer, not 37 routes.**
+  `recordAudit` reads the signed impersonation cookie and applies the pure,
+  tested `computeAttribution`: a customer-attributed action (`actorUserId` set,
+  no explicit platform actor) written inside an active impersonation is
+  re-attributed — the staff member becomes `actorPlatformUserId`, the customer is
+  preserved as `impersonatedUserId`, the support session is linked via
+  `impersonationSessionId`, and `actorUserId` is cleared. A durable
+  `ImpersonationSession` row (reason, start, expiry, org, target) anchors every
+  session; the cookie carries its id. Expiry stops impersonated access and
+  attribution; nested impersonation is impossible (`authorizePlatform({ mutating
+  })` refuses to start while impersonating). Audit rows carry ids/labels only —
+  never cookies, tokens, or secrets.
+- **Consequences / hard decisions:**
+  - **Projection, not rescope.** Rewriting every tenant query to be
+    membership-scoped in one phase would violate the additive-migration and
+    do-not-break rules. The projection keeps `session.organizationId` semantics
+    identical; the deferred follow-on is collapsing `User.organizationId` into a
+    pure derived value and making operational profiles (Student/Instructor, which
+    are `@unique userId` and hang off `User.organizationId`) per-membership. Until
+    then, a user's *operational* data is single-org; ownership/roles/membership
+    management are fully multi-org.
+  - **ACCOUNT_OWNER is never an assignable role** (`ASSIGNABLE_SYSTEM_ROLES`
+    excludes it and `SUPER_ADMIN`); it is conferred only through the ownership
+    workflow — otherwise a role picker would mint owners and bypass the transfer.
+  - **The cookie carries the platform label + session id** so `recordAudit`
+    attributes correctly without a per-audit database lookup on the hot path.
+- **Enforced by** `tests/ownership.test.ts`, `tests/impersonation-audit.test.ts`
+  (pure rules + attribution), extended `tests/platform-console.test.ts`, the
+  backfill fixture validation, and the seeded-data ownership-invariant check.
+- **Reconsider when:** operational data must be genuinely multi-org (per-membership
+  Student/Instructor profiles), or `User.organizationId` is collapsed into a
+  derived active-membership pointer.
+
+---
+
 **Adding an ADR:** copy the format, take the next number, link any ADR it
 supersedes, and update [ARCHITECTURE.md](./ARCHITECTURE.md) in the same PR.

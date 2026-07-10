@@ -29,6 +29,7 @@ const WX_TONE: Record<"VFR" | "MVFR" | "IFR", string> = {
 // Student Pilots, a dedicated my-training workspace. See
 // docs/company/ROLES_AND_WORKSPACES.md for the full Dashboard Matrix.
 const OVERVIEW_EYEBROW: Record<Role, string> = {
+  ACCOUNT_OWNER: "Operations Overview",
   SUPER_ADMIN: "Operations Overview",
   SCHOOL_ADMIN: "Operations Overview",
   DISPATCHER: "Dispatch Overview",

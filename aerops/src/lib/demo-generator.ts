@@ -5,7 +5,21 @@ import {
   CertificateType, TrainingPart, AircraftStatus, LeadStatus,
 } from "@prisma/client";
 import { db } from "@/lib/db";
-import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/permissions";
+import { systemOrgRoleSeed } from "@/lib/permissions";
+
+/**
+ * Provision a Membership for every user in a generated org (ownership invariant,
+ * ADR-023): each user's role flows through, so the owner (created ACCOUNT_OWNER)
+ * holds an active ACCOUNT_OWNER membership matching Organization.ownerId.
+ * Idempotent — safe to call on both the minimal and full generation paths.
+ */
+async function provisionOrgMemberships(organizationId: string) {
+  await db.$executeRaw`
+    INSERT INTO "Membership" ("id","userId","organizationId","role","customRoleId","primaryLocationId","departmentId","status","createdAt","updatedAt")
+    SELECT gen_random_uuid()::text, u."id", u."organizationId", u."role", u."customRoleId", u."primaryLocationId", u."departmentId", 'ACTIVE'::"MembershipStatus", u."createdAt", CURRENT_TIMESTAMP
+    FROM "User" u WHERE u."organizationId" = ${organizationId}
+    ON CONFLICT ("userId","organizationId") DO NOTHING`;
+}
 import { ORG_TEMPLATES, type OrgTemplateKey, type FleetMixEntry } from "@/lib/org-templates";
 export { ORG_TEMPLATES, FLEET_SIZE_PRESETS, type OrgTemplateKey } from "@/lib/org-templates";
 
@@ -154,9 +168,7 @@ export async function generateOrganization(opts: GenerateOptions): Promise<Gener
   const passwordHash = await bcrypt.hash(ownerPassword, 10);
 
   const plan = await db.subscriptionPlan.findFirst({ where: { name: template.plan } });
-  const systemRoles = Object.entries(DEFAULT_ROLE_PERMISSIONS)
-    .filter(([name]) => name !== "SUPER_ADMIN")
-    .map(([name, permissions]) => ({ name, permissions: [...permissions], isSystem: true }));
+  const systemRoles = systemOrgRoleSeed();
 
   const org = await db.organization.create({
     data: {
@@ -194,7 +206,7 @@ export async function generateOrganization(opts: GenerateOptions): Promise<Gener
     data: {
       organizationId: org.id, email: ownerEmail, passwordHash,
       firstName: opts.ownerFirstName || pick(FIRST_NAMES), lastName: opts.ownerLastName || pick(LAST_NAMES),
-      role: Role.SCHOOL_ADMIN,
+      role: Role.ACCOUNT_OWNER,
     },
   });
   await db.organization.update({ where: { id: org.id }, data: { ownerId: owner.id } });
@@ -218,6 +230,7 @@ export async function generateOrganization(opts: GenerateOptions): Promise<Gener
   counts.staff = staffRoles.length + 1;
 
   if (!seedData) {
+    await provisionOrgMemberships(org.id);
     return { orgId: org.id, slug, ownerEmail, ownerPassword, counts };
   }
 
@@ -590,5 +603,6 @@ export async function generateOrganization(opts: GenerateOptions): Promise<Gener
     counts.parts = partSpecs.length;
   }
 
+  await provisionOrgMemberships(org.id);
   return { orgId: org.id, slug, ownerEmail, ownerPassword, counts };
 }

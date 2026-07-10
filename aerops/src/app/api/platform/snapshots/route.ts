@@ -13,7 +13,7 @@ const schema = z.object({
 
 /** Capture a point-in-time snapshot of an organization's data. */
 export async function POST(req: Request) {
-  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"]);
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
 
   const body = schema.safeParse(await req.json());

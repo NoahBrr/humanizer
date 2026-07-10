@@ -7,14 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 
 // Labels mirror ROLE_LABELS (rbac.ts) — the aviation-native display names.
-// SUPER_ADMIN (Account Owner) is intentionally not invitable here.
+// ACCOUNT_OWNER is intentionally not invitable here — ownership is conferred
+// only through the dedicated ownership-transfer workflow (ADR-023).
 const ROLES = [
   ["STUDENT", "Student Pilot"],
   ["INSTRUCTOR", "Flight Instructor"],
   ["DISPATCHER", "Flight Dispatcher"],
   ["MAINTENANCE", "Maintenance Manager"],
   ["ACCOUNTANT", "Finance Manager"],
-  ["SCHOOL_ADMIN", "Operations Director"],
+  ["SCHOOL_ADMIN", "Organization Administrator"],
 ] as const;
 
 export function InviteUserForm() {

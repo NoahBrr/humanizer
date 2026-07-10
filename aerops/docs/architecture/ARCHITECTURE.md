@@ -129,17 +129,40 @@ revoke-everywhere. Three session kinds resolve through one helper
 | `individual` | `User` (organizationId null) | `/welcome` onboarding only |
 | `platform` | `PlatformUser` (separate table, separate roles) | `/platform` |
 
+Organization affiliation is a first-class `Membership` (ADR-023):
+`(userId, organizationId)` unique, carrying role, custom role, status, and
+primary location/department, so one person may belong to several organizations
+with a different role in each. It is the source of truth for affiliation,
+roles, and ownership; the `User.organizationId`/`role`/`customRoleId`/
+`primaryLocationId`/`departmentId` columns are a **maintained projection** of
+the user's active membership (chosen deterministically by
+`selectActiveMembership`: preferred → home → earliest → none). The single-org
+operational core (tenant scope from the session) is unchanged, and every
+membership mutation re-projects (`lib/memberships.ts`) so the two never drift.
+Collapsing `User.organizationId` into a derived pointer and making
+Student/Instructor profiles per-membership is a deferred follow-on.
+
 Platform sessions are re-verified against the `PlatformUser` row on
 **every request** (`isActive` + `sessionVersion`, role read from the row —
 `platformClaimsValid` in `lib/session-rules.ts`), so deactivation,
 revocation bumps, and demotions apply immediately; org users get the same
 check in `orgSessionFor()`. Impersonation (platform staff → tenant) is an
-HMAC-signed, expiring cookie; read-only by default with mutation blocking;
-start/stop audited and customer-notified. `AUTH_SECRET` fails closed in
+HMAC-signed, expiring cookie anchored to a durable `ImpersonationSession` row
+(reason, start, expiry, org, target, `endedAt`) whose id the cookie carries;
+read-only by default with mutation blocking; start/stop audited and
+customer-notified; and **no platform mutation runs while impersonating**
+(`authorizePlatform({ mutating: true })` refuses it, so the audit actor is
+always the real staff member and nested impersonation is impossible — ADR-022). `AUTH_SECRET` fails closed in
 production (`lib/env.ts` + `instrumentation.ts` — see
 [SECURITY_STANDARDS.md](./SECURITY_STANDARDS.md)). Email verification and
 password reset land in Phase B of [PRODUCTION.md](../../PRODUCTION.md)
-§13.1. All bearer tokens AeroOps issues (API keys, invitation and
+§13.1. During impersonation `recordAudit` re-attributes centrally: a
+customer-written action records the staff member as `actorPlatformUserId`,
+preserves the customer as `impersonatedUserId`, links the durable
+`ImpersonationSession` row, and clears `actorUserId`, so one shared-layer fix
+covers every customer route and expiry stops attribution
+([ADR-023](./DECISIONS.md#adr-023--finalized-organization-ownership-membership-and-impersonation-audit-attribution)).
+All bearer tokens AeroOps issues (API keys, invitation and
 invite-link tokens) are stored only as sha256 hashes and shown once
 ([ADR-020](./DECISIONS.md#adr-020--all-bearer-tokens-stored-as-one-way-sha256-hashes-raw-shown-once)).
 
@@ -156,6 +179,22 @@ reference it; UI, server pages, and APIs all gate from the same
 (tested). Exactly two exception categories exist, each allowlisted with a
 written reason in the test: public-by-design routes and self-service
 identity routes.
+
+Platform staff have a parallel data-driven model: `lib/platform-permissions.ts`
+maps the `PlatformRole` enum to a `PlatformPermission` catalog, and `/platform`
+routes gate with `authorizePlatform(platformRolesWith("…"), { mutating })` so
+capabilities are derived, not hardcoded (ADR-022). Staff actions on a customer
+user (`/api/platform/users/[id]`: deactivate, reactivate, force-logout, role
+change, owner transfer) are matrix-gated, audited, and notify the org on access
+changes. Ownership is finalized (ADR-023): `Organization.ownerId` is the source
+of truth **and** the owner holds an active `ACCOUNT_OWNER` membership; the two
+move together atomically through the ownership-transfer service
+(`lib/memberships.ts`), never a bare role edit, and `ACCOUNT_OWNER` is conferred
+only through that workflow. The legacy `SUPER_ADMIN` org role is retired
+(`SCHOOL_ADMIN` is Organization Administrator, not ownership). Last-owner
+safeguards: the current owner cannot be deactivated, demoted, role-changed, or
+membership-removed until ownership transfers, and the last active administrator
+cannot be deactivated.
 
 ## 7. Organization hierarchy
 
@@ -175,7 +214,10 @@ The **active location** is a per-user cookie (`aerops-location`) falling
 back to the org's first active location; anything location-sensitive
 (weather, ops boards, filters) must respect it. Business profiles
 (`lib/business-profiles.ts`) — flight school, club, rental, FBO,
-maintenance, corporate — drive module enablement per org.
+maintenance, corporate — drive module enablement per org. A member's tie to an
+organization is a first-class `Membership` row (ADR-023) — one person can hold a
+different role in each of several organizations — projected onto the `User`
+columns the session reads (§5).
 
 ## 8. Multi-tenancy model
 

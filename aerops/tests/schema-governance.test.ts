@@ -97,6 +97,8 @@ describe("timestamp conventions", () => {
     Invoice: "issuedAt",
     Document: "uploadedAt",
     SimulationRun: "startedAt",
+    // A support session's creation IS its start (ADR-023); startedAt says more.
+    ImpersonationSession: "startedAt",
   };
 
   it("every org-owned model has createdAt or a documented creation stamp", () => {

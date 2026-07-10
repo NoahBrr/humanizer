@@ -7,6 +7,7 @@ import { logger } from "@/lib/logger";
 import { validatePassword } from "@/lib/password";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { hashToken } from "@/lib/tokens";
+import { assignOwnerTx, addMembershipTx } from "@/lib/memberships";
 
 const acceptSchema = z.object({
   token: z.string().min(10),
@@ -30,6 +31,9 @@ export async function POST(req: Request) {
     where: { tokenHash: hashToken(data.token) },
     include: { organization: { include: { plan: true, _count: { select: { users: true } } } } },
   });
+  // A proposed Account Owner activates ownership on acceptance, but only if the
+  // org is still ownerless — never clobber an existing owner (Part 8).
+  const asOwner = invitation ? invitation.role === "ACCOUNT_OWNER" && !invitation.organization.ownerId : false;
   if (!invitation) return NextResponse.json({ error: "This invitation link is invalid." }, { status: 404 });
   if (invitation.acceptedAt) return NextResponse.json({ error: "This invitation was already used. Try signing in instead." }, { status: 409 });
   if (invitation.expiresAt < new Date()) return NextResponse.json({ error: "This invitation has expired. Ask your administrator for a new one." }, { status: 410 });
@@ -42,21 +46,39 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(data.password, 10);
-  const user = await db.user.create({
-    data: {
-      organizationId: invitation.organizationId,
-      email: invitation.email,
-      passwordHash,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      role: invitation.role,
-      customRoleId: invitation.customRoleId,
-      // Role-appropriate profile so the user is functional immediately.
-      ...(invitation.role === "STUDENT" ? { studentProfile: { create: {} } } : {}),
-      ...(invitation.role === "INSTRUCTOR" ? { instructorProfile: { create: { certificates: "CFI" } } } : {}),
-    },
+  // Non-owner role for the account/profile; ownership (if any) is conferred by
+  // the membership service, which also creates the ACCOUNT_OWNER membership and
+  // projects the active org. Account + membership + acceptance are one tx so an
+  // accepted invitation never leaves a half-provisioned or ownerless member.
+  const effectiveRole = invitation.role === "ACCOUNT_OWNER" ? "SCHOOL_ADMIN" : invitation.role;
+  const user = await db.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        email: invitation.email,
+        passwordHash,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: effectiveRole,
+        customRoleId: invitation.customRoleId,
+        // Role-appropriate profile so the user is functional immediately.
+        ...(effectiveRole === "STUDENT" ? { studentProfile: { create: {} } } : {}),
+        ...(effectiveRole === "INSTRUCTOR" ? { instructorProfile: { create: { certificates: "CFI" } } } : {}),
+      },
+    });
+    if (asOwner) {
+      await assignOwnerTx(tx, { organizationId: invitation.organizationId, userId: created.id, invitedByLabel: invitation.invitedBy ?? undefined });
+    } else {
+      await addMembershipTx(tx, {
+        userId: created.id,
+        organizationId: invitation.organizationId,
+        role: effectiveRole,
+        customRoleId: invitation.customRoleId,
+        invitedByLabel: invitation.invitedBy ?? undefined,
+      });
+    }
+    await tx.invitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } });
+    return created;
   });
-  await db.invitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } });
 
   await recordAudit({
     organizationId: invitation.organizationId,
@@ -65,7 +87,7 @@ export async function POST(req: Request) {
     action: "users.invitation_accepted",
     entityType: "User",
     entityId: user.id,
-    newValue: { email: user.email, role: user.role },
+    newValue: { email: user.email, role: asOwner ? "ACCOUNT_OWNER" : effectiveRole, owner: asOwner },
   });
   logger.info("invitation accepted", { organizationId: invitation.organizationId, role: invitation.role });
 

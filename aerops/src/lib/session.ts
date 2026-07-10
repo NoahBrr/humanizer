@@ -1,20 +1,22 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "crypto";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import type { OrgStatus, PlatformRole, Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { requireAuthSecret } from "@/lib/env";
 import { hashToken } from "@/lib/tokens";
-import { platformClaimsValid } from "@/lib/session-rules";
-import { permissionsForRole, type Permission } from "@/lib/permissions";
+import { platformClaimsValid, platformAccessAllowed } from "@/lib/session-rules";
+import { type Permission } from "@/lib/permissions";
+import { resolvePermissions } from "@/lib/platform-users";
 import { enabledModules, type ModuleKey } from "@/lib/features";
 import { modulesForProfiles } from "@/lib/business-profiles";
+import { readActiveImpersonation } from "@/lib/impersonation";
 
-export const IMPERSONATION_COOKIE = "aerops-impersonation";
-const IMPERSONATION_TTL_MS = 60 * 60 * 1000;
+// Re-export the impersonation cookie helpers so existing importers of
+// "@/lib/session" (the impersonate route) keep working after the split into
+// lib/impersonation.ts (which audit.ts also reads, without the session graph).
+export { IMPERSONATION_COOKIE, encodeImpersonation, decodeImpersonation, impersonationTtlMs } from "@/lib/impersonation";
 
 /**
  * The one session shape the whole application consumes. Wraps the raw auth
@@ -40,37 +42,11 @@ export type AppSession = {
   businessProfiles: string[];
   /** Platform-staff fields */
   platformRole?: PlatformRole;
-  impersonation?: { platformUserId: string; platformLabel: string; readOnly: boolean };
+  /** Present only while a platform user is impersonating a customer (ADR-023).
+   *  `platformUserId` is the real staff actor; `session.userId` is the
+   *  impersonated customer; `sessionId` links to the ImpersonationSession row. */
+  impersonation?: { platformUserId: string; platformLabel: string; readOnly: boolean; sessionId?: string };
 };
-
-// --- Impersonation cookie (HMAC-signed, short-lived) ------------------------
-
-type ImpersonationPayload = { platformUserId: string; targetUserId: string; readOnly: boolean; exp: number };
-
-function sign(data: string) {
-  return createHmac("sha256", requireAuthSecret()).update(data).digest("base64url");
-}
-
-export function encodeImpersonation(payload: ImpersonationPayload) {
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  return `${body}.${sign(body)}`;
-}
-
-export function decodeImpersonation(value: string): ImpersonationPayload | null {
-  const [body, mac] = value.split(".");
-  if (!body || !mac) return null;
-  const expected = sign(body);
-  const a = Buffer.from(mac);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  const payload = JSON.parse(Buffer.from(body, "base64url").toString()) as ImpersonationPayload;
-  if (payload.exp < Date.now()) return null;
-  return payload;
-}
-
-export function impersonationTtlMs() {
-  return IMPERSONATION_TTL_MS;
-}
 
 // --- Session resolution ------------------------------------------------------
 
@@ -100,9 +76,7 @@ async function orgSessionFor(userId: string, tokenSessionVersion?: number): Prom
       modules: new Set<ModuleKey>(),
     };
   }
-  const permissions = user.customRole
-    ? (new Set(user.customRole.permissions as Permission[]) as ReadonlySet<Permission>)
-    : permissionsForRole(user.role);
+  const permissions = resolvePermissions(user.role, user.customRole?.permissions);
   return {
     userId: user.id,
     email: user.email,
@@ -137,11 +111,12 @@ export async function getSession(): Promise<AppSession | null> {
     });
     if (!platformClaimsValid(platformUser, raw.user.sessionVersion)) return null;
 
-    const cookieStore = await cookies();
-    const impCookie = cookieStore.get(IMPERSONATION_COOKIE)?.value;
-    const imp = impCookie ? decodeImpersonation(impCookie) : null;
+    const imp = await readActiveImpersonation();
     if (imp && imp.platformUserId === raw.user.id) {
       const target = await orgSessionFor(imp.targetUserId);
+      // Expiry, an ended session (cookie cleared), or a now-invalid target all
+      // collapse back to a plain platform session below — stopping both
+      // impersonated access and its audit attribution.
       if (target) {
         return {
           kind: "platform",
@@ -149,8 +124,9 @@ export async function getSession(): Promise<AppSession | null> {
           platformRole: platformUser.role,
           impersonation: {
             platformUserId: raw.user.id,
-            platformLabel: `${platformUser.firstName} ${platformUser.lastName}`,
+            platformLabel: imp.platformLabel,
             readOnly: imp.readOnly,
+            sessionId: imp.sessionId,
           },
         };
       }
@@ -280,16 +256,24 @@ export async function authorize(permission: Permission | null, opts: { mutating?
  */
 export async function requirePlatformSession(roles?: PlatformRole[]): Promise<AppSession> {
   const session = await getSession();
-  if (!session?.platformRole) redirect("/sign-in");
+  if (!platformAccessAllowed(session)) redirect("/sign-in"); // customers never see /platform
   if (roles && !roles.includes(session.platformRole)) redirect("/platform/dashboard");
   return session;
 }
 
-/** Guard for /platform API routes and pages. */
-export async function authorizePlatform(roles?: PlatformRole[]): Promise<AuthorizeOk | AuthorizeErr> {
+/**
+ * Guard for /platform API routes and pages. `opts.mutating` refuses the call
+ * while an impersonation session is active — otherwise the acting identity is
+ * the impersonated customer, so the audit actor and read-only impersonation
+ * would both be wrong. Non-mutating calls (including ending impersonation) pass.
+ */
+export async function authorizePlatform(roles?: PlatformRole[], opts: { mutating?: boolean } = {}): Promise<AuthorizeOk | AuthorizeErr> {
   const session = await getSession();
-  if (!session?.platformRole) {
+  if (!platformAccessAllowed(session)) {
     return { error: NextResponse.json({ error: "Platform access required" }, { status: 403 }) };
+  }
+  if (opts.mutating && session.impersonation) {
+    return { error: NextResponse.json({ error: "End the impersonation session before performing platform actions." }, { status: 403 }) };
   }
   if (roles && !roles.includes(session.platformRole)) {
     return { error: NextResponse.json({ error: "Your platform role cannot perform this action" }, { status: 403 }) };

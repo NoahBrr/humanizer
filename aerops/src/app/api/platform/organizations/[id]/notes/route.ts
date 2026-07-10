@@ -12,7 +12,7 @@ const postSchema = z.object({ body: z.string().min(2).max(2000) });
  * audited under the platform actor.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN", "CUSTOMER_SUCCESS", "SUPPORT_ENGINEER"]);
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN", "CUSTOMER_SUCCESS", "SUPPORT_ENGINEER"], { mutating: true });
   if (error) return error;
 
   const { id } = await params;

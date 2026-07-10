@@ -7,10 +7,29 @@
  */
 import { PrismaClient, Role, EventType, EventStatus, SquawkSeverity, SquawkStatus, MaintenanceStatus, DispatchStatus, InvoiceStatus, LineItemKind, PaymentMethod, NotificationKind, CertificateType, TrainingPart, CheckrideStatus, LessonGrade, DocumentKind, AircraftStatus, PlatformRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { readFileSync } from "fs";
+import path from "path";
 import { hashToken } from "../src/lib/tokens";
-import { DEFAULT_ROLE_PERMISSIONS } from "../src/lib/permissions";
+import { systemOrgRoleSeed } from "../src/lib/permissions";
 
 const db = new PrismaClient();
+
+/**
+ * Provision Membership rows + ACCOUNT_OWNER ownership for all seeded users by
+ * running the exact deterministic D2 backfill migration, so demo data always
+ * satisfies the ownership invariant (owner has an active ACCOUNT_OWNER
+ * membership) without duplicating the logic here.
+ */
+async function backfillSeedMemberships() {
+  const sql = readFileSync(
+    path.join(process.cwd(), "prisma/migrations/20260710032000_backfill_memberships_ownership/migration.sql"),
+    "utf8",
+  );
+  const statements = sql
+    .split("\n").filter((l) => !l.trim().startsWith("--")).join("\n")
+    .split(";").map((s) => s.trim()).filter(Boolean);
+  for (const stmt of statements) await db.$executeRawUnsafe(stmt);
+}
 
 const day = (offset: number, hour = 9, minute = 0) => {
   const d = new Date();
@@ -45,9 +64,7 @@ async function main() {
     ],
   });
 
-  const systemRoles = Object.entries(DEFAULT_ROLE_PERMISSIONS)
-    .filter(([name]) => name !== "SUPER_ADMIN")
-    .map(([name, permissions]) => ({ name, permissions: [...permissions], isSystem: true }));
+  const systemRoles = systemOrgRoleSeed();
 
   const org = await db.organization.create({
     data: {
@@ -516,6 +533,8 @@ async function main() {
       { organizationId: org.id, actorLabel: "System", action: "org.plan_assigned", entityType: "Organization", entityId: org.id, newValue: { plan: "Professional" }, createdAt: day(-30, 9) },
     ],
   });
+
+  await backfillSeedMemberships();
 
   console.log("Seed complete.");
   console.log("Platform staff (password: demo1234): founder@aerops.io · support@aerops.io · auditor@aerops.io");

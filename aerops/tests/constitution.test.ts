@@ -76,6 +76,34 @@ describe("every API route authorizes (one gate, no exceptions)", () => {
   }
 });
 
+describe("platform mutations refuse impersonation (audit integrity, ADR-023)", () => {
+  // During impersonation session.userId is the impersonated CUSTOMER, so a
+  // platform route that mutates would record the customer's id as the platform
+  // actor — the AuditLog.actorPlatformUser FK insert fails and recordAudit
+  // swallows it (a mutation with no audit) — or persist customer-labelled data.
+  // authorizePlatform(..., { mutating: true }) refuses while impersonating, so
+  // every mutating /api/platform handler must pass it. The impersonate route's
+  // DELETE (ending a session) is the sole intentionally-unguarded handler; its
+  // POST carries the marker so the file still passes this file-level scan.
+  const platformRoutes = walk(path.join(SRC, "app", "api", "platform")).filter((p) => p.endsWith("route.ts"));
+  const MUTATING = /export async function (POST|PATCH|PUT|DELETE)\b/;
+
+  it("finds platform routes (walker sanity)", () => {
+    expect(platformRoutes.length).toBeGreaterThan(5);
+  });
+
+  for (const route of platformRoutes) {
+    const src = readFileSync(route, "utf8");
+    if (!MUTATING.test(src)) continue;
+    it(`${rel(route)} guards mutations with { mutating: true }`, () => {
+      expect(
+        /\{\s*mutating:\s*true\s*\}/.test(src),
+        `${rel(route)} has a mutating handler but never passes { mutating: true } to authorizePlatform — a staff member could mutate while impersonating and the action would be misattributed or lose its audit row`,
+      ).toBe(true);
+    });
+  }
+});
+
 describe("nobody bypasses the event bus", () => {
   it("emitWebhook is called only inside src/lib", () => {
     const offenders = walk(SRC)

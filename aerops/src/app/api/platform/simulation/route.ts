@@ -12,7 +12,7 @@ const startSchema = z.object({
 
 /** Start a live simulation run against an organization. */
 export async function POST(req: Request) {
-  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"]);
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
 
   const body = startSchema.safeParse(await req.json());
@@ -46,7 +46,7 @@ const stopSchema = z.object({ runId: z.string().min(1) });
 
 /** Stop a simulation run. */
 export async function DELETE(req: Request) {
-  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"]);
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
 
   const body = stopSchema.safeParse(await req.json());

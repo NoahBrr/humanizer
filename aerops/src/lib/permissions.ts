@@ -43,8 +43,15 @@ const BASE: Permission[] = ["notifications.view", "documents.view"];
 /**
  * Default permission bundles for the built-in roles. Seeded into each org as
  * system OrgRoles and used as the fallback when a user has no custom role.
+ *
+ * ACCOUNT_OWNER carries every permission — the ultimate authority within one
+ * organization (ADR-023). SUPER_ADMIN is retained only as a DEPRECATED legacy
+ * value (no code assigns it to a customer; the D2 migration moved every row off
+ * it). SCHOOL_ADMIN is the Organization Administrator: full permissions, no
+ * ownership.
  */
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
+  ACCOUNT_OWNER: ALL_PERMISSIONS,
   SUPER_ADMIN: ALL_PERMISSIONS,
   SCHOOL_ADMIN: ALL_PERMISSIONS,
   DISPATCHER: [
@@ -72,4 +79,28 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
 
 export function permissionsForRole(role: Role): ReadonlySet<Permission> {
   return new Set(DEFAULT_ROLE_PERMISSIONS[role]);
+}
+
+/**
+ * Built-in roles seeded as assignable system OrgRoles for a new organization.
+ * Excludes ACCOUNT_OWNER (conferred only through the ownership workflow, never
+ * a role you assign) and the deprecated SUPER_ADMIN. Single source so the org
+ * creation sites (onboarding, platform wizard, demo generator) never drift.
+ */
+export const ASSIGNABLE_SYSTEM_ROLES: Role[] = [
+  "SCHOOL_ADMIN", "DISPATCHER", "INSTRUCTOR", "STUDENT", "MAINTENANCE", "ACCOUNTANT",
+];
+
+/** The seed payload for a new org's system OrgRoles (see ASSIGNABLE_SYSTEM_ROLES). */
+export function systemOrgRoleSeed(): { name: string; permissions: Permission[]; isSystem: true }[] {
+  return ASSIGNABLE_SYSTEM_ROLES.map((name) => ({
+    name,
+    permissions: [...DEFAULT_ROLE_PERMISSIONS[name]],
+    isSystem: true,
+  }));
+}
+
+/** True for roles that confer or historically implied ultimate org authority. */
+export function isOwnerTierRole(role: Role): boolean {
+  return role === "ACCOUNT_OWNER" || role === "SUPER_ADMIN";
 }

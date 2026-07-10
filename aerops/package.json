@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx prisma/seed.ts",
-    "db:setup": "prisma migrate dev && tsx prisma/seed.ts"
+    "db:setup": "prisma migrate dev && tsx prisma/seed.ts",
+    "migration:report": "tsx scripts/migration-report.ts"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",

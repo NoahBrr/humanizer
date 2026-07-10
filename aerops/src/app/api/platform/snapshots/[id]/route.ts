@@ -6,7 +6,7 @@ import { restoreSnapshot } from "@/lib/org-snapshot";
 
 /** Restore an organization to a snapshot — replaces its current data. */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"]);
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
   const { id } = await params;
 
@@ -29,7 +29,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"]);
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
   const { id } = await params;
 

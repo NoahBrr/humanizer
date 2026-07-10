@@ -1,9 +1,10 @@
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { db } from "@/lib/db";
-import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/permissions";
+import { systemOrgRoleSeed } from "@/lib/permissions";
 import { recordAudit } from "@/lib/audit";
 import { createToken, hashToken } from "@/lib/tokens";
+import { assignOwnerTx, addMembershipTx } from "@/lib/memberships";
 
 /**
  * Public onboarding engine: individual accounts, self-serve organization
@@ -70,26 +71,26 @@ export async function createOrganizationForUser(userId: string, input: CreateOrg
   const starter = await db.subscriptionPlan.findFirst({ where: { name: "Starter" } });
   const slug = await uniqueSlug(input.name);
 
-  const org = await db.organization.create({
-    data: {
-      name: input.name,
-      slug,
-      timeZone: input.timeZone ?? "America/New_York",
-      planId: starter?.id,
-      businessProfiles: input.businessProfiles,
-      ownerId: user.id,
-      locations: { create: { name: input.location.name, icao: input.location.icao, timeZone: input.timeZone ?? "America/New_York" } },
-      orgRoles: {
-        create: Object.entries(DEFAULT_ROLE_PERMISSIONS)
-          .filter(([name]) => name !== "SUPER_ADMIN")
-          .map(([name, permissions]) => ({ name, permissions: [...permissions], isSystem: true })),
+  // Org + first location + system roles + the creator's ACCOUNT_OWNER membership
+  // and ownership are provisioned in one transaction, so a new organization is
+  // never left partially configured or ownerless (Priority 0 / Part 2).
+  const org = await db.$transaction(async (tx) => {
+    const created = await tx.organization.create({
+      data: {
+        name: input.name,
+        slug,
+        timeZone: input.timeZone ?? "America/New_York",
+        planId: starter?.id,
+        businessProfiles: input.businessProfiles,
+        onboardingStatus: "IN_PROGRESS",
+        locations: { create: { name: input.location.name, icao: input.location.icao, timeZone: input.timeZone ?? "America/New_York" } },
+        orgRoles: { create: systemOrgRoleSeed() },
       },
-    },
-  });
-
-  await db.user.update({
-    where: { id: user.id },
-    data: { organizationId: org.id, role: "SCHOOL_ADMIN", phone: input.phone ?? undefined },
+      include: { locations: { select: { id: true }, take: 1 } },
+    });
+    if (input.phone) await tx.user.update({ where: { id: user.id }, data: { phone: input.phone } });
+    await assignOwnerTx(tx, { organizationId: created.id, userId: user.id, primaryLocationId: created.locations[0]?.id ?? null });
+    return created;
   });
 
   // Team invitations: mint a real single-use token per invite and return the
@@ -179,9 +180,12 @@ export async function approveJoinRequest(
 
   const role = opts.role ?? request.requestedRole;
   await db.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: request.userId },
-      data: { organizationId: request.organizationId, role, primaryLocationId: opts.locationId ?? null },
+    await addMembershipTx(tx, {
+      userId: request.userId,
+      organizationId: request.organizationId,
+      role,
+      primaryLocationId: opts.locationId ?? null,
+      approvedByLabel: decidedBy,
     });
     await tx.joinRequest.update({
       where: { id: requestId },
@@ -219,7 +223,12 @@ export async function redeemInviteLink(token: string, userId: string) {
 
   if (link.autoApprove) {
     await db.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: userId }, data: { organizationId: link.organizationId, role: link.role } });
+      await addMembershipTx(tx, {
+        userId,
+        organizationId: link.organizationId,
+        role: link.role,
+        invitedByLabel: `Invite link "${link.label}"`,
+      });
       if (link.role === "STUDENT") {
         await tx.student.upsert({ where: { userId }, update: {}, create: { userId } });
       }

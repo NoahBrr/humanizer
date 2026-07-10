@@ -23,7 +23,7 @@ const createSchema = z.object({
  * template (Founder Platform → Demo Data Generator).
  */
 export async function POST(req: Request) {
-  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"]);
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
 
   const body = createSchema.safeParse(await req.json());

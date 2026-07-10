@@ -52,6 +52,22 @@ anything not yet true is marked **(aspirational — not yet enforced)**.
   promoting the deploy **(aspirational — not yet enforced; no production
   exists)**.
 - Never edit an applied migration; a mistake gets a follow-up migration.
+- **A new enum value needs its own migration before it can be used.** Postgres
+  cannot use a newly-added enum value in the transaction that adds it, so a
+  change introducing one ships as additive DDL (new value + new models +
+  nullable columns) followed by a **separate data-only migration** that
+  backfills. The D2 ownership work is the reference (ADR-023): the DDL adds
+  `ACCOUNT_OWNER`, `Membership`, and `ImpersonationSession`; the backfill then
+  creates one membership per org-user, promotes each `ownerId` user to
+  `ACCOUNT_OWNER`, and moves remaining customer `SUPER_ADMIN` rows to
+  `SCHOOL_ADMIN`. `SUPER_ADMIN` is retained-but-deprecated in the enum because
+  dropping a Postgres enum value is destructive.
+- **Data backfills are deterministic and idempotent**, validated against
+  fresh / seeded / legacy / missing-owner fixtures so they converge in any
+  environment. **A backfill never guesses**: it never invents an owner for an
+  ownerless org. Ownerless or ambiguous orgs and legacy roles are surfaced for
+  explicit remediation by the read-only `scripts/migration-report.ts`, never
+  silently resolved.
 
 ## Foreign keys
 
@@ -160,6 +176,16 @@ anything not yet true is marked **(aspirational — not yet enforced)**.
   (`src/lib/session.ts`).
 - Revocation-style lifecycles use their own timestamp instead of deletion:
   `ApiKey.revokedAt`, `InviteLink.revokedAt`, `Organization.suspendedAt`.
+- Platform-staff user actions stay within these lifecycle fields — never a
+  hard delete: deactivate/reactivate flip `isActive` (session resolution drops
+  the user on the next request), force-logout increments `sessionVersion`, and
+  ownership transfer moves `Organization.ownerId` and the paired `ACCOUNT_OWNER`
+  membership together inside one `$transaction` (`lib/memberships.ts`), demoting
+  the former owner to Organization Administrator so they keep an authorized
+  role. The current owner cannot be deactivated, demoted, role-changed, or
+  membership-removed until ownership is transferred, and the last active
+  administrator cannot be deactivated, so `ownerId` never dangles at an inactive
+  user (ADR-023, refining ADR-022).
 - Hard deletes are reserved for platform tooling (tenant wipe/restore,
   demo-org cleanup) and import rollback — always through the manifest or
   the canonical wipe order, always audited.
@@ -186,6 +212,25 @@ anything not yet true is marked **(aspirational — not yet enforced)**.
 - No Postgres row-level security; isolation is enforced at the application
   layer by the single `authorize()` gate plus session-scoped queries, and
   reviewed per the merge checklist.
+- **`Membership` is the source of truth for org affiliation, roles, and
+  ownership** (ADR-023): `@@unique([userId, organizationId])`, carrying role,
+  custom role, status (`ACTIVE`/`DEACTIVATED`), primary location/department, and
+  invited/approved-by labels — one user may hold memberships in many
+  organizations. `User.organizationId`/`role`/`customRoleId`/`primaryLocationId`/
+  `departmentId` are a **maintained projection** of the user's active membership
+  (selected deterministically by `selectActiveMembership`), so the operational
+  core stays single-org-scoped from the session; every membership mutation
+  re-projects (`lib/memberships.ts`) so the projection never drifts. Collapsing
+  `User.organizationId` into a derived pointer and moving Student/Instructor
+  profiles per-membership (both `@unique userId` today) is a deferred follow-on.
+- **Ownership invariant:** for every org with an `ownerId`, that user holds
+  exactly one active `ACCOUNT_OWNER` membership in the org and no other
+  membership does. `Organization.ownerId` is the source of truth but is an
+  ownership pointer, not an authorization shortcut (access still flows through
+  the membership role → permission bundle). `ownerId` and the paired
+  `ACCOUNT_OWNER` membership move together, atomically, through the
+  ownership-transfer service (`transferOwnershipTx`/`assignOwnerTx`) — never a
+  bare role or profile edit.
 
 ## Performance expectations
 
@@ -229,5 +274,5 @@ runtime-created rows); the dev seed **never** runs in production
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system shape and engines
 - [SECURITY_STANDARDS.md](./SECURITY_STANDARDS.md) — auth, tenancy, secrets
 - [ENGINEERING_HANDBOOK.md](../engineering/ENGINEERING_HANDBOOK.md) — how we work
-- [DECISIONS.md](./DECISIONS.md) — ADR-007 (no-RLS tenancy), ADR-015 (additive-only migrations)
+- [DECISIONS.md](./DECISIONS.md) — ADR-007 (no-RLS tenancy), ADR-015 (additive-only migrations), ADR-023 (membership, ownership, backfill pattern)
 - [PRODUCTION.md](../../PRODUCTION.md) — launch plan (§11 backups, §13 blockers)

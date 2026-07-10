@@ -39,7 +39,8 @@ model PlatformUser {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  auditLogs AuditLog[]
+  auditLogs             AuditLog[]
+  impersonationSessions ImpersonationSession[]
 }
 
 model SubscriptionPlan {
@@ -59,26 +60,43 @@ model SubscriptionPlan {
 }
 
 /// Immutable trail of every important action, tenant and platform alike.
+///
+/// Attribution (ADR-023): `actorUserId` is a genuine customer actor;
+/// `actorPlatformUserId` is a genuine AeroOps-staff actor. During impersonation
+/// BOTH identities are preserved separately — the staff member is the real
+/// actor (`actorPlatformUserId`), the customer they represent is
+/// `impersonatedUserId`, and `impersonationSessionId` links the support session.
+/// A row must never imply a customer independently performed a staff-initiated
+/// action, so under impersonation `actorUserId` is left null.
+/// Note: `actorUserId` is a bare string (no FK) because API-key service
+/// accounts record `apikey:<id>`, which is not a User row.
 model AuditLog {
-  id                  String   @id @default(cuid())
-  organizationId      String?
-  actorUserId         String?
-  actorPlatformUserId String?
-  actorLabel          String
-  action              String
-  entityType          String?
-  entityId            String?
-  oldValue            Json?
-  newValue            Json?
-  ip                  String?
-  userAgent           String?
-  createdAt           DateTime @default(now())
+  id                     String   @id @default(cuid())
+  organizationId         String?
+  actorUserId            String?
+  actorPlatformUserId    String?
+  impersonatedUserId     String?
+  impersonationSessionId String?
+  actorLabel             String
+  action                 String
+  entityType             String?
+  entityId               String?
+  oldValue               Json?
+  newValue               Json?
+  ip                     String?
+  userAgent              String?
+  createdAt              DateTime @default(now())
 
-  organization      Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  actorPlatformUser PlatformUser? @relation(fields: [actorPlatformUserId], references: [id])
+  organization         Organization?         @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actorPlatformUser    PlatformUser?         @relation(fields: [actorPlatformUserId], references: [id])
+  impersonatedUser     User?                 @relation("ImpersonatedAudits", fields: [impersonatedUserId], references: [id], onDelete: SetNull)
+  impersonationSession ImpersonationSession? @relation(fields: [impersonationSessionId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
   @@index([action, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([impersonatedUserId, createdAt])
+  @@index([impersonationSessionId])
 }
 
 // ---------------------------------------------------------------------------
@@ -91,60 +109,125 @@ enum OrgStatus {
   DELETED
 }
 
+/// Regulatory / operational category of a customer organization (Phase D2).
+enum OrgType {
+  PART_61_FLIGHT_SCHOOL
+  PART_141_FLIGHT_SCHOOL
+  FLYING_CLUB
+  UNIVERSITY_PROGRAM
+  CORPORATE_FLIGHT_DEPT
+  MAINTENANCE_ORG
+  OTHER
+}
+
+/// Commercial state of the subscription. Distinct from OrgStatus (access) and
+/// from live billing — MANUAL means invoiced off-platform (no Stripe).
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  MANUAL
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  LIVE
+}
+
+/// How the org is billed. STRIPE is provisioned behind an env flag and is never
+/// live in this phase (PRODUCTION.md); MANUAL is the safe default.
+enum BillingMode {
+  MANUAL
+  STRIPE
+}
+
 model Organization {
-  id                  String    @id @default(cuid())
+  id                  String             @id @default(cuid())
+  /// Public display name (shown to customers and in the workspace).
   name                String
-  slug                String    @unique
+  /// Registered legal entity name, if different from the display name.
+  legalName           String?
+  slug                String             @unique
+  orgType             OrgType            @default(OTHER)
+  description         String?
+  website             String?
+  phone               String?
+  billingEmail        String?
+  primaryContactName  String?
+  primaryContactEmail String?
+  primaryContactPhone String?
+  /// Org mailing/contact address (free text); per-site addresses live on Location.
+  address             String?
   logoUrl             String?
-  brandColor          String    @default("#2563eb")
-  timeZone            String    @default("America/New_York")
-  status              OrgStatus @default(ACTIVE)
-  /// Primary Owner (a User id). Transfer requires dual confirmation + audit.
+  /// Storage-adapter object key for the logo (lib/storage). Served via logoUrl.
+  logoObjectKey       String?
+  brandColor          String             @default("#2563eb")
+  timeZone            String             @default("America/New_York")
+  status              OrgStatus          @default(ACTIVE)
+  subscriptionStatus  SubscriptionStatus @default(TRIAL)
+  onboardingStatus    OnboardingStatus   @default(NOT_STARTED)
+  billingMode         BillingMode        @default(MANUAL)
+  /// Whether the org appears in public organization search (self-serve join).
+  isDiscoverable      Boolean            @default(false)
+  /// Per-org capacity overrides; null falls back to the plan's limit. These are
+  /// subscription limits, NOT live counts (Section D2 Part 3).
+  maxAircraftOverride Int?
+  maxUsersOverride    Int?
+  /// Primary Owner (a User id). Source of truth for ownership; the referenced
+  /// user must hold an active ACCOUNT_OWNER Membership (ADR-023). Transfer runs
+  /// through the dedicated ownership-transfer service (ownerId + memberships,
+  /// atomically) — never a plain profile update.
   ownerId             String?
   planId              String?
   /// Module keys switched off for this org (overrides plan availability)
-  disabledModules     String[]  @default([])
+  disabledModules     String[]           @default([])
   /// Activated business activities (see lib/business-profiles.ts). Empty = all plan modules.
-  businessProfiles    String[]  @default([])
+  businessProfiles    String[]           @default([])
   /// Built-in automation keys the org has switched off (see lib/automations.ts)
-  disabledAutomations String[]  @default([])
+  disabledAutomations String[]           @default([])
   /// Demo tenants are excluded from customer analytics and safe to delete.
-  isDemo              Boolean   @default(false)
+  isDemo              Boolean            @default(false)
+  /// Internal platform-staff notes (never customer-visible) live in PlatformNote.
   suspendedAt         DateTime?
   deletedAt           DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
-  plan                 SubscriptionPlan?     @relation(fields: [planId], references: [id])
-  users                User[]
-  locations            Location[]
-  departments          Department[]
-  orgRoles             OrgRole[]
-  invitations          Invitation[]
-  auditLogs            AuditLog[]
-  aircraft             Aircraft[]
-  lessonTypes          LessonType[]
-  scheduleEvents       ScheduleEvent[]
-  invoices             Invoice[]
-  notifications        Notification[]
-  documents            Document[]
-  syllabi              Syllabus[]
-  snapshots            OrgSnapshot[]
-  simulations          SimulationRun[]
-  joinRequests         JoinRequest[]
-  inviteLinks          InviteLink[]
-  importJobs           ImportJob[]
-  loginEvents          LoginEvent[]
-  lessonRequests       LessonRequest[]
-  waitlistEntries      WaitlistEntry[]
-  leads                Lead[]
-  apiKeys              ApiKey[]
-  webhooks             Webhook[]
-  parts                Part[]
-  missionControlScenes MissionControlScene[]
-  platformNotes        PlatformNote[]
+  plan                  SubscriptionPlan?      @relation(fields: [planId], references: [id])
+  users                 User[]
+  memberships           Membership[]
+  locations             Location[]
+  departments           Department[]
+  orgRoles              OrgRole[]
+  invitations           Invitation[]
+  auditLogs             AuditLog[]
+  impersonationSessions ImpersonationSession[]
+  aircraft              Aircraft[]
+  lessonTypes           LessonType[]
+  scheduleEvents        ScheduleEvent[]
+  invoices              Invoice[]
+  notifications         Notification[]
+  documents             Document[]
+  syllabi               Syllabus[]
+  snapshots             OrgSnapshot[]
+  simulations           SimulationRun[]
+  joinRequests          JoinRequest[]
+  inviteLinks           InviteLink[]
+  importJobs            ImportJob[]
+  loginEvents           LoginEvent[]
+  lessonRequests        LessonRequest[]
+  waitlistEntries       WaitlistEntry[]
+  leads                 Lead[]
+  apiKeys               ApiKey[]
+  webhooks              Webhook[]
+  parts                 Part[]
+  missionControlScenes  MissionControlScene[]
+  platformNotes         PlatformNote[]
 
   @@index([status])
+  @@index([orgType])
 }
 
 /// Data-driven role: a named bundle of permission keys. System roles are
@@ -161,6 +244,7 @@ model OrgRole {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users        User[]
+  memberships  Membership[]
   invitations  Invitation[]
 
   @@unique([organizationId, name])
@@ -175,6 +259,7 @@ model Department {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   location     Location?    @relation(fields: [locationId], references: [id])
   users        User[]
+  memberships  Membership[]
 
   createdAt DateTime @default(now())
 
@@ -201,7 +286,16 @@ model Invitation {
   @@index([organizationId])
 }
 
+/// Organization-level roles. `ACCOUNT_OWNER` is the ultimate authority within
+/// one organization (the user referenced by `Organization.ownerId`).
+/// `SUPER_ADMIN` is DEPRECATED as an organization role (ADR-023): it was
+/// historically conflated with ownership. It is retained in the enum only to
+/// avoid a destructive Postgres enum-value drop; the D2 migration moves every
+/// customer row off it and no code assigns it (enforced by
+/// tests/schema-governance). `SCHOOL_ADMIN` is a broad Organization
+/// Administrator, explicitly NOT a synonym for ownership.
 enum Role {
+  ACCOUNT_OWNER
   SUPER_ADMIN
   SCHOOL_ADMIN
   DISPATCHER
@@ -209,6 +303,74 @@ enum Role {
   STUDENT
   MAINTENANCE
   ACCOUNTANT
+}
+
+/// Status of a user's membership in one organization.
+enum MembershipStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+/// A user's affiliation with one organization: their role there, status, and
+/// primary location/department (ADR-023). This is the source of truth for org
+/// affiliation and roles and supports one user belonging to many organizations.
+/// `User.organizationId`/`role`/`customRoleId`/`primaryLocationId`/`departmentId`
+/// are a maintained projection of the user's ACTIVE (session-selected) membership
+/// so the operational core stays single-org-scoped from the session.
+model Membership {
+  id                String           @id @default(cuid())
+  userId            String
+  organizationId    String
+  role              Role
+  /// Custom OrgRole override (wins over the built-in role), same-org only.
+  customRoleId      String?
+  primaryLocationId String?
+  departmentId      String?
+  status            MembershipStatus @default(ACTIVE)
+  /// Label of who created/invited this membership (audit-friendly, never a
+  /// cross-tenant FK).
+  invitedByLabel    String?
+  approvedByLabel   String?
+  deactivatedAt     DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customRole      OrgRole?     @relation(fields: [customRoleId], references: [id])
+  primaryLocation Location?    @relation("MembershipPrimaryLocation", fields: [primaryLocationId], references: [id])
+  department      Department?  @relation(fields: [departmentId], references: [id])
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, status])
+  @@index([userId, status])
+  @@index([organizationId, role])
+}
+
+/// A live, audited support session in which AeroOps staff act as a customer
+/// user (ADR-023 / Priority 1). The signed impersonation cookie carries this
+/// row's id; every audit written while it is active links back here, preserving
+/// both identities. Expiry (`expiresAt`) stops impersonated access and
+/// attribution; `endedAt` records an explicit stop.
+model ImpersonationSession {
+  id             String    @id @default(cuid())
+  platformUserId String
+  targetUserId   String
+  organizationId String
+  reason         String
+  readOnly       Boolean   @default(true)
+  startedAt      DateTime  @default(now())
+  expiresAt      DateTime
+  endedAt        DateTime?
+
+  platformUser PlatformUser @relation(fields: [platformUserId], references: [id])
+  targetUser   User         @relation("ImpersonatedSessions", fields: [targetUserId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditLogs    AuditLog[]
+
+  @@index([platformUserId, startedAt])
+  @@index([organizationId, startedAt])
+  @@index([targetUserId])
 }
 
 model User {
@@ -236,15 +398,18 @@ model User {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  organization      Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customRole        OrgRole?       @relation(fields: [customRoleId], references: [id])
-  primaryLocation   Location?      @relation("PrimaryLocationUsers", fields: [primaryLocationId], references: [id])
-  department        Department?    @relation(fields: [departmentId], references: [id])
-  studentProfile    Student?
-  instructorProfile Instructor?
-  notifications     Notification[]
-  documents         Document[]     @relation("DocumentOwner")
-  joinRequests      JoinRequest[]
+  organization         Organization?          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customRole           OrgRole?               @relation(fields: [customRoleId], references: [id])
+  primaryLocation      Location?              @relation("PrimaryLocationUsers", fields: [primaryLocationId], references: [id])
+  department           Department?            @relation(fields: [departmentId], references: [id])
+  memberships          Membership[]
+  studentProfile       Student?
+  instructorProfile    Instructor?
+  notifications        Notification[]
+  documents            Document[]             @relation("DocumentOwner")
+  joinRequests         JoinRequest[]
+  impersonatedSessions ImpersonationSession[] @relation("ImpersonatedSessions")
+  impersonatedAudits   AuditLog[]             @relation("ImpersonatedAudits")
 
   @@index([organizationId, role])
 }
@@ -267,11 +432,12 @@ model Location {
   timeZone       String  @default("America/New_York")
   isActive       Boolean @default(true)
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  departments    Department[]
-  primaryUsers   User[]          @relation("PrimaryLocationUsers")
-  aircraft       Aircraft[]
-  scheduleEvents ScheduleEvent[]
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departments        Department[]
+  primaryUsers       User[]          @relation("PrimaryLocationUsers")
+  primaryMemberships Membership[]    @relation("MembershipPrimaryLocation")
+  aircraft           Aircraft[]
+  scheduleEvents     ScheduleEvent[]
 
   createdAt DateTime @default(now())
 

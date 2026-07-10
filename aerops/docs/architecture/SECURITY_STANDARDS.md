@@ -42,9 +42,37 @@ the code.
 - **Org scoping comes from the session, never from client input.**
   Cross-tenant queries exist only behind `authorizePlatform()`.
 - Platform staff (`PlatformUser`) are a **separate identity table** — never
-  members of customer organizations. `/platform` routes gate by
-  `PlatformRole` (FOUNDER / PLATFORM_ADMIN / CUSTOMER_SUCCESS /
-  SUPPORT_ENGINEER / …).
+  members of customer organizations. `/platform` capabilities are a data-driven
+  matrix: `src/lib/platform-permissions.ts` maps the `PlatformRole` enum
+  (FOUNDER / PLATFORM_ADMIN / SOFTWARE_ENGINEER / CUSTOMER_SUCCESS /
+  SUPPORT_ENGINEER / BILLING_ADMIN / AUDITOR) to a `PlatformPermission` catalog.
+  Routes gate with `authorizePlatform(platformRolesWith("platform.users.manage"), …)`
+  — the allowed-role list is *derived* from the matrix, not hardcoded, so adding
+  a role/capability is a data edit and AUDITOR is provably read-only (ADR-022).
+  The six idealized spec role names are display aliases, not enum values.
+- **Platform authority and organization ownership are authorized
+  independently** (ADR-023). `PlatformUser` (AeroOps staff) and personal `User`
+  are distinct identity tables with distinct RBAC (`PLATFORM_ROLE_PERMISSIONS`
+  vs org `Permission` bundles). A Platform Super Admin manages orgs through
+  *platform* authorization and is **never** inserted as an org member or owner;
+  an Account Owner gets **no** platform permission. Platform org-creation invites
+  or assigns an owner — it never adds the staff member as a member.
+- **Platform mutations are refused while impersonating.**
+  `authorizePlatform(roles, { mutating: true })` returns 403 when the session
+  carries an impersonation cookie: during impersonation the acting id is the
+  *target customer's*, so a write would bypass read-only impersonation and lose
+  its audit (the customer id fails the `AuditLog.actorPlatformUserId` FK).
+- **Platform-staff actions on a customer user** (`PATCH /api/platform/users/[id]`
+  — deactivate, reactivate, force-logout, role change, owner transfer) are each
+  matrix-gated, audited with the staff actor, and surfaced to the org as a
+  notification when they change access. Guardrails (ADR-023): the current
+  Account Owner cannot be deactivated, demoted, role-changed, or
+  membership-removed until ownership is transferred, and the last active
+  administrator cannot be deactivated; ownership (`Organization.ownerId` plus the
+  owner's active `ACCOUNT_OWNER` membership) moves only through the
+  ownership-transfer service, atomically, never a bare role edit; a custom role
+  must belong to the target's own org; promotions clear `customRoleId` so they
+  actually take effect. No hard deletes — `isActive`/`deletedAt` only.
 - API keys pass through the **same** `authorize()` gate as humans: scopes
   are permission keys, read-only keys are refused all mutations, module
   gating and suspension apply identically (`apiKeySession`,
@@ -58,7 +86,7 @@ the code.
 | Resolution | Always `getSession()` — never `auth()` directly — so tenancy rules live in exactly one place |
 | Strategy | NextAuth JWT (`session: { strategy: "jwt" }`, `src/auth.config.ts`); default NextAuth cookies (httpOnly, SameSite Lax) — no custom cookie override in the repo |
 | Revocation | `sessionVersion` on `User`/`PlatformUser`: any bump (or `isActive = false`) kills all live JWTs on the next request. Org users check in `orgSessionFor()`; platform users check on **every** request in `getSession()` via `platformClaimsValid()` (`src/lib/session-rules.ts`), which also fails closed on tokens missing the version claim. The platform **role** is read from the row, not the token, so demotions apply immediately. Pinned by `tests/auth-security.test.ts` |
-| Impersonation | HMAC-SHA256-signed, expiring (1 h TTL) `aerops-impersonation` cookie, verified with `timingSafeEqual` (`encodeImpersonation`/`decodeImpersonation`). Read-only by default; read-only blocks **all** mutations at the gate. Start and stop are audited (`platform.impersonation_start/_end`) and the customer org is notified at session end (`src/app/api/platform/impersonate/route.ts`). Never weaken this. |
+| Impersonation | HMAC-SHA256-signed, expiring (1 h TTL) `aerops-impersonation` cookie, verified with `timingSafeEqual` (`encodeImpersonation`/`decodeImpersonation`), anchored to a durable `ImpersonationSession` row (reason, start, expiry, org, target, `endedAt`) whose id + staff label the cookie carries. Read-only by default; read-only blocks **all** mutations at the gate. Start and stop are audited (`platform.impersonation_start/_end`) and the customer org is notified at session end (`src/app/api/platform/impersonate/route.ts`). Expiry alone stops impersonated access **and** audit attribution; nested impersonation is impossible (starting it is a refused mutating action). Never weaken this. |
 | Impersonation cookie flags | `httpOnly`, `sameSite: "lax"`, `secure` in production, 1 h `maxAge` |
 | API-key sessions | `Bearer aero_…` header beats the browser cookie; key is sha256-hashed for lookup; revoked keys are refused |
 | Server-side session store (Redis) | **(aspirational — not yet enforced)** — PRODUCTION.md §2.6 lists sessions as a Redis candidate |
@@ -215,6 +243,17 @@ lands.
   them (`src/lib/org-snapshot.ts`).
 - Audit failure never breaks the operation it describes, but is loudly
   logged.
+- **Impersonation attribution is corrected in one place** (ADR-023): every
+  customer route records `actorUserId: session.userId`, but during impersonation
+  that id is the *customer's*. `recordAudit` applies the pure, tested
+  `computeAttribution` — a customer-written action inside an active session is
+  re-attributed so the staff member becomes `actorPlatformUserId`, the customer
+  is preserved as `impersonatedUserId`, the support session is linked via
+  `impersonationSessionId`, and `actorUserId` is cleared so no row implies the
+  customer acted alone. One shared-layer fix covers all ~37 customer routes and
+  both identities are always preserved. Session expiry stops attribution, nested
+  impersonation cannot occur, and audit rows carry ids and labels only — never
+  cookies, tokens, or secrets.
 - The audit log doubles as the Mission Control command timeline.
 - Retention policy (2 y hot, then export to R2) **(aspirational — not yet
   enforced)** — PRODUCTION.md §3.16.
@@ -236,5 +275,5 @@ lands.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system shape, engines, event bus
 - [ENGINEERING_HANDBOOK.md](../engineering/ENGINEERING_HANDBOOK.md) — coding, workflow, and release standards
 - [PRODUCTION.md](../../PRODUCTION.md) — launch plan; §3/§12/§13 are the security hardening path
-- [DECISIONS.md](./DECISIONS.md) — ADR-003 (JWT sessions), ADR-004 (separate PlatformUser identity)
+- [DECISIONS.md](./DECISIONS.md) — ADR-003 (JWT sessions), ADR-004 (separate PlatformUser identity), ADR-023 (ownership, membership, impersonation audit attribution)
 - [CLAUDE.md](../../CLAUDE.md) — session-start operating system
