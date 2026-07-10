@@ -600,5 +600,69 @@ Risks · Reconsider when. Statuses: **Accepted** · Superseded (→ ADR-n).
 
 ---
 
+## ADR-024 — Founder authority: immutable identity, secure bootstrap, Platform User management
+
+**Date:** 2026-07 (Phase D3-A) · **Status:** Accepted · **Extends** ADR-022 (platform matrix), ADR-023 (platform vs org authority)
+
+- **Context:** Phase D3 needs a highest platform tier (`FOUNDER_SUPER_ADMIN`) held
+  only by the two founders (Noah, Jack) with a founder-only console, plus full
+  Platform User management. Two hard requirements: founder authority must be
+  **server-enforced and un-grantable** (not a UI/email check, not something a
+  role assignment can confer), and founder credentials must never be hardcoded,
+  seeded, logged, or committed.
+- **Immutable founder identity.** Founder access keys on a `PlatformUser.isFounder`
+  boolean set **only** by the bootstrap — never by assigning a role. The console
+  and every founder-exclusive action gate on `founderAccessAllowed(session)` /
+  `authorizeFounder()` / `requireFounderSession()` (server-side). So even
+  `FOUNDER_SUPER_ADMIN` the *role* does not grant founder power; the role is the
+  permission tier, `isFounder` is the identity. `FOUNDER_SUPER_ADMIN` is never
+  assignable through the ordinary role-change flow (like `ACCOUNT_OWNER` for orgs).
+- **Secure bootstrap** (`scripts/bootstrap-founders.ts`, `npm run bootstrap:founders`):
+  reads each founder's initial password from a **protected env var**
+  (`FOUNDER_NOAH_PASSWORD` / `FOUNDER_JACK_PASSWORD`), stores only the bcrypt hash,
+  and never prints it. Gated by `FOUNDER_BOOTSTRAP` so it can be disabled after
+  init. **Idempotent** — an existing founder is verified (identity/role repaired)
+  but the password is NEVER overwritten. Sets `mustChangePassword` so the initial
+  env password is single-use (rotated on first sign-in, enforced by the mutating
+  guards). Every action is audited. Founder emails/names are identities (not
+  secrets) and live in the script; passwords live only in the environment. The
+  seed creates **no founder at all** — the bootstrap is the only path to founder
+  identity; the seeded demo platform admin (Platform Admin Plus) exercises the
+  non-founder side of the boundary locally.
+- **Time-boxed + scoped platform access.** `PlatformUser` gains `accessStartsAt`/
+  `accessExpiresAt` (a session outside the window is refused in `getSession`),
+  `readOnly` (mutations refused, like read-only impersonation), and
+  `restrictedOrgIds` (a scoped staff member may act only on those orgs, enforced
+  by `platformOrgScopeError(session, orgId)` on EVERY org-targeting route — org
+  edit/notes/logo, snapshot create/restore/delete, live simulation
+  start/tick/stop, import rollback, impersonate, customer-user management — and
+  the org detail page, after the org id is resolved (a constitution test pins the
+  list so a new org route can't skip it); a founder
+  is never scoped, so it cannot lock founders out). `mustChangePassword` refuses
+  mutations until rotation (the self-service password route uses the non-mutating
+  guard so it stays reachable). The last-founder deactivate guard is atomic (a
+  transaction advisory lock serializes concurrent founder deactivations).
+- **Platform User management** is founder-only: search, invite (a single-use setup
+  token — only the hash stored — so a founder never handles another user's
+  password; an invited user is NEVER a founder), role change, activate/deactivate,
+  force-logout, and scope/expiry. Safeguards: the **last active founder** cannot be
+  deactivated/removed; any change to a founder requires a recorded **reason**; you
+  cannot deactivate yourself; secrets are never selected or returned.
+- **Consequences:** `PlatformCustomRole` + `PlatformUserInvitation` models are
+  added; custom-platform-role *assignment UI* is a documented D3 follow-on (the
+  model + `customRoleId` are in place). Founder-only routes use a new
+  `authorizeFounder` gate (added to the constitution authorization scan); the
+  public token-auth activate route and the self-service password route are
+  catalogued exemptions.
+- **Enforced by** `tests/founder-authority.test.ts` (identity/last-founder/access-
+  window/credential-hygiene), the updated `tests/platform-console.test.ts` matrix,
+  the constitution scans, and a live bootstrap verification (gate, policy,
+  idempotency, no-leak).
+- **Reconsider when:** custom platform roles need first-class permission
+  resolution, or founder MFA/hardware-key enrollment is required before founder
+  actions.
+
+---
+
 **Adding an ADR:** copy the format, take the next number, link any ADR it
 supersedes, and update [ARCHITECTURE.md](./ARCHITECTURE.md) in the same PR.

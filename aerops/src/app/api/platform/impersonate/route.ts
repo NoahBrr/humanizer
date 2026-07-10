@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { encodeImpersonation, impersonationTtlMs, readActiveImpersonation, IMPERSONATION_COOKIE } from "@/lib/impersonation";
 import { recordAudit } from "@/lib/audit";
 import { platformRolesWith } from "@/lib/platform-permissions";
@@ -31,6 +31,9 @@ export async function POST(req: Request) {
   if (!target || !target.isActive || target.deletedAt) return NextResponse.json({ error: "Target user not found" }, { status: 404 });
   if (!target.organization || !target.organizationId) return NextResponse.json({ error: "This user does not belong to an organization yet" }, { status: 400 });
   if (target.organization.status === "DELETED") return NextResponse.json({ error: "Organization is deleted" }, { status: 400 });
+  // Org-restricted staff may impersonate only within their scoped organizations (D3-A).
+  const scopeError = platformOrgScopeError(session, target.organizationId);
+  if (scopeError) return scopeError;
 
   const expiresAt = new Date(Date.now() + impersonationTtlMs());
   const platformLabel = `${session.firstName} ${session.lastName}`;

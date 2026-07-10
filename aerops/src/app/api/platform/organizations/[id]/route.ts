@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { platformCan, PLATFORM_PERMISSIONS, type PlatformPermission } from "@/lib/platform-permissions";
 
@@ -80,6 +80,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const { id } = await params;
+  const scopeError = platformOrgScopeError(session, id);
+  if (scopeError) return scopeError;
   const org = await db.organization.findUnique({ where: { id } });
   if (!org) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

@@ -32,6 +32,7 @@ describe("every API route authorizes (one gate, no exceptions)", () => {
     "app/api/auth/register/route.ts", // public sign-up, rate limited, creates org-less accounts only
     "app/api/health/route.ts", // observability: data-free by contract
     "app/api/invitations/accept/route.ts", // token-authenticated public onboarding
+    "app/api/platform/activate/route.ts", // token-authenticated Platform User setup (D3-A), rate limited
     "app/api/demo-requests/route.ts", // marketing form intake, rate limited, data-free response
   ]);
 
@@ -71,7 +72,7 @@ describe("every API route authorizes (one gate, no exceptions)", () => {
     }
     it(`${name} calls authorize()/authorizePlatform()`, () => {
       const src = readFileSync(route, "utf8");
-      expect(/\b(authorize|authorizePlatform)\(/.test(src), `${name} has no authorization gate`).toBe(true);
+      expect(/\b(authorize|authorizePlatform|authorizeFounder)\(/.test(src), `${name} has no authorization gate`).toBe(true);
     });
   }
 });
@@ -87,6 +88,13 @@ describe("platform mutations refuse impersonation (audit integrity, ADR-023)", (
   // POST carries the marker so the file still passes this file-level scan.
   const platformRoutes = walk(path.join(SRC, "app", "api", "platform")).filter((p) => p.endsWith("route.ts"));
   const MUTATING = /export async function (POST|PATCH|PUT|DELETE)\b/;
+  // Routes with no platform session to protect (D3-A): the public token-auth
+  // setup route, and the self-service password rotation (deliberately gated
+  // non-mutating so a mustChangePassword user can still reach exactly it).
+  const NO_SESSION_TO_GUARD = new Set([
+    "app/api/platform/activate/route.ts",
+    "app/api/platform/account/password/route.ts",
+  ]);
 
   it("finds platform routes (walker sanity)", () => {
     expect(platformRoutes.length).toBeGreaterThan(5);
@@ -94,12 +102,39 @@ describe("platform mutations refuse impersonation (audit integrity, ADR-023)", (
 
   for (const route of platformRoutes) {
     const src = readFileSync(route, "utf8");
-    if (!MUTATING.test(src)) continue;
+    if (!MUTATING.test(src) || NO_SESSION_TO_GUARD.has(rel(route))) continue;
     it(`${rel(route)} guards mutations with { mutating: true }`, () => {
       expect(
         /\{\s*mutating:\s*true\s*\}/.test(src),
         `${rel(route)} has a mutating handler but never passes { mutating: true } to authorizePlatform — a staff member could mutate while impersonating and the action would be misattributed or lose its audit row`,
       ).toBe(true);
+    });
+  }
+});
+
+describe("org-scoped platform access is enforced, not dead (D3-A / restrictedOrgIds)", () => {
+  // A platform user can be restricted to specific organizations. Every route
+  // that acts on a single org MUST enforce that restriction server-side (via
+  // platformOrgScopeError after resolving the org, or authorizePlatform({ orgId }))
+  // — otherwise the confinement control the founder console configures is a
+  // no-op. This pins the enforcement so it can't silently become dead again.
+  const ORG_TARGETING = [
+    "app/api/platform/organizations/[id]/route.ts",
+    "app/api/platform/organizations/[id]/notes/route.ts",
+    "app/api/platform/organizations/[id]/logo/route.ts",
+    "app/api/platform/snapshots/route.ts",
+    "app/api/platform/snapshots/[id]/route.ts",
+    "app/api/platform/simulation/route.ts",
+    "app/api/platform/simulation/tick/route.ts",
+    "app/api/platform/imports/[id]/rollback/route.ts",
+    "app/api/platform/impersonate/route.ts",
+    "app/api/platform/users/[id]/route.ts",
+  ];
+  for (const rel of ORG_TARGETING) {
+    it(`${rel} enforces org scope`, () => {
+      const src = readFileSync(path.join(SRC, rel), "utf8");
+      const enforces = src.includes("platformOrgScopeError") || /authorizePlatform\([^;]*orgId/.test(src);
+      expect(enforces, `${rel} acts on an org but never checks restrictedOrgIds`).toBe(true);
     });
   }
 });

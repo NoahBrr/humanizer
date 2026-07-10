@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { requirePlatformSession } from "@/lib/session";
+import { platformOrgInScope } from "@/lib/session-rules";
 import { MODULES, CORE_MODULES, type ModuleKey } from "@/lib/features";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -49,6 +50,8 @@ function Field({ label, value, link }: { label: string; value?: string | null; l
 export default async function OrganizationDetail({ params }: { params: Promise<{ id: string }> }) {
   const session = await requirePlatformSession();
   const { id } = await params;
+  // Org-restricted staff can view only their scoped organizations (D3-A).
+  if (!platformOrgInScope(session.restrictedOrgIds, id)) notFound();
   const org = await db.organization.findUnique({
     where: { id },
     include: {

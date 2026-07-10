@@ -196,6 +196,18 @@ safeguards: the current owner cannot be deactivated, demoted, role-changed, or
 membership-removed until ownership transfers, and the last active administrator
 cannot be deactivated.
 
+Founder authority is a separate, higher tier (ADR-024): the top `PlatformRole` is
+`FOUNDER_SUPER_ADMIN`, held only by the two bootstrapped founders, and founder-only
+surfaces (`/platform/founder`, Platform User management) gate on an **immutable
+`PlatformUser.isFounder` identity** via `authorizeFounder()` / `requireFounderSession()`
+— never a role, email, or client check. Founders are provisioned only by
+`scripts/bootstrap-founders.ts` (protected env-var passwords, hashes only, gated,
+idempotent, audited, rotation forced); `FOUNDER_SUPER_ADMIN` is never assignable
+via role change and the last active founder cannot be removed. Platform User
+management supports token-invite (invitee sets their own password; never a
+founder), plus read-only / org-restricted / time-boxed access scopes enforced in
+the authorize layer.
+
 ## 7. Organization hierarchy
 
 ```mermaid

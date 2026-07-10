@@ -6,7 +6,7 @@ import type { OrgStatus, PlatformRole, Role } from "@prisma/client";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { hashToken } from "@/lib/tokens";
-import { platformClaimsValid, platformAccessAllowed } from "@/lib/session-rules";
+import { platformClaimsValid, platformAccessAllowed, platformAccessWindowActive, founderAccessAllowed, platformOrgInScope } from "@/lib/session-rules";
 import { type Permission } from "@/lib/permissions";
 import { resolvePermissions } from "@/lib/platform-users";
 import { enabledModules, type ModuleKey } from "@/lib/features";
@@ -42,6 +42,15 @@ export type AppSession = {
   businessProfiles: string[];
   /** Platform-staff fields */
   platformRole?: PlatformRole;
+  /** Immutable founder identity (D3-A / ADR-024) — set only by the bootstrap.
+   *  Gates the founder-only console and founder-exclusive actions. */
+  isFounder?: boolean;
+  /** Read-only platform scope — refused all mutations (like read-only impersonation). */
+  platformReadOnly?: boolean;
+  /** If non-empty, this platform user may act only on these organization ids. */
+  restrictedOrgIds?: string[];
+  /** The platform user must rotate their password before acting. */
+  mustChangePassword?: boolean;
   /** Present only while a platform user is impersonating a customer (ADR-023).
    *  `platformUserId` is the real staff actor; `session.userId` is the
    *  impersonated customer; `sessionId` links to the ImpersonationSession row. */
@@ -107,9 +116,16 @@ export async function getSession(): Promise<AppSession | null> {
     // immediately too.
     const platformUser = await db.platformUser.findUnique({
       where: { id: raw.user.id },
-      select: { isActive: true, sessionVersion: true, role: true, firstName: true, lastName: true, email: true },
+      select: {
+        isActive: true, sessionVersion: true, role: true, firstName: true, lastName: true, email: true,
+        isFounder: true, mustChangePassword: true, readOnly: true, restrictedOrgIds: true,
+        accessStartsAt: true, accessExpiresAt: true,
+      },
     });
     if (!platformClaimsValid(platformUser, raw.user.sessionVersion)) return null;
+    // Time-boxed access: outside [accessStartsAt, accessExpiresAt] the platform
+    // session is refused, so temporary/scheduled access expires on its own.
+    if (!platformAccessWindowActive(platformUser, new Date())) return null;
 
     const imp = await readActiveImpersonation();
     if (imp && imp.platformUserId === raw.user.id) {
@@ -122,6 +138,10 @@ export async function getSession(): Promise<AppSession | null> {
           kind: "platform",
           ...target,
           platformRole: platformUser.role,
+          isFounder: platformUser.isFounder,
+          platformReadOnly: platformUser.readOnly,
+          restrictedOrgIds: platformUser.restrictedOrgIds,
+          mustChangePassword: platformUser.mustChangePassword,
           impersonation: {
             platformUserId: raw.user.id,
             platformLabel: imp.platformLabel,
@@ -145,6 +165,10 @@ export async function getSession(): Promise<AppSession | null> {
       modules: new Set(),
       businessProfiles: [],
       platformRole: platformUser.role,
+      isFounder: platformUser.isFounder,
+      platformReadOnly: platformUser.readOnly,
+      restrictedOrgIds: platformUser.restrictedOrgIds,
+      mustChangePassword: platformUser.mustChangePassword,
     };
   }
 
@@ -267,7 +291,19 @@ export async function requirePlatformSession(roles?: PlatformRole[]): Promise<Ap
  * the impersonated customer, so the audit actor and read-only impersonation
  * would both be wrong. Non-mutating calls (including ending impersonation) pass.
  */
-export async function authorizePlatform(roles?: PlatformRole[], opts: { mutating?: boolean } = {}): Promise<AuthorizeOk | AuthorizeErr> {
+export function platformOrgScopeError(session: AppSession | null | undefined, orgId: string | undefined): NextResponse | null {
+  if (!orgId) return null;
+  if (!session || session.kind !== "platform") return null;
+  if (!platformOrgInScope(session.restrictedOrgIds, orgId)) {
+    return NextResponse.json({ error: "Your platform access is restricted to specific organizations." }, { status: 403 });
+  }
+  return null;
+}
+
+export async function authorizePlatform(
+  roles?: PlatformRole[],
+  opts: { mutating?: boolean; orgId?: string } = {},
+): Promise<AuthorizeOk | AuthorizeErr> {
   const session = await getSession();
   if (!platformAccessAllowed(session)) {
     return { error: NextResponse.json({ error: "Platform access required" }, { status: 403 }) };
@@ -275,8 +311,60 @@ export async function authorizePlatform(roles?: PlatformRole[], opts: { mutating
   if (opts.mutating && session.impersonation) {
     return { error: NextResponse.json({ error: "End the impersonation session before performing platform actions." }, { status: 403 }) };
   }
+  // Read-only platform scope refuses every mutation (D3-A), like read-only impersonation.
+  if (opts.mutating && session.platformReadOnly) {
+    return { error: NextResponse.json({ error: "Your platform access is read-only." }, { status: 403 }) };
+  }
+  // Force a password rotation before any mutation (the password-change route
+  // uses the non-mutating guard, so it stays reachable).
+  if (opts.mutating && session.mustChangePassword) {
+    return { error: NextResponse.json({ error: "Rotate your password before performing platform actions." }, { status: 403 }) };
+  }
+  // Org-scoped platform access: a restricted staff member may act only on their orgs.
+  const scopeError = platformOrgScopeError(session, opts.orgId);
+  if (scopeError) {
+    return { error: scopeError };
+  }
   if (roles && !roles.includes(session.platformRole)) {
     return { error: NextResponse.json({ error: "Your platform role cannot perform this action" }, { status: 403 }) };
   }
   return { session };
+}
+
+/**
+ * Guard for founder-only /platform routes (D3-A / ADR-024). Requires the
+ * immutable `isFounder` identity — never a role — so founder-exclusive surfaces
+ * cannot be reached by granting a platform role in the UI. `opts.mutating`
+ * additionally refuses the call while impersonating or under a read-only scope.
+ */
+export async function authorizeFounder(opts: { mutating?: boolean } = {}): Promise<AuthorizeOk | AuthorizeErr> {
+  const session = await getSession();
+  if (!platformAccessAllowed(session)) {
+    return { error: NextResponse.json({ error: "Platform access required" }, { status: 403 }) };
+  }
+  if (!founderAccessAllowed(session)) {
+    return { error: NextResponse.json({ error: "Founder access required" }, { status: 403 }) };
+  }
+  if (opts.mutating && session.impersonation) {
+    return { error: NextResponse.json({ error: "End the impersonation session before performing founder actions." }, { status: 403 }) };
+  }
+  if (opts.mutating && session.platformReadOnly) {
+    return { error: NextResponse.json({ error: "Your platform access is read-only." }, { status: 403 }) };
+  }
+  if (opts.mutating && session.mustChangePassword) {
+    return { error: NextResponse.json({ error: "Rotate your password before performing founder actions." }, { status: 403 }) };
+  }
+  return { session };
+}
+
+/**
+ * Page-level guard for founder-only /platform pages (D3-A). Every founder page
+ * calls this itself (soft navigation doesn't re-run the layout) — customers go
+ * to sign-in, non-founder staff to the platform dashboard.
+ */
+export async function requireFounderSession(): Promise<AppSession> {
+  const session = await getSession();
+  if (!platformAccessAllowed(session)) redirect("/sign-in");
+  if (!founderAccessAllowed(session)) redirect("/platform/dashboard");
+  return session;
 }

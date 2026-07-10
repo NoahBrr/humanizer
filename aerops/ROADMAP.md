@@ -12,6 +12,35 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-10 — Phase D3-A Founder & Platform User hardening
+(ADR-024). Highest platform tier `FOUNDER_SUPER_ADMIN`, held only by the two
+bootstrapped founders (Noah, Jack). Founder power keys on an **immutable
+`PlatformUser.isFounder` identity** set only by `scripts/bootstrap-founders.ts`
+(never a role, never a UI/email check) — the founder console and every
+founder-exclusive action gate on `authorizeFounder()`/`requireFounderSession()`
+server-side. **Secure bootstrap:** reads initial passwords from PROTECTED env
+vars (`FOUNDER_*_PASSWORD`), stores only bcrypt hashes, never prints them, gated
+by `FOUNDER_BOOTSTRAP`, idempotent (never overwrites an existing password), sets
+`mustChangePassword` (single-use initial password, rotation enforced by the
+mutating guards), fully audited — no founder credential is hardcoded, seeded,
+logged, or committed. **Platform User management** (founder-only): search,
+invite via single-use setup token (invitee sets their own password; never
+creates a founder), role change, activate/deactivate, force-logout, and
+read-only / org-restriction / time-boxed access scopes — with last-active-founder
+protection, founder-change reason + audit, and safe-fields-only (no
+passwordHash/mfaSecret/tokens). Time-boxed platform access (`accessStartsAt`/
+`accessExpiresAt`), `readOnly` scope, and `restrictedOrgIds` are enforced in the
+session/authorize layer, not the UI. New models `PlatformCustomRole`,
+`PlatformUserInvitation`; migration additive. Access scopes are enforced in the
+authorize layer (org restriction via `platformOrgScopeError` on every
+org-targeting route + the org detail page; read-only/expiry in
+authorizePlatform/getSession) — never the UI; founders can never be scoped
+(no self/last-founder lockout); the last-founder deactivate guard is atomic
+(advisory-lock). Verified: 258 tests (+28), tsc, lint, build; live bootstrap
+(gate/policy/idempotency/no-leak) + a 33-assertion founder HTTP e2e; passed a
+5-lens adversarial review board (all confirmed blocking findings fixed).
+**Not deployed.**_
+
 _Last session update: 2026-07-10 — Phase D2 organization ownership, membership,
 and impersonation audit attribution (ADR-023). (1) **Finalized ownership.** New
 `ACCOUNT_OWNER` role; `Organization.ownerId` is the source of truth **and** the

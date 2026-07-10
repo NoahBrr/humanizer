@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authorizePlatform } from "@/lib/session";
+import { db } from "@/lib/db";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { simulationTick } from "@/lib/simulation";
 
 const schema = z.object({ runId: z.string().min(1) });
@@ -12,11 +13,18 @@ const schema = z.object({ runId: z.string().min(1) });
  * stop are the audited actions, and each run row counts its ticks.
  */
 export async function POST(req: Request) {
-  const { error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
+  const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
 
   const body = schema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
+
+  // Each tick writes into the run's org — scope-check it (org-restricted staff, D3-A).
+  const run = await db.simulationRun.findUnique({ where: { id: body.data.runId }, select: { organizationId: true } });
+  if (run) {
+    const scopeError = platformOrgScopeError(session, run.organizationId);
+    if (scopeError) return scopeError;
+  }
 
   const result = await simulationTick(body.data.runId);
   if (!result) return NextResponse.json({ error: "Run is not active" }, { status: 409 });

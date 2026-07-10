@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { Role } from "@prisma/client";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { platformRolesWith, type PlatformPermission } from "@/lib/platform-permissions";
 import { ASSIGNABLE_SYSTEM_ROLES } from "@/lib/permissions";
@@ -87,6 +87,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   const orgId = target.organizationId;
+  // Org-restricted staff may manage users only within their scoped orgs (D3-A).
+  if (orgId) {
+    const scopeError = platformOrgScopeError(session, orgId);
+    if (scopeError) return scopeError;
+  }
   const needsOrg =
     body.action === "set_role" ||
     body.action === "set_custom_role" ||

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 
 const postSchema = z.object({ body: z.string().min(2).max(2000) });
@@ -16,6 +16,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (error) return error;
 
   const { id } = await params;
+  const scopeError = platformOrgScopeError(session, id);
+  if (scopeError) return scopeError;
   const org = await db.organization.findUnique({ where: { id }, select: { id: true, name: true } });
   if (!org) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

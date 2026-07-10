@@ -134,13 +134,20 @@ describe("static enforcement", () => {
     expect(inst).toMatch(/assertProductionEnv/);
   });
 
-  it("every data-bearing /platform page calls requirePlatformSession (layouts don't re-run on soft navigation)", () => {
+  it("every data-bearing /platform page calls requirePlatformSession or requireFounderSession (layouts don't re-run on soft navigation)", () => {
     const platformDir = path.join(SRC, "app", "platform");
+    // Token-authenticated public entry (D3-A): reachable without a session BY
+    // DESIGN — the setup token is the credential; data access is by token hash.
+    const TOKEN_AUTHENTICATED = new Set([path.join("app", "platform", "activate", "[token]", "page.tsx")]);
     const offenders = walk(platformDir)
       .filter((p) => p.endsWith("page.tsx"))
+      .filter((p) => !TOKEN_AUTHENTICATED.has(path.relative(SRC, p)))
       .filter((p) => {
         const src = readFileSync(p, "utf8");
-        return src.includes("@/lib/db") && !src.includes("requirePlatformSession(");
+        // Data-bearing = touches the db directly OR through a co-located data
+        // helper (./foo-data) — helpers must not become a guard-scan blind spot.
+        const dataBearing = src.includes("@/lib/db") || /from\s+"\.\/[^"]*data[^"]*"/.test(src);
+        return dataBearing && !src.includes("requirePlatformSession(") && !src.includes("requireFounderSession(");
       })
       .map((p) => path.relative(SRC, p));
     expect(offenders).toEqual([]);

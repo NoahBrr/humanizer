@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { rollbackImport } from "@/lib/import/engine";
 
@@ -15,6 +15,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const job = await db.importJob.findUnique({ where: { id }, include: { organization: { select: { name: true } } } });
   if (!job) return NextResponse.json({ error: "Import not found" }, { status: 404 });
+  const scopeError = platformOrgScopeError(session, job.organizationId);
+  if (scopeError) return scopeError;
   if (job.status !== "COMMITTED") return NextResponse.json({ error: "Already rolled back" }, { status: 409 });
 
   try {

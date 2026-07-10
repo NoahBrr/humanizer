@@ -23,8 +23,8 @@ import { permissionsForRole } from "@/lib/permissions";
 const ALL_ROLES = Object.keys(PLATFORM_ROLE_PERMISSIONS) as PlatformRole[];
 
 describe("platform permission matrix", () => {
-  it("gives FOUNDER and PLATFORM_ADMIN every capability", () => {
-    for (const role of ["FOUNDER", "PLATFORM_ADMIN"] as PlatformRole[]) {
+  it("gives the founder + admin roles every capability", () => {
+    for (const role of ["FOUNDER_SUPER_ADMIN", "FOUNDER", "PLATFORM_ADMIN"] as PlatformRole[]) {
       expect([...PLATFORM_ROLE_PERMISSIONS[role]].sort()).toEqual([...ALL_PLATFORM_PERMISSIONS].sort());
     }
   });
@@ -53,13 +53,13 @@ describe("platform permission matrix", () => {
   });
 
   it("derives the org-management role list used by the org PATCH route", () => {
-    expect(platformRolesWith("platform.orgs.manage").sort()).toEqual(["BILLING_ADMIN", "FOUNDER", "PLATFORM_ADMIN"]);
+    expect(platformRolesWith("platform.orgs.manage").sort()).toEqual(["BILLING_ADMIN", "FOUNDER", "FOUNDER_SUPER_ADMIN", "PLATFORM_ADMIN"]);
   });
 
   it("restricts the highest-impact capabilities to admins", () => {
-    // Only FOUNDER / PLATFORM_ADMIN can transfer ownership or change roles.
-    expect(platformRolesWith("platform.users.transfer_owner").sort()).toEqual(["FOUNDER", "PLATFORM_ADMIN"]);
-    expect(platformRolesWith("platform.roles.manage").sort()).toEqual(["FOUNDER", "PLATFORM_ADMIN"]);
+    // Only the founder + admin tiers can transfer ownership or change roles.
+    expect(platformRolesWith("platform.users.transfer_owner").sort()).toEqual(["FOUNDER", "FOUNDER_SUPER_ADMIN", "PLATFORM_ADMIN"]);
+    expect(platformRolesWith("platform.roles.manage").sort()).toEqual(["FOUNDER", "FOUNDER_SUPER_ADMIN", "PLATFORM_ADMIN"]);
     // Support and billing cannot transfer ownership.
     expect(platformCan("SUPPORT_ENGINEER", "platform.users.transfer_owner")).toBe(false);
     expect(platformCan("BILLING_ADMIN", "platform.roles.manage")).toBe(false);

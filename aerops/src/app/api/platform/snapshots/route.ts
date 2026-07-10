@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { captureSnapshot } from "@/lib/org-snapshot";
 
@@ -21,6 +21,8 @@ export async function POST(req: Request) {
 
   const org = await db.organization.findUnique({ where: { id: body.data.orgId }, select: { id: true, name: true, deletedAt: true } });
   if (!org || org.deletedAt) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  const scopeError = platformOrgScopeError(session, org.id);
+  if (scopeError) return scopeError;
 
   try {
     const snap = await captureSnapshot(org.id, body.data.name, session.email, body.data.description);

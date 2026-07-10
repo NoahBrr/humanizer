@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Activity, Building2, Database, DatabaseZap, LayoutDashboard, ScrollText, ShieldHalf, Users } from "lucide-react";
+import { Activity, Building2, Crown, Database, DatabaseZap, LayoutDashboard, ScrollText, ShieldHalf, Users } from "lucide-react";
 import { AeroOpsMark } from "@/components/brand/logo";
 import { getSession } from "@/lib/session";
 import { PLATFORM_ROLE_LABELS } from "@/lib/rbac";
@@ -19,10 +20,29 @@ const PLATFORM_NAV = [
   { href: "/platform/audit", label: "Audit Log", icon: ScrollText },
 ];
 
+// Founder Controls (D3-A) is founder-exclusive — appended only for the immutable
+// `isFounder` identity, never for a mere platform role. Non-founders never see it.
+const FOUNDER_NAV = { href: "/platform/founder", label: "Founder Controls", icon: Crown };
+
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
-  if (!session) redirect("/sign-in");
+  const pathname = (await headers()).get("x-pathname");
+
+  // Public tokenized routes under /platform (the Platform User activation page)
+  // carry no session. The middleware allow-lists them; render them bare, with no
+  // console chrome. Every data-bearing page still self-guards via
+  // requirePlatformSession()/requireFounderSession(), so the console cannot leak.
+  if (!session) return <>{children}</>;
   if (!session.platformRole) redirect("/dashboard"); // customers never see /platform
+
+  // Force a password rotation before any console use. Loop-safe: never redirect
+  // while already on the change-password route, and fail open (no redirect) when
+  // the path header is unavailable — so this can never trap a user in a loop.
+  if (session.mustChangePassword && pathname && !pathname.startsWith("/platform/security/change-password")) {
+    redirect("/platform/security/change-password");
+  }
+
+  const nav = session.isFounder ? [...PLATFORM_NAV, FOUNDER_NAV] : PLATFORM_NAV;
 
   return (
     <div className="min-h-screen">
@@ -38,7 +58,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
             <p className="text-[10px] text-sidebar-foreground/60">Internal · {PLATFORM_ROLE_LABELS[session.platformRole]}</p>
           </div>
         </div>
-        <PlatformNavLinks items={PLATFORM_NAV.map(({ href, label }) => ({ href, label }))} />
+        <PlatformNavLinks items={nav.map(({ href, label }) => ({ href, label }))} />
         <div className="px-5 py-4">
           <PlatformSignOut name={`${session.firstName} ${session.lastName}`} />
         </div>

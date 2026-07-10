@@ -65,7 +65,8 @@ export const ROLE_LABELS: Record<Role, string> = {
 };
 
 export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
-  FOUNDER: "Founder",
+  FOUNDER_SUPER_ADMIN: "Founder Super Admin",
+  FOUNDER: "Platform Admin Plus",
   SOFTWARE_ENGINEER: "Software Engineer",
   PLATFORM_ADMIN: "Platform Administrator",
   CUSTOMER_SUCCESS: "Customer Success",

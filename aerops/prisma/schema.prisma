@@ -16,6 +16,8 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 enum PlatformRole {
+  /// Highest platform authority (D3-A). Held only by the bootstrapped founders.
+  FOUNDER_SUPER_ADMIN
   FOUNDER
   SOFTWARE_ENGINEER
   PLATFORM_ADMIN
@@ -26,21 +28,83 @@ enum PlatformRole {
 }
 
 model PlatformUser {
+  id                 String       @id @default(cuid())
+  email              String       @unique
+  passwordHash       String
+  firstName          String
+  lastName           String
+  role               PlatformRole
+  /// Optional custom platform role — a named bundle of platform permissions
+  /// that overrides the built-in role's defaults when set (mirrors OrgRole).
+  customRoleId       String?
+  /// Immutable founder identity — set ONLY by the founder bootstrap, never by
+  /// role assignment (ADR-024). Founder-only console access keys on this, so
+  /// founder power cannot be granted by editing a role in the UI.
+  isFounder          Boolean      @default(false)
+  isActive           Boolean      @default(true)
+  /// Forces a secure password rotation before the account is usable (bootstrap).
+  mustChangePassword Boolean      @default(false)
+  mfaEnabled         Boolean      @default(false)
+  mfaSecret          String?
+  sessionVersion     Int          @default(0)
+  /// Time-boxed access: a session outside [accessStartsAt, accessExpiresAt] is
+  /// refused, giving temporary/expiring platform access.
+  accessStartsAt     DateTime?
+  accessExpiresAt    DateTime?
+  /// Read-only scope — refused all mutations (like read-only impersonation).
+  readOnly           Boolean      @default(false)
+  /// If non-empty, this platform user may only act on these organization ids.
+  restrictedOrgIds   String[]     @default([])
+  invitedByLabel     String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  customRole            PlatformCustomRole?    @relation(fields: [customRoleId], references: [id])
+  auditLogs             AuditLog[]
+  impersonationSessions ImpersonationSession[]
+
+  @@index([customRoleId])
+}
+
+/// A named, custom bundle of platform permissions (D3-A). Mirrors OrgRole for
+/// customer orgs: a platform user holds a built-in PlatformRole or a custom role
+/// that overrides it. Permission keys come from lib/platform-permissions.ts.
+model PlatformCustomRole {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  description    String?
+  permissions    String[]
+  createdByLabel String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  platformUsers PlatformUser[]
+  invitations   PlatformUserInvitation[]
+}
+
+/// A pending invitation for a new Platform User (D3-A). Only the token hash is
+/// stored; the raw setup token is shown once. Accepting it creates the account
+/// with a password the invitee sets — a founder never handles another user's
+/// password.
+model PlatformUserInvitation {
   id             String       @id @default(cuid())
-  email          String       @unique
-  passwordHash   String
+  email          String
   firstName      String
   lastName       String
   role           PlatformRole
-  isActive       Boolean      @default(true)
-  mfaEnabled     Boolean      @default(false)
-  mfaSecret      String?
-  sessionVersion Int          @default(0)
+  customRoleId   String?
+  /// sha256 of the single-use setup token (lib/tokens.ts, ADR-020).
+  tokenHash      String       @unique
+  invitedByLabel String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  auditLogs             AuditLog[]
-  impersonationSessions ImpersonationSession[]
+  customRole PlatformCustomRole? @relation(fields: [customRoleId], references: [id])
+
+  @@index([email])
+  @@index([customRoleId])
 }
 
 model SubscriptionPlan {

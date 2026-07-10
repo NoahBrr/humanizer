@@ -53,7 +53,12 @@ const VIEW_ONLY: PlatformPermission[] = ALL_PLATFORM_PERMISSIONS.filter((p) => !
  * to their function. Spec role names map onto these via PLATFORM_ROLE_SPEC_ALIAS.
  */
 export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, PlatformPermission[]> = {
-  // Platform Super Admin — the full console.
+  // Founder Super Admin — the full console. Founder-EXCLUSIVE surfaces (the
+  // Founder Controls console, Platform User management, pricing) additionally
+  // require the immutable `isFounder` identity (ADR-024), which no role grants —
+  // so this permission set is the platform capability floor, not the founder gate.
+  FOUNDER_SUPER_ADMIN: [...ALL_PLATFORM_PERMISSIONS],
+  // Platform Admin Plus — the full platform console, minus founder-exclusive controls.
   FOUNDER: [...ALL_PLATFORM_PERMISSIONS],
   // Platform Administrator — full operational management.
   PLATFORM_ADMIN: [...ALL_PLATFORM_PERMISSIONS],
@@ -92,7 +97,8 @@ export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, PlatformPermission[
 
 /** Spec-facing display names for the idealized six platform roles (+ extras). */
 export const PLATFORM_ROLE_SPEC_ALIAS: Record<PlatformRole, string> = {
-  FOUNDER: "Platform Super Admin",
+  FOUNDER_SUPER_ADMIN: "Founder Super Admin",
+  FOUNDER: "Platform Admin Plus",
   PLATFORM_ADMIN: "Platform Administrator",
   SUPPORT_ENGINEER: "Platform Support",
   BILLING_ADMIN: "Platform Billing",

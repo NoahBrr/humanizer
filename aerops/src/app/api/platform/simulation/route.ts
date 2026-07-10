@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { SCENARIOS } from "@/lib/simulation";
 
@@ -20,6 +20,8 @@ export async function POST(req: Request) {
 
   const org = await db.organization.findUnique({ where: { id: body.data.orgId }, select: { id: true, name: true, deletedAt: true } });
   if (!org || org.deletedAt) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  const scopeError = platformOrgScopeError(session, org.id);
+  if (scopeError) return scopeError;
 
   // One running simulation per organization.
   await db.simulationRun.updateMany({
@@ -52,6 +54,12 @@ export async function DELETE(req: Request) {
   const body = stopSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
 
+  // Scope-check the run's org BEFORE mutating it (org-restricted staff, D3-A).
+  const existing = await db.simulationRun.findUnique({ where: { id: body.data.runId }, select: { organizationId: true } });
+  if (existing) {
+    const scopeError = platformOrgScopeError(session, existing.organizationId);
+    if (scopeError) return scopeError;
+  }
   const run = await db.simulationRun.update({
     where: { id: body.data.runId },
     data: { status: "STOPPED", stoppedAt: new Date() },

@@ -58,6 +58,10 @@ async function main() {
   // --- Platform staff (AeroOps employees — separate identity space) --------
   await db.platformUser.createMany({
     data: [
+      // The seed NEVER creates a founder (ADR-024): founder identity comes only
+      // from `npm run bootstrap:founders` with protected env vars. This demo
+      // account is Platform Admin Plus — full platform matrix, NO founder
+      // access — which also exercises the founder boundary locally.
       { email: "founder@aerops.io", passwordHash: password, firstName: "Jordan", lastName: "Hale", role: PlatformRole.FOUNDER },
       { email: "support@aerops.io", passwordHash: password, firstName: "Riley", lastName: "Kim", role: PlatformRole.SUPPORT_ENGINEER },
       { email: "auditor@aerops.io", passwordHash: password, firstName: "Sam", lastName: "Osei", role: PlatformRole.AUDITOR },

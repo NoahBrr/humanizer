@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { restoreSnapshot } from "@/lib/org-snapshot";
 
@@ -9,6 +9,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const { session, error } = await authorizePlatform(["FOUNDER", "PLATFORM_ADMIN"], { mutating: true });
   if (error) return error;
   const { id } = await params;
+  const snap = await db.orgSnapshot.findUnique({ where: { id }, select: { organizationId: true } });
+  if (snap) {
+    const scopeError = platformOrgScopeError(session, snap.organizationId);
+    if (scopeError) return scopeError;
+  }
 
   try {
     const result = await restoreSnapshot(id);
@@ -33,6 +38,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (error) return error;
   const { id } = await params;
 
+  const existing = await db.orgSnapshot.findUnique({ where: { id }, select: { organizationId: true } });
+  if (existing) {
+    const scopeError = platformOrgScopeError(session, existing.organizationId);
+    if (scopeError) return scopeError;
+  }
   const snap = await db.orgSnapshot.delete({ where: { id }, select: { name: true, organizationId: true } }).catch(() => null);
   if (!snap) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

@@ -41,11 +41,25 @@ the code.
   constitution-tested).
 - **Org scoping comes from the session, never from client input.**
   Cross-tenant queries exist only behind `authorizePlatform()`.
+- **Founder authority is an immutable identity, not a role** (ADR-024).
+  Founder-only surfaces (`/platform/founder`, Platform User management) gate on
+  `PlatformUser.isFounder` via `authorizeFounder()` / `requireFounderSession()` —
+  server-side, never a UI, email, or client check. `isFounder` is set only by the
+  gated, idempotent, audited bootstrap (`scripts/bootstrap-founders.ts`: passwords
+  from protected env vars, hashes only, never printed or overwritten, rotation
+  forced on first sign-in); `FOUNDER_SUPER_ADMIN` is never assignable through the
+  role-change flow, and the last active founder cannot be deactivated. Platform
+  access can be time-boxed (`accessStartsAt`/`accessExpiresAt`, enforced per
+  request in `getSession`), read-only, or restricted to named organizations
+  (`restrictedOrgIds`, enforced by `platformOrgScopeError` on every org-targeting
+  route + the org detail page) — all in the authorize layer, never the UI. A
+  founder can never be scoped (no self/last-founder lockout).
 - Platform staff (`PlatformUser`) are a **separate identity table** — never
   members of customer organizations. `/platform` capabilities are a data-driven
   matrix: `src/lib/platform-permissions.ts` maps the `PlatformRole` enum
-  (FOUNDER / PLATFORM_ADMIN / SOFTWARE_ENGINEER / CUSTOMER_SUCCESS /
-  SUPPORT_ENGINEER / BILLING_ADMIN / AUDITOR) to a `PlatformPermission` catalog.
+  (FOUNDER_SUPER_ADMIN / FOUNDER / PLATFORM_ADMIN / SOFTWARE_ENGINEER /
+  CUSTOMER_SUCCESS / SUPPORT_ENGINEER / BILLING_ADMIN / AUDITOR) to a
+  `PlatformPermission` catalog.
   Routes gate with `authorizePlatform(platformRolesWith("platform.users.manage"), …)`
   — the allowed-role list is *derived* from the matrix, not hardcoded, so adding
   a role/capability is a data edit and AUDITOR is provably read-only (ADR-022).

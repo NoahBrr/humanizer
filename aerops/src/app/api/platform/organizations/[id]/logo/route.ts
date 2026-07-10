@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { authorizePlatform } from "@/lib/session";
+import { authorizePlatform, platformOrgScopeError } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { platformRolesWith } from "@/lib/platform-permissions";
 import { getStorage } from "@/lib/storage";
@@ -18,6 +18,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (error) return error;
 
   const { id } = await params;
+  const scopeError = platformOrgScopeError(session, id);
+  if (scopeError) return scopeError;
   const org = await db.organization.findUnique({ where: { id } });
   if (!org) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -66,6 +68,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (error) return error;
 
   const { id } = await params;
+  const scopeError = platformOrgScopeError(session, id);
+  if (scopeError) return scopeError;
   const org = await db.organization.findUnique({ where: { id } });
   if (!org) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
