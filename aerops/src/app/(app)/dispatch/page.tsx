@@ -59,7 +59,7 @@ export default async function DispatchPage() {
     <div className="animate-fade-up">
       <PageHeader
         title="Dispatch"
-        description="Pre-flight release and post-flight closeout. Closing a flight bills it automatically."
+        description="Pre-flight release and aircraft return. Completing a return creates a draft Revenue Review — it does not charge anything."
       />
       <DispatchBoard dispatches={serialized} canDispatch={canDispatch} />
     </div>

@@ -49,7 +49,9 @@ export default async function BillingPage() {
 
   return (
     <div className="animate-fade-up">
-      <PageHeader title="Billing" description="Invoices are generated automatically when flights close. Stripe & QuickBooks sync-ready." />
+      <PageHeader title="Billing" description="Invoices are generated automatically when flights close. Stripe & QuickBooks sync-ready.">
+        <Link href="/billing/reviews" className="text-xs font-medium text-primary hover:underline">Revenue Reviews</Link>
+      </PageHeader>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         {stats.map((s) => (
           <Card key={s.label}>

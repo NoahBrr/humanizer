@@ -89,7 +89,10 @@ describe("tenant-scoped uniqueness", () => {
   // gained a nullable organizationId); its long-standing 1:1 `scheduleEventId
   // @unique` is tenant-safe by construction (the referenced ScheduleEvent is itself
   // org-scoped) and a 1:1-relation FK cannot be expressed as a composite @@unique.
-  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email", "organizationId", "inviteTokenHash", "scheduleEventId"]);
+  // `invoiceId` is allowed for the same structural reason as `scheduleEventId`: it is the FK of a
+  // 1:1 relation (Invoice 1:1 RevenueReview), a system cuid — never a tenant natural key — and a
+  // 1:1-relation FK cannot be expressed as a composite @@unique; tenant-safe via the wrapped Invoice.
+  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email", "organizationId", "inviteTokenHash", "scheduleEventId", "invoiceId"]);
   it("no org-owned model declares a single-field @unique on a non-global field", () => {
     const offenders: string[] = [];
     for (const m of orgOwned()) {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Radio, PlaneTakeoff, PlaneLanding, Check, Loader2, AlertTriangle } from "lucide-react";
+import { Radio, PlaneTakeoff, PlaneLanding, Check, Loader2, AlertTriangle, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { StatusBadge, Badge } from "@/components/ui/badge";
@@ -35,7 +36,7 @@ export function DispatchBoard({ dispatches, canDispatch }: { dispatches: Dispatc
       </Column>
       <Column
         title="Released / In Flight"
-        description="Close out after landing to bill the flight"
+        description="Complete the aircraft return after landing — creates a draft review, charges nothing"
         icon={<PlaneTakeoff className="h-4 w-4 text-primary" />}
         count={released.length}
       >
@@ -43,7 +44,7 @@ export function DispatchBoard({ dispatches, canDispatch }: { dispatches: Dispatc
       </Column>
       <Column
         title="Closed Today"
-        description="Completed and billed"
+        description="Return complete — draft Revenue Review created"
         icon={<PlaneLanding className="h-4 w-4 text-success" />}
         count={closed.length}
       >
@@ -198,11 +199,15 @@ function ReleasedCard({ d, canDispatch }: { d: DispatchRow; canDispatch: boolean
   const [nightTime, setNightTime] = useState("0");
   const [instrumentTime, setInstrumentTime] = useState("0");
   const [fuelAdded, setFuelAdded] = useState("0");
+  const [oilAdded, setOilAdded] = useState("0");
+  const [airports, setAirports] = useState("");
+  const [condition, setCondition] = useState("");
   const [withSquawk, setWithSquawk] = useState(false);
   const [squawkTitle, setSquawkTitle] = useState("");
   const [squawkSeverity, setSquawkSeverity] = useState("MINOR");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
 
   const flightTime = Math.max(0, Number(hobbsIn) - hobbsOut);
   const estimate = flightTime * d.rate + (d.instructor ? (flightTime + 0.5) * d.cfiRate : 0);
@@ -216,6 +221,9 @@ function ReleasedCard({ d, canDispatch }: { d: DispatchRow; canDispatch: boolean
       body: JSON.stringify({
         hobbsIn: Number(hobbsIn), tachIn: Number(tachIn), landings: Number(landings),
         nightTime: Number(nightTime), instrumentTime: Number(instrumentTime), fuelAddedGal: Number(fuelAdded),
+        oilAddedQt: oilAdded ? Number(oilAdded) : undefined,
+        airportsVisited: airports.trim() || undefined,
+        conditionIn: condition.trim() || undefined,
         squawk: withSquawk && squawkTitle.length >= 3 ? { title: squawkTitle, severity: squawkSeverity } : null,
       }),
     });
@@ -224,8 +232,31 @@ function ReleasedCard({ d, canDispatch }: { d: DispatchRow; canDispatch: boolean
       const j = await res.json().catch(() => ({}));
       setError(typeof j.error === "string" ? j.error : "Closeout failed.");
     } else {
+      const j = await res.json().catch(() => ({}));
+      // Show a confirmation linking to the created review before refreshing the
+      // board out from under it, so the operator can jump straight to it.
+      if (typeof j.reviewId === "string") setReviewId(j.reviewId);
       router.refresh();
     }
+  }
+
+  if (reviewId) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <DispatchHeader d={d} />
+          <div className="mt-3 flex items-start gap-2 rounded-lg bg-success/10 px-3 py-2.5 text-xs text-foreground">
+            <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+            <div>
+              <p className="font-medium">Return complete — draft Revenue Review created. Nothing was charged.</p>
+              <Link href={`/billing/reviews/${reviewId}`} className="mt-1 inline-block font-semibold text-primary hover:underline">
+                View Revenue Review
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -236,7 +267,7 @@ function ReleasedCard({ d, canDispatch }: { d: DispatchRow; canDispatch: boolean
           Released {d.releasedAt ? formatTime(d.releasedAt) : ""} by {d.releasedBy ?? "—"} · Hobbs out {hobbsOut.toFixed(1)}
         </p>
         {canDispatch && !open && (
-          <Button size="sm" variant="outline" className="mt-3 w-full" onClick={() => setOpen(true)}>Post-flight closeout</Button>
+          <Button size="sm" variant="outline" className="mt-3 w-full" onClick={() => setOpen(true)}>Complete aircraft return</Button>
         )}
         {open && (
           <div className="mt-3 space-y-2.5 border-t border-border pt-3">
@@ -247,6 +278,9 @@ function ReleasedCard({ d, canDispatch }: { d: DispatchRow; canDispatch: boolean
               <div className="space-y-1"><Label>Fuel added (gal)</Label><Input type="number" step="0.1" value={fuelAdded} onChange={(e) => setFuelAdded(e.target.value)} className="h-8 text-xs" /></div>
               <div className="space-y-1"><Label>Night (hrs)</Label><Input type="number" step="0.1" value={nightTime} onChange={(e) => setNightTime(e.target.value)} className="h-8 text-xs" /></div>
               <div className="space-y-1"><Label>Instrument (hrs)</Label><Input type="number" step="0.1" value={instrumentTime} onChange={(e) => setInstrumentTime(e.target.value)} className="h-8 text-xs" /></div>
+              <div className="space-y-1"><Label>Oil added (qt)</Label><Input type="number" step="0.1" value={oilAdded} onChange={(e) => setOilAdded(e.target.value)} className="h-8 text-xs" /></div>
+              <div className="space-y-1"><Label>Airports visited</Label><Input value={airports} onChange={(e) => setAirports(e.target.value)} placeholder="Airports visited" className="h-8 text-xs" /></div>
+              <div className="col-span-2 space-y-1"><Label>Aircraft condition</Label><Input value={condition} onChange={(e) => setCondition(e.target.value)} placeholder="Notes on how the aircraft came back" className="h-8 text-xs" /></div>
             </div>
 
             <label className="flex cursor-pointer items-center gap-2 text-xs">
@@ -267,12 +301,13 @@ function ReleasedCard({ d, canDispatch }: { d: DispatchRow; canDispatch: boolean
 
             <div className="flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2">
               <span className="text-[11px] text-muted-foreground">Billable: <span className="font-semibold text-foreground">{flightTime.toFixed(1)} hrs</span></span>
-              <Badge tone="blue">Est. {formatCurrency(estimate)}</Badge>
+              <Badge tone="blue">Draft total (not charged) {formatCurrency(estimate)}</Badge>
             </div>
+            <p className="text-[11px] text-muted-foreground">Completing the return records the meters and creates a draft Revenue Review. It does not charge anything.</p>
             {error && <p className="text-[11px] font-medium text-destructive">{error}</p>}
             <div className="flex gap-2">
               <Button size="sm" className="flex-1" disabled={busy || flightTime <= 0} onClick={close}>
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlaneLanding className="h-3.5 w-3.5" />} Close & bill flight
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlaneLanding className="h-3.5 w-3.5" />} Complete return & create Revenue Review
               </Button>
               <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             </div>

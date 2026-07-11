@@ -6,6 +6,7 @@ import { recordAudit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import { computeFlightCharges, flightTimeFromHobbs } from "@/lib/billing";
 import { resolvePricing, computeRentalCharge, legacyFallbackProfile, type PricingCandidate } from "@/lib/pricing";
+import { nextOrgSequence, reviewNumber, invoiceNumber as fmtInvoiceNumber } from "@/lib/revenue-review";
 import { emitDomainEvent } from "@/lib/events";
 
 const closeSchema = z.object({
@@ -15,6 +16,11 @@ const closeSchema = z.object({
   nightTime: z.number().min(0).default(0),
   instrumentTime: z.number().min(0).default(0),
   fuelAddedGal: z.number().min(0).default(0),
+  // Return-capture (doc 02 Part A). All optional — a fast counter closeout
+  // records only meters; the rest is captured where the org configures it.
+  oilAddedQt: z.number().min(0).optional(),
+  airportsVisited: z.string().max(200).optional(),
+  conditionIn: z.string().max(500).optional(),
   squawk: z.object({ title: z.string().min(3), description: z.string().optional(), severity: z.enum(["GROUNDING", "MAJOR", "MINOR"]) }).nullish(),
 });
 
@@ -24,9 +30,11 @@ const closeSchema = z.object({
 class DispatchAlreadyClosed extends Error {}
 
 /**
- * Close out a flight: compute billable time from hobbs, roll the aircraft
- * meters forward, log pilot time, generate the invoice, and update the
- * student's balance — one transaction.
+ * Aircraft return: compute billable time from Hobbs, roll the aircraft meters
+ * forward, log pilot time, and create a DRAFT Revenue Review (wrapping a DRAFT
+ * invoice) — one transaction. Per ADR-025 this completes the OPERATIONAL
+ * closeout only; nothing is charged and no balance moves until Operations
+ * approves the review (Phase 3). No payment provider is involved.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { session, error } = await authorize("dispatch.close", { mutating: true });
@@ -101,15 +109,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const total = rental.amount.plus(charges.instructorCharge);
   const totalNum = total.toNumber();
 
-  const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
+  const closedByLabel = `${session.firstName} ${session.lastName}`;
 
   try {
-    const closed = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx) => {
       // Atomic claim: flip RELEASED→CLOSED as a guarded updateMany. Only the
       // request that actually transitions the row proceeds; a concurrent
       // double-submit matches zero rows here and aborts the transaction, so
-      // the invoice, balance decrement, and meter increments happen exactly
-      // once (idempotent closeout — do-not-break rule 5).
+      // the Revenue Review and meter increments happen exactly once
+      // (idempotent closeout — do-not-break rule 5).
       const claim = await tx.dispatch.updateMany({
         where: { id, status: "RELEASED" },
         data: {
@@ -122,6 +130,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           nightTime: data.nightTime,
           instrumentTime: data.instrumentTime,
           fuelAddedGal: data.fuelAddedGal,
+          oilAddedQt: data.oilAddedQt,
+          airportsVisited: data.airportsVisited,
+          conditionIn: data.conditionIn,
+          closedBy: closedByLabel,
           dualReceived: isDual ? flightTime : null,
           dualGiven: isDual ? flightTime : null,
           picTime: isDual ? null : flightTime,
@@ -143,27 +155,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         },
       });
 
+      // ADR-025 flip: aircraft return creates a DRAFT Revenue Review wrapping a
+      // DRAFT Invoice — NOT a finalized charge. Nothing is owed and no balance
+      // moves until Operations approves (Phase 3); the student's account balance
+      // is intentionally untouched here (Amount Due derives from the invoice).
+      // Student pilot-hour bookkeeping is student-only; the review/invoice below
+      // is created for EVERY closed dispatch (a renter/solo flight with no
+      // linked Student still bills the aircraft rental — its studentId is null
+      // and the customer/payer is assigned before approval).
       if (dispatch.studentId) {
         await tx.student.update({
           where: { id: dispatch.studentId },
           data: {
             totalHours: { increment: flightTime },
             ...(isDual ? {} : { soloHours: { increment: flightTime } }),
-            accountBalance: { decrement: total },
           },
         });
-        await tx.invoice.create({
+      }
+      let reviewId: string | null = null;
+      {
+        const invSeq = await nextOrgSequence(tx, session.organizationId, "invoice");
+        const rrSeq = await nextOrgSequence(tx, session.organizationId, "revenue_review");
+        const invoice = await tx.invoice.create({
           data: {
             organizationId: session.organizationId,
             studentId: dispatch.studentId,
-            number: invoiceNumber,
-            status: "OPEN",
-            dueAt: new Date(Date.now() + 14 * 86_400_000),
+            number: fmtInvoiceNumber(invSeq),
+            status: "DRAFT",
             lines: {
               create: [
                 {
                   kind: "AIRCRAFT_RENTAL",
-                  description: `${dispatch.aircraft.tailNumber} rental (${resolution.profile!.wetDry.toLowerCase()}) — ${rental.quantity.toString()} ${resolution.profile!.billingBasis.toLowerCase()} @ ${resolution.profile!.name}`,
+                  description: `${dispatch.aircraft.tailNumber} rental (${profile.wetDry.toLowerCase()}) — ${rental.quantity.toString()} ${profile.billingBasis.toLowerCase()} @ ${profile.name}`,
                   quantity: rental.quantity,
                   unitPrice: rental.rateAmount,
                 },
@@ -179,6 +202,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             },
           },
         });
+        const review = await tx.revenueReview.create({
+          data: {
+            organizationId: session.organizationId,
+            number: reviewNumber(rrSeq),
+            status: "DRAFT",
+            currency: "USD",
+            invoiceId: invoice.id,
+            dispatchId: id,
+            aircraftId: dispatch.aircraftId,
+            studentId: dispatch.studentId,
+            instructorId: dispatch.instructorId,
+            locationId: dispatch.locationId,
+            payerId: dispatch.payerId,
+            flightDate: dispatch.scheduleEvent?.start ?? new Date(),
+            hobbsOut: dispatch.hobbsOut ?? hobbsOut,
+            hobbsIn: data.hobbsIn,
+            tachOut: dispatch.tachOut ?? tachOut,
+            tachIn: data.tachIn,
+            flightTime,
+            landings: data.landings,
+            warnings: resolution.warnings.length ? (resolution.warnings as unknown as object) : undefined,
+          },
+        });
+        reviewId = review.id;
       }
 
       if (data.squawk) {
@@ -198,8 +245,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       }
 
-      // Return the freshly-closed row for the response payload.
-      return tx.dispatch.findUniqueOrThrow({ where: { id } });
+      // Return the freshly-closed row + the created review for the response.
+      const closedDispatch = await tx.dispatch.findUniqueOrThrow({ where: { id } });
+      return { dispatch: closedDispatch, reviewId };
     });
 
     await recordAudit({
@@ -209,17 +257,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       action: "dispatch.close",
       entityType: "Dispatch",
       entityId: id,
-      newValue: { tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: totalNum, landings: data.landings, squawk: data.squawk?.title },
+      newValue: { tailNumber: dispatch.aircraft.tailNumber, flightTime, draftTotal: totalNum, landings: data.landings, squawk: data.squawk?.title },
     });
-    logger.info("flight closed", { dispatchId: id, flightTime, billed: totalNum });
+    logger.info("flight closed", { dispatchId: id, flightTime, draftTotal: totalNum });
 
     // One emission; the event bus fans out to webhooks, automations, and
     // any future consumer — this route doesn't know who is listening.
     await emitDomainEvent(session.organizationId, "flight.closed", {
-      dispatchId: id, aircraftId: dispatch.aircraftId, tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: totalNum,
+      dispatchId: id, aircraftId: dispatch.aircraftId, tailNumber: dispatch.aircraft.tailNumber, flightTime, draftTotal: totalNum,
     });
 
-    return NextResponse.json({ dispatch: closed, flightTime, total: totalNum });
+    return NextResponse.json({ dispatch: result.dispatch, reviewId: result.reviewId, flightTime, draftTotal: totalNum });
   } catch (e) {
     if (e instanceof DispatchAlreadyClosed) {
       return NextResponse.json({ error: "This dispatch has already been closed." }, { status: 409 });

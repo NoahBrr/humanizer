@@ -306,6 +306,10 @@ model Organization {
   studentPayerRelationships    StudentPayerRelationship[]
   dispatchRestrictionDecisions DispatchRestrictionDecision[]
   dispatches                   Dispatch[]
+  // Revenue Engine — Phase 3 (M9)
+  revenueReviews          RevenueReview[]
+  revenueReviewApprovals  RevenueReviewApproval[]
+  instructorTimeEntries   InstructorTimeEntry[]
 
   @@index([status])
   @@index([orgType])
@@ -493,6 +497,7 @@ model User {
   impersonatedAudits   AuditLog[]             @relation("ImpersonatedAudits")
 
   responsiblePayers    ResponsiblePayer[]
+  revenueReviewApprovals RevenueReviewApproval[]
 
   @@index([organizationId, role])
 }
@@ -527,6 +532,7 @@ model Location {
   revenueItemLocations    RevenueItemLocation[]
   taxRules                TaxRule[]
   dispatches              Dispatch[]
+  revenueReviews          RevenueReview[]
 
   createdAt DateTime @default(now())
 
@@ -607,6 +613,7 @@ model Student {
   waitlistEntries    WaitlistEntry[]
 
   studentPayerRelationships StudentPayerRelationship[]
+  revenueReviews            RevenueReview[]
 
   @@index([assignedInstructorId])
 }
@@ -633,6 +640,8 @@ model Instructor {
   lessonRequests LessonRequest[]
 
   instructorRateProfiles InstructorRateProfile[]
+  revenueReviews         RevenueReview[]
+  instructorTimeEntries  InstructorTimeEntry[]
 }
 
 model InstructorAvailability {
@@ -729,6 +738,7 @@ model Aircraft {
 
   aircraftPricingProfiles AircraftPricingProfile[]
   revenueItemAircraft     RevenueItemAircraft[]
+  revenueReviews          RevenueReview[]
 
   createdAt DateTime @default(now())
 
@@ -915,6 +925,7 @@ model ScheduleEvent {
   lessonType     LessonType?     @relation(fields: [lessonTypeId], references: [id])
   syllabusLesson SyllabusLesson? @relation(fields: [syllabusLessonId], references: [id])
   dispatch       Dispatch?
+  instructorTimeEntries InstructorTimeEntry[]
 
   @@index([organizationId, start, end])
   @@index([seriesId])
@@ -995,6 +1006,7 @@ model Dispatch {
   pricingProfile AircraftPricingProfile? @relation(fields: [pricingProfileId], references: [id], onDelete: SetNull)
 
   restrictionDecisions DispatchRestrictionDecision[]
+  revenueReviews       RevenueReview[]
 
   @@index([status])
   @@index([organizationId, status])
@@ -1177,6 +1189,7 @@ model Invoice {
   student      Student?      @relation(fields: [studentId], references: [id])
   lines        InvoiceLine[]
   payments     Payment[]
+  revenueReview RevenueReview?
 
   @@unique([organizationId, number])
   @@index([organizationId, status])
@@ -2427,7 +2440,8 @@ model ResponsiblePayer {
 
   relationships StudentPayerRelationship[]
   dispatches    Dispatch[]
-  // TRIMMED (Phase 3+): revenueReviews, invoices, credits, paymentCustomers,
+  revenueReviews RevenueReview[]
+  // TRIMMED (Phase 3+): invoices, credits, paymentCustomers,
   // transfersFrom, transfersTo — re-added in their owning phases.
 
   @@unique([organizationId, userId])
@@ -2489,4 +2503,181 @@ model DispatchRestrictionDecision {
   @@unique([dispatchId, key])
   @@index([organizationId, createdAt])
   @@index([organizationId, key, createdAt])
+}
+
+// ===========================================================================
+// Revenue Engine — Phase 3 (M9 core): RevenueReview + approval signatures +
+// instructor time entry. Additive, tenant-scoped. FORWARD RELATIONS TO PHASE
+// 3-later / Phase 4-5 MODELS ARE TRIMMED (InstructorEarning, TaxSnapshot,
+// RevenueAdjustment, RevenueAllocation, CreditApplication, PromoCodeRedemption,
+// CustomerCredit, ScheduledCharge, PlatformFee, Dispute, PaymentMethodReference,
+// InvoiceLine.instructorTimeEntry back-ref) — re-added in their owning phase.
+// See docs/architecture/revenue-engine/13 §4.4 / §4.7.
+// ===========================================================================
+
+enum RevenueReviewStatus {
+  DRAFT
+  AWAITING_INSTRUCTOR_REVIEW
+  AWAITING_OPERATIONS_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  PAYMENT_SCHEDULED
+  PAYMENT_PROCESSING
+  CARD_PAID
+  ACH_PENDING
+  PAID
+  PAYMENT_FAILED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  VOIDED
+  DISPUTED
+  WRITTEN_OFF
+}
+
+enum RevenueApprovalKind {
+  INSTRUCTOR_ROUTINE
+  OPERATIONS
+  SECOND
+  FINANCE
+}
+
+enum InstructorTimeSource {
+  INSTRUCTOR_ENTERED
+  HOBBS_SUGGESTED
+  SUPERVISOR_ENTERED
+  SUPERVISOR_OVERRIDE
+}
+
+model RevenueReview {
+  id             String              @id @default(cuid())
+  organizationId String
+  number         String
+  status         RevenueReviewStatus @default(DRAFT)
+  currency       String              @default("USD") @db.Char(3)
+
+  invoiceId  String  @unique
+  dispatchId String?
+
+  aircraftId   String?
+  studentId    String?
+  instructorId String?
+  locationId   String?
+
+  // Payer routing & resolution (doc 11)
+  payerId              String?
+  payerResolutionBasis String?
+  billToLabel          String?
+  billToPayerType      PayerType?
+  paymentMethodRefId   String?
+  payerApprovalRequestedAt DateTime?
+  payerApprovedAt          DateTime?
+  payerDeclinedAt          DateTime?
+  payerDeclineReason       String?
+
+  // Immutable operational snapshot copied at creation (doc 02)
+  flightDate DateTime?
+  hobbsOut   Decimal?  @db.Decimal(9, 1)
+  hobbsIn    Decimal?  @db.Decimal(9, 1)
+  tachOut    Decimal?  @db.Decimal(9, 1)
+  tachIn     Decimal?  @db.Decimal(9, 1)
+  flightTime Decimal?  @db.Decimal(6, 1)
+  landings   Int?
+  warnings   Json?
+
+  // Risk & approval routing (doc 03)
+  riskFlags              String[] @default([])
+  secondApprovalRequired Boolean  @default(false)
+
+  // Lifecycle actor fields (doc 03)
+  submittedAt            DateTime?
+  submittedById          String?
+  changesRequestedAt     DateTime?
+  changesRequestedById   String?
+  changesRequestedReason String?
+  approvedAt             DateTime?
+  approvedById           String?
+  approvalSnapshot        Json?
+  totalAtApproval         Decimal?             @db.Decimal(12, 2)
+  paymentPolicyAtApproval PaymentTimingPolicy?
+  scheduledChargeAt       DateTime?
+  voidedAt                DateTime?
+  voidedById              String?
+  voidReason              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  dispatch     Dispatch?         @relation(fields: [dispatchId], references: [id], onDelete: SetNull)
+  aircraft     Aircraft?         @relation(fields: [aircraftId], references: [id], onDelete: SetNull)
+  student      Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  instructor   Instructor?       @relation(fields: [instructorId], references: [id], onDelete: SetNull)
+  location     Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  payer        ResponsiblePayer? @relation(fields: [payerId], references: [id], onDelete: Restrict)
+
+  approvals   RevenueReviewApproval[]
+  timeEntries InstructorTimeEntry[]
+  // TRIMMED (later phases): paymentMethodRef, earnings, taxSnapshots, adjustments,
+  // allocations, creditApplications, promoRedemptions, targetedCredits,
+  // scheduledCharge, platformFee, disputes. paymentMethodRefId column kept (scalar).
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status, scheduledChargeAt])
+  @@index([instructorId, status])
+  @@index([dispatchId])
+}
+
+model RevenueReviewApproval {
+  id              String              @id @default(cuid())
+  organizationId  String
+  revenueReviewId String
+  kind            RevenueApprovalKind
+  approverUserId  String?
+  approverLabel   String
+  note            String?
+  createdAt       DateTime            @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  review       RevenueReview @relation(fields: [revenueReviewId], references: [id], onDelete: Cascade)
+  approver     User?         @relation(fields: [approverUserId], references: [id], onDelete: SetNull)
+
+  @@unique([revenueReviewId, kind])
+  @@index([organizationId, createdAt])
+}
+
+model InstructorTimeEntry {
+  id              String @id @default(cuid())
+  organizationId  String
+  revenueReviewId String
+  instructorId    String
+  scheduleEventId String?
+
+  category    InstructorTimeCategory
+  customLabel String?
+  hours       Decimal @db.Decimal(6, 2)
+  suggestedHours Decimal? @db.Decimal(6, 2)
+  source      InstructorTimeSource
+  billToCustomer Boolean
+  compensable    Boolean
+  notes          String?
+  confirmedByInstructorAt DateTime?
+  overrideReason          String?
+  overriddenById          String?
+  overriddenByLabel       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  review        RevenueReview  @relation(fields: [revenueReviewId], references: [id], onDelete: Cascade)
+  instructor    Instructor     @relation(fields: [instructorId], references: [id], onDelete: Restrict)
+  scheduleEvent ScheduleEvent? @relation(fields: [scheduleEventId], references: [id], onDelete: SetNull)
+  // TRIMMED (Phase 3 later): earning InstructorEarning?  /  invoiceLines InvoiceLine[]
+
+  @@index([organizationId, createdAt])
+  @@index([revenueReviewId])
+  @@index([instructorId, createdAt])
 }

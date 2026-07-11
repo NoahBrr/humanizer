@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, CalendarDays, Radio, Plane, GraduationCap, Users, Wrench,
-  Receipt, BarChart3, Bell, FolderLock, Settings, UploadCloud, ClipboardCheck, Activity, Megaphone, Briefcase, Sparkles, MonitorPlay, type LucideIcon,
+  Receipt, ClipboardList, BarChart3, Bell, FolderLock, Settings, UploadCloud, ClipboardCheck, Activity, Megaphone, Briefcase, Sparkles, MonitorPlay, type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Business",
     items: [
       { href: "/billing", label: "Billing", icon: Receipt },
+      { href: "/billing/reviews", label: "Revenue Reviews", icon: ClipboardList },
       { href: "/reports", label: "Reports", icon: BarChart3 },
       { href: "/crm", label: "Growth", icon: Megaphone },
       { href: "/executive", label: "Executive", icon: Briefcase },
