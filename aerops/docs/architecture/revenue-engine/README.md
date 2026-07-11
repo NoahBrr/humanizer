@@ -1,10 +1,10 @@
 # AeroOps Revenue Engine — Design Set Index
 
-> **Status:** Proposed — Phase 8 Part 1 · **Date:** 2026-07-10 · **Lead roles:** Head of Product; Documentation Engineer · **Part of:** Revenue Engine design set ([README](./README.md))
+> **Status:** Proposed — Phase 8 Parts 1–2 · **Date:** 2026-07-10 · **Lead roles:** Head of Product; Documentation Engineer · **Part of:** Revenue Engine design set ([README](./README.md))
 
 ## What the Revenue Engine is
 
-The **Revenue Engine** is the aviation-native financial operating system of AeroOps: it connects aircraft dispatch, aircraft return, Hobbs and Tach time, instructor time, organization-defined charges, invoice review, payment collection, instructor compensation, revenue allocation, reporting, and accounting exports. It is not a basic billing module — it is the financial workflow that begins the moment an aircraft is dispatched and ends only when the flight is operationally closed, the Revenue Review is approved, the customer is charged, the school receives its proceeds, AeroOps earns its platform fee, Instructor Compensation is recorded, and reports and Financial Exports are updated. "Revenue Engine" is the customer-facing module name; backend records keep standard accounting and provider terms (Invoice, InvoiceLine, PaymentIntent, PaymentTransaction, Refund, TaxSnapshot, LedgerEntry, Dispute) — existing database concepts are never renamed for marketing reasons. This design set is **Part 1 of 3 — design only**: no schema, code, migration, deploy, live Stripe charge, or production email ships with it.
+The **Revenue Engine** is the aviation-native financial operating system of AeroOps: it connects aircraft dispatch, aircraft return, Hobbs and Tach time, instructor time, organization-defined charges, invoice review, payment collection, instructor compensation, revenue allocation, reporting, and accounting exports. It is not a basic billing module — it is the financial workflow that begins the moment an aircraft is dispatched and ends only when the flight is operationally closed, the Revenue Review is approved, the customer is charged, the school receives its proceeds, AeroOps earns its platform fee, Instructor Compensation is recorded, and reports and Financial Exports are updated. "Revenue Engine" is the customer-facing module name; backend records keep standard accounting and provider terms (Invoice, InvoiceLine, PaymentIntent, PaymentTransaction, Refund, TaxSnapshot, LedgerEntry, Dispute) — existing database concepts are never renamed for marketing reasons. This design set now spans **Parts 1–2 of 3 — design only**: no schema, code, migration, deploy, Stripe object, live charge, or production email ships with it. Part 1 (docs 00–16) designed the workflow from dispatch to money; Part 2 (docs 17–35) designs the payments layer — Stripe Connect, saved Payment Methods, card and ACH execution, failures, refunds and disputes, the platform fee, allocation and compensation mechanics, and the Revenue Dashboard. Stripe **test mode** is the only sanctioned environment, and even it is not exercised in the design phase.
 
 ## The defining workflow: dispatch to payment
 
@@ -27,6 +27,8 @@ Docs 02 (steps 1–4), 03 (steps 5–7), 09 (steps 8–9), and 12 (steps 10–12
 
 Read in numeric order. Doc 13 is **canonical and binding** for the data model: where any design doc and 13 disagree on a name, type, constraint, or FK action, 13 wins.
 
+### Part 1 — dispatch to money (docs 00–16)
+
 | Doc | What it covers | Lead roles |
 |---|---|---|
 | [00-current-billing-audit.md](./00-current-billing-audit.md) | How billing works in AeroOps **today**: audit of the existing Prisma schema, `billing.ts`, and the dispatch-close write path; reuse-vs-new verdicts every other doc builds on | Database Architect; Financial Systems Architect |
@@ -47,7 +49,37 @@ Read in numeric order. Doc 13 is **canonical and binding** for the data model: w
 | [15-adr-proposals.md](./15-adr-proposals.md) | Proposed ADRs for the decided patterns (including the snapshot carve-out from the computed-values rule, supersession of ADR-011's invoice-inside-closeout shape, and the L1–L6 rate-resolution order); merged into DECISIONS.md on approval | Principal Software Architect at Stripe; Financial Systems Architect; Database Architect |
 | [16-risks-and-open-decisions.md](./16-risks-and-open-decisions.md) | Consolidated risks, unresolved decisions that need a product/owner call before Part 2, and the Part 1 compliance confirmations (deliverables 17 and 18) | Head of Product; Reliability/SRE Engineer; Aviation Accounting Specialist; Flight School Owner |
 
+### Part 2 — payments (docs 17–35)
+
+Part 1 stays binding: Part 2 docs extend 00–16 by reference and never reinterpret them. [13-database-model.md](./13-database-model.md) remains canonical for every Part 1 model/enum/status name; [34-part2-database-additions.md](./34-part2-database-additions.md) is **canonical and binding for every NEW Part 2 shape** — where a Part 2 design doc and 34 disagree, 34 wins.
+
+| Doc | What it covers | Lead roles |
+|---|---|---|
+| [17-two-financial-systems.md](./17-two-financial-systems.md) | Spec Part N: the hard separation between AeroOps' two money systems — SaaS billing (Stripe Billing, org subscriptions) vs Revenue Engine school payments (Stripe Connect) — with the platform fee as the one deliberate bridge | SaaS Revenue Operations Architect; Principal Software Architect at Stripe; Financial Systems Architect |
+| [18-stripe-connect-decision.md](./18-stripe-connect-decision.md) | Spec Part O: the formal Connect evaluation and **the decision** — direct charges on per-org **Express** connected accounts, platform fee collected atomically via `application_fee_amount`; ADR-037; funds-flow diagrams (card, ACH, refunds, dispute, platform fee); resolves Part 1 open decision D1 | Principal Payments Architect at Stripe; Financial Systems Architect; Flight School Owner; Head of Product |
+| [19-connected-account-onboarding.md](./19-connected-account-onboarding.md) | Spec Part P: the `ConnectedAccount` model, seven-status onboarding lifecycle, Stripe-hosted KYC, the hard gate that blocks charge initiation until the account is ready, suspension/deauthorization, and the Platform Console status view | Principal Payments Architect at Stripe; Head of Product; Security Engineer at Cloudflare |
+| [20-payment-methods-and-consent.md](./20-payment-methods-and-consent.md) | Spec Part Q: `PaymentCustomer`/`PaymentMethodReference` semantics, saved cards and ACH, default methods, the safe-metadata allowlist (never raw card/bank data), and off-session charging consent records with revocation | Principal Payments Architect at Stripe; Financial UX Designer; Security Engineer at Cloudflare |
+| [21-card-and-ach-workflows.md](./21-card-and-ach-workflows.md) | Spec Part R: rail-level card workflow (off-session 3-D Secure requires-action, decline catalog) and ACH Direct Debit workflow (verification gates, the pending window, R-code returns, late-return reversal); paid means webhook-confirmed, nothing else | Principal Payments Architect at Stripe; Reliability/SRE Engineer; Financial UX Designer |
+| [22-approval-to-payment.md](./22-approval-to-payment.md) | Spec Part S: the approval readiness checklist, the approval transaction (one `db.$transaction`, no provider calls inside), the payment-request outbox, and the payment worker that executes charges with per-hop idempotency | Principal Software Architect at Stripe; Financial Systems Architect; Reliability/SRE Engineer |
+| [23-webhooks-and-reconciliation.md](./23-webhooks-and-reconciliation.md) | Spec Part T: the inbound Stripe webhook pipeline (signature → `PaymentProviderEvent` unique insert → guarded reduce; tenancy from local references, never the payload), the event-handling matrix, and the reconciliation job that converges AeroOps and Stripe when events are late, lost, duplicated, or out of order | Principal Payments Architect at Stripe; Security Engineer at Cloudflare; Reliability/SRE Engineer |
+| [24-idempotency.md](./24-idempotency.md) | Spec Part S (idempotency): the complete idempotency-key catalog and the exactly-once proof for every hop from approval to settled books, including the unknown-outcome (crashed-mid-call) protocol | Principal Software Architect at Stripe; Database Architect; Reliability/SRE Engineer |
+| [25-payment-failure-workflow.md](./25-payment-failure-workflow.md) | Spec Part U: the failure sequence, safe customer-facing failure vocabulary, notification and escalation, authorized retry with duplicate prevention, org-configurable consequence policies (wired into the doc-10 restriction matrix), and late ACH returns | Head of Product; Reliability/SRE Engineer; Director of Operations; Financial UX Designer |
+| [26-refunds-voids-disputes.md](./26-refunds-voids-disputes.md) | Spec Part V: void rules before payment initiation, full/partial Refunds with reversal writes (allocations, tax, platform fee, compensation impact), and Dispute tracking with a right-sized evidence workflow | Financial Systems Architect; Principal Payments Architect at Stripe; Aviation Accounting Specialist |
+| [27-platform-fee.md](./27-platform-fee.md) | Spec Part W: per-org Platform Fee Agreements (percentage / fixed / combined / per-rail / volume-tier / introductory / negotiated / waiver), versioned and effective-dated, snapshotted per payment, platform-role-only control, honest disclosure, reconciliation | SaaS Revenue Operations Architect; Financial Systems Architect; Head of Product |
+| [28-revenue-allocation-ledger.md](./28-revenue-allocation-ledger.md) | Spec Part X: Part 2 allocation and ledger mechanics — collection/settlement legs, processing-expense visibility, refund/dispute reversal sets, the category catalog, balanced and immutable throughout | Aviation Accounting Specialist; Financial Systems Architect; SaaS Revenue Operations Architect |
+| [29-instructor-compensation.md](./29-instructor-compensation.md) | Spec Part Y: compensation recognition policies (lesson completion / approval / payment / ACH-settled / manual), holds and clawbacks, the full `InstructorEarning` status machine, contractor-vs-employee reporting | Chief Flight Instructor; Aviation Accounting Specialist; Financial Systems Architect; Independent Flight Instructor |
+| [30-revenue-dashboard.md](./30-revenue-dashboard.md) | Spec Part Z: the three strictly separated Revenue Dashboard surfaces — executive dashboard, operations revenue queue, student/payer view — every figure mapped to snapshotted records, nothing paid-marked client-side | Financial UX Designer; Head of Product; Head of Human Interface Design at Apple; Aviation UX Lead at Boeing Digital Aviation |
+| [31-notifications.md](./31-notifications.md) | Spec Part AA: the notification matrix (event → recipients → channels), digest and anti-spam rules, money-visibility boundaries, and honest dev-preview behavior when production email is off | Head of Product; Financial UX Designer; Reliability/SRE Engineer |
+| [32-financial-security-threat-assessment.md](./32-financial-security-threat-assessment.md) | Spec Part AB: the financial security threat assessment — authorization, tenancy, payment-method access, webhook verification, idempotency, replay, secrets, and the automatic-rejection conditions; owner approval of this doc together with 18 gates Part 3 | Security Engineer at Cloudflare; Principal Payments Architect at Stripe; Reliability/SRE Engineer |
+| [33-payment-test-plan.md](./33-payment-test-plan.md) | Spec Part AC: the payment test plan — approval/idempotency/webhook-replay/tenancy/visibility suites, Stripe test fixtures and mocks, no live credentials required by unit tests | QA/Test Engineer; Principal Payments Architect at Stripe; Reliability/SRE Engineer |
+| [34-part2-database-additions.md](./34-part2-database-additions.md) | **Canonical and binding for every NEW Part 2 model, enum, column, constraint, and index** (e.g. `ConnectedAccount`, `PaymentConsent`, extensions to `PaymentProviderEvent`); where docs 17–31 and 34 disagree, 34 wins; 13 stays canonical for everything Part 1 bound | Database Architect; Principal Software Architect at Stripe; Financial Systems Architect |
+| [35-part2-open-decisions-and-confirmations.md](./35-part2-open-decisions-and-confirmations.md) | Part 2 risks, open decisions needing a product/owner call before Part 3, and the Part 2 compliance confirmations (deliverables 19 and 20) | Head of Product; Flight School Owner; Reliability/SRE Engineer |
+
+Docs 32, 33, and 35 are part of this design set and are being finalized in the same Part 2 pass; their filenames are fixed by this index (several Part 2 docs reference them by number and defer exact filenames here) so cross-references stay stable when they land.
+
 ## Deliverables map
+
+### Part 1 (18 deliverables)
 
 The Phase 8 Part 1 spec requires 18 deliverables before Part 2 implementation begins.
 
@@ -74,6 +106,35 @@ The Phase 8 Part 1 spec requires 18 deliverables before Part 2 implementation be
 
 Docs [09-payment-timing-and-collection.md](./09-payment-timing-and-collection.md) and [12-revenue-allocation-and-reporting.md](./12-revenue-allocation-and-reporting.md) carry spec Parts B/I and the allocation/reporting requirements that cut across the numbered deliverables; they are required reading even though no single deliverable number maps to them.
 
+### Part 2 (20 deliverables)
+
+The Phase 8 Part 2 spec requires 20 deliverables before Part 3 implementation begins.
+
+| # | Deliverable | Where it lives |
+|---|---|---|
+| 1 | Stripe Connect architecture decision | [18-stripe-connect-decision.md](./18-stripe-connect-decision.md) (§1 decision, §7 ADR-037) |
+| 2 | Funds-flow diagram | [18-stripe-connect-decision.md](./18-stripe-connect-decision.md) §8 |
+| 3 | Connected-account onboarding workflow | [19-connected-account-onboarding.md](./19-connected-account-onboarding.md) |
+| 4 | Payment-method architecture | [20-payment-methods-and-consent.md](./20-payment-methods-and-consent.md) |
+| 5 | Card workflow | [21-card-and-ach-workflows.md](./21-card-and-ach-workflows.md) |
+| 6 | ACH workflow | [21-card-and-ach-workflows.md](./21-card-and-ach-workflows.md) |
+| 7 | Approval-to-payment workflow | [22-approval-to-payment.md](./22-approval-to-payment.md) |
+| 8 | Webhook design | [23-webhooks-and-reconciliation.md](./23-webhooks-and-reconciliation.md) |
+| 9 | Idempotency design | [24-idempotency.md](./24-idempotency.md) |
+| 10 | Failure workflow | [25-payment-failure-workflow.md](./25-payment-failure-workflow.md) |
+| 11 | Refund and dispute workflow | [26-refunds-voids-disputes.md](./26-refunds-voids-disputes.md) |
+| 12 | Platform-fee design | [27-platform-fee.md](./27-platform-fee.md) |
+| 13 | Revenue-allocation design | [28-revenue-allocation-ledger.md](./28-revenue-allocation-ledger.md) |
+| 14 | Instructor-compensation design | [29-instructor-compensation.md](./29-instructor-compensation.md) |
+| 15 | Revenue Dashboard design | [30-revenue-dashboard.md](./30-revenue-dashboard.md) |
+| 16 | Notification design | [31-notifications.md](./31-notifications.md) |
+| 17 | Security threat assessment | [32-financial-security-threat-assessment.md](./32-financial-security-threat-assessment.md) |
+| 18 | Payment test plan | [33-payment-test-plan.md](./33-payment-test-plan.md) |
+| 19 | Confirmation no live charges occurred | Compliance confirmations in [35-part2-open-decisions-and-confirmations.md](./35-part2-open-decisions-and-confirmations.md) |
+| 20 | Confirmation nothing was deployed | Compliance confirmations in [35-part2-open-decisions-and-confirmations.md](./35-part2-open-decisions-and-confirmations.md) |
+
+Docs [17-two-financial-systems.md](./17-two-financial-systems.md) (spec Part N — the SaaS-billing/Revenue-Engine separation) and [34-part2-database-additions.md](./34-part2-database-additions.md) (binding for all NEW Part 2 schema shapes) cut across the numbered deliverables; they are required reading even though no single deliverable number maps to them.
+
 ## Conventions that hold across every doc
 
 - Money is Prisma `Decimal` — never float. New financial models carry an explicit ISO 4217 currency column; the default recommendation is `Decimal(12,2)` + currency, with the binding per-field call made in [13-database-model.md](./13-database-model.md).
@@ -82,4 +143,4 @@ Docs [09-payment-timing-and-collection.md](./09-payment-timing-and-collection.md
 
 ## What happens next
 
-Approval of this design set **and the accompanying threat model** gates Part 2 implementation — no schema, code, or migration work starts before that sign-off. On approval, the ADRs proposed in [15-adr-proposals.md](./15-adr-proposals.md) merge into DECISIONS.md, and Parts 2–3 implement the doc-13 schema in the sequence set by [14-migration-plan.md](./14-migration-plan.md).
+Part 2 is now **designed** — like Part 1, on paper only: no schema, code, migration, deploy, Stripe object, or live charge exists. **Owner approval of the Stripe Connect ADR ([18-stripe-connect-decision.md](./18-stripe-connect-decision.md), ADR-037) and the security threat assessment ([32-financial-security-threat-assessment.md](./32-financial-security-threat-assessment.md)) gates Part 3 implementation** — no payment code is written before that sign-off. On approval, the ADRs proposed in [15-adr-proposals.md](./15-adr-proposals.md) and [18-stripe-connect-decision.md](./18-stripe-connect-decision.md) merge into DECISIONS.md, and Part 3 implements the [13-database-model.md](./13-database-model.md) schema plus the [34-part2-database-additions.md](./34-part2-database-additions.md) additions in the sequence set by [14-migration-plan.md](./14-migration-plan.md), against Stripe **test mode only**, behind env flags that default off. Before any **live** launch, the selected Connect posture (merchant of record, tax reporting, dispute and negative-balance liability) must be reviewed by qualified **legal and accounting professionals** (spec Part O; [18](./18-stripe-connect-decision.md) review requirements).

@@ -182,11 +182,13 @@ Execution needs no queue (none exists — audit finding): `payment-runner.ts` is
 
 Details: [09-payment-timing-and-collection.md](./09-payment-timing-and-collection.md).
 
-## 11. Stripe Connect model — Part 1 position
+## 11. Stripe Connect model — Part 1 position, decided in Part 2
 
 **Part 1 binds the interface, not the provider topology.** All charging flows through a provider-agnostic `PaymentProvider` adapter (`createCustomer`, `createSetupSession` (hosted), `detachPaymentMethod`, `createCharge({amount, currency, customerRef, methodRef, idempotencyKey, metadata})`, `parseWebhookEvent(signature, raw)`) implemented in Part 2 as `src/lib/stripe.ts` behind the `REVENUE_CHARGING` env flag — **Stripe test mode only**, off by default, absent-adapter surfaces degrade gracefully. The design set already assumes per-organization connected accounts (payer customers and Payment Methods live on the org's connected account, so provider objects structurally cannot cross tenants — [11](./11-responsible-payers.md)); the **Connect account type and fee mechanics are finalized in Part 2**, gated on the approved threat model.
 
-The Part 2 decision, enumerated without commitment:
+**Part 2 update — the decision is made.** [18-stripe-connect-decision.md](./18-stripe-connect-decision.md) (ADR-037) selects **direct charges on per-organization Stripe Express connected accounts, with the AeroOps platform fee collected atomically via `application_fee_amount`**: the school is the settlement merchant and merchant of record, funds settle into the school's connected balance, and AeroOps never custodies customer funds. Funds-flow diagrams (card, ACH, full/partial refund, dispute, platform fee) are bound in 18 §8. The option table below is preserved as the Part 1 evaluation record — 18 §5.3 overrules its "Standard — leading recommendation" line with documented reasons — and owner approval of 18, together with the Part 2 threat assessment, gates Part 3 implementation.
+
+The Part 2 decision as Part 1 enumerated it, without commitment (since resolved above):
 
 | Option | Shape | Trade-off |
 |---|---|---|
@@ -194,7 +196,7 @@ The Part 2 decision, enumerated without commitment:
 | **Connect Standard accounts + direct charges + application fee** | Each school owns a full Stripe account and dashboard; charges created on the connected account with `application_fee_amount` | Cleanest liability and tax posture (school is merchant of record), strongest structural tenancy, least platform lock-in; onboarding is Stripe-branded and heavier. **Leading recommendation.** |
 | **Connect Express accounts + destination charges** | AeroOps-managed onboarding and branded dashboard; platform creates charges and routes funds with fees | Best onboarding UX and platform control; more platform responsibility (disputes, refunds, compliance surface), higher Connect fees. Credible alternative if Standard onboarding proves too heavy for small Part 61 schools. |
 
-PlatformFee accrual/earning is provider-independent (accrued at approval, earned at collection under platform-owned `PlatformFeePolicy` — [12](./12-revenue-allocation-and-reporting.md)); only the *money-movement* mechanics await the Connect decision. Interface and constraints: [09-payment-timing-and-collection.md](./09-payment-timing-and-collection.md).
+PlatformFee accrual/earning is provider-independent (accrued at approval, earned at collection under platform-owned `PlatformFeePolicy` — [12](./12-revenue-allocation-and-reporting.md)); the *money-movement* mechanics are now bound by [18-stripe-connect-decision.md](./18-stripe-connect-decision.md) §8. Interface and constraints: [09-payment-timing-and-collection.md](./09-payment-timing-and-collection.md).
 
 ## 12. Idempotency, end to end
 
@@ -211,7 +213,7 @@ Every hop from aircraft return to settled money is exactly-once **by constructio
 | Provider → AeroOps (webhook) | `PaymentProviderEvent` unique-insert on `[provider, providerEventId]`: duplicate delivery is a recorded no-op; processing is transactional after the insert |
 | Adjustments/credits/promos/refunds | `Refund.adjustmentId @unique`, `@@unique([creditId, revenueReviewId])`, `@@unique([promoCodeId, revenueReviewId])`, guarded APPROVED→APPLIED claims |
 
-The uniqueness inventory is bound in [13-database-model.md](./13-database-model.md); the claim idiom and webhook pipeline in [09-payment-timing-and-collection.md](./09-payment-timing-and-collection.md).
+The uniqueness inventory is bound in [13-database-model.md](./13-database-model.md); the claim idiom and webhook pipeline in [09-payment-timing-and-collection.md](./09-payment-timing-and-collection.md). Part 2 completes this chain: the full idempotency-key catalog and end-to-end exactly-once proof (including the unknown-outcome protocol for a crash mid-provider-call) are [24-idempotency.md](./24-idempotency.md); the approval-transaction → outbox → payment-worker hops are [22-approval-to-payment.md](./22-approval-to-payment.md); the webhook store-then-reduce pipeline and reconciliation job are [23-webhooks-and-reconciliation.md](./23-webhooks-and-reconciliation.md).
 
 ## 13. Immutable financial snapshots
 
@@ -259,8 +261,8 @@ Full threat model is a **Part 2 entry gate**: per spec Part M, live-payment impl
 Designed failure-first; each mode has one owner doc.
 
 1. **Payment failure** — the review moves to Payment Failed with the decline/return code recorded; the invoice carries a **derived Amount Due** (locked total − settled payments + refunds), never a stored running balance; retries follow policy; hard declines suspend the stored method. `Student.accountBalance` is demoted and retired on the two-release deprecation path ([09](./09-payment-timing-and-collection.md), [14](./14-migration-plan.md)).
-2. **Provider outage** — operational workflow is unaffected by construction (no provider calls in any transaction). Attempts fail and record their error; ScheduledCharges remain claimable; the deterministic idempotency key makes re-execution safe; staleness watches open `STALE_PENDING_PAYMENT` exceptions for anything stuck PROCESSING ([09](./09-payment-timing-and-collection.md)).
-3. **Webhook loss or replay** — replay is a no-op via the `PaymentProviderEvent` unique insert. Loss is caught by staleness watches and, in Part 2, provider polling and payout matching, which re-derive truth from the provider and open exceptions for divergence ([09](./09-payment-timing-and-collection.md), [12](./12-revenue-allocation-and-reporting.md)).
+2. **Provider outage** — operational workflow is unaffected by construction (no provider calls in any transaction). Attempts fail and record their error; ScheduledCharges remain claimable; the deterministic idempotency key makes re-execution safe; staleness watches open `STALE_PENDING_PAYMENT` exceptions for anything stuck PROCESSING ([09](./09-payment-timing-and-collection.md); Part 2 binds the worker's crash/retry behavior in [22-approval-to-payment.md](./22-approval-to-payment.md) and the exactly-once proof in [24-idempotency.md](./24-idempotency.md)).
+3. **Webhook loss or replay** — replay is a no-op via the `PaymentProviderEvent` unique insert. Loss is caught by staleness watches and, in Part 2, the reconciliation job's provider polling and payout matching — designed in [23-webhooks-and-reconciliation.md](./23-webhooks-and-reconciliation.md) — which re-derive truth from the provider and open exceptions for divergence ([09](./09-payment-timing-and-collection.md), [12](./12-revenue-allocation-and-reporting.md)).
 4. **Partial batch failure** — batches are never all-or-nothing: each charge is claimed and processed independently with per-row outcomes (the Import Center reporting pattern), so one failing card never blocks the sweep; the run reports succeeded/failed/skipped per charge ([09](./09-payment-timing-and-collection.md)).
 5. **Crash between operational and financial record creation** — impossible by construction: the draft Invoice + Revenue Review are created **inside** the closeout transaction (TX-2), so a crash rolls back both and the dispatch remains RELEASED; the return can be resubmitted and the guarded claim guarantees single application. There is no state in which meters rolled but no review exists ([02](./02-operational-dispatch-and-closeout.md)).
 

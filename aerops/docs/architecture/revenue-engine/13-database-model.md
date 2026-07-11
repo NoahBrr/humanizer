@@ -2502,3 +2502,9 @@ Owned by the workflow docs (03–12) — this document only fixes the storage: R
 ## 13. Related documents
 
 [00-current-billing-audit.md](./00-current-billing-audit.md) (current state) · [02](./02-operational-dispatch-and-closeout.md)–[12](./12-revenue-allocation-and-reporting.md) (workflow designs this schema serves) · [14-migration-plan.md](./14-migration-plan.md) (sequencing, backfills, fixtures) · [DATABASE_STANDARDS.md](../DATABASE_STANDARDS.md) · [DECISIONS.md](../DECISIONS.md) (ADR-011, ADR-020, ADR-021, ADR-023; ADR-025 proposed in doc 03)
+
+---
+
+## Part 2 additions
+
+The Phase 8 Part 2 database design — new models (`ConnectedAccount`, `PaymentConsent`, `BillingAuthorizationText`, `DisputeEvidence`, `PlatformFeeTier`, `FinancialHold`, `CompensationReversalDecision`, `ReconciliationRun`, `NotificationPreference`), additive extensions to the payment/allocation/compensation models bound above, all new and extended enums, and the migration-plan delta — is canonical in [34-part2-database-additions.md](./34-part2-database-additions.md). That document extends this one and never reinterprets it; its §2 lists every arbitration, including the one amendment to a shape bound here (`ScheduledCharge` partial uniques, its R-P9 / Open question Q1).
