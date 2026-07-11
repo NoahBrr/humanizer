@@ -80,14 +80,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const resolution = resolvePricing(candidates, {
     aircraftId: dispatch.aircraftId,
     explicitProfileId: dispatch.pricingProfileId,
+    // NOTE: minimal Phase-2 context (studentId ⇒ "student"). The full
+    // pricingFactsFor() deriver (membership roles, program, customer type from
+    // Membership/Enrollment — doc 05 §5.4) lands with the pricing capture UI;
+    // until then only L1/L4/L5/L6 and student-type L3 profiles resolve here.
     customerTypes: dispatch.studentId ? ["student"] : [],
     membershipRoles: [],
     programIds: [],
     locationId: dispatch.locationId,
   }, new Date());
-  const rental = computeRentalCharge(resolution.profile!, { hobbsOut, hobbsIn: data.hobbsIn });
-  const aircraftCharge = Number(rental.amount);
-  const total = aircraftCharge + charges.instructorCharge;
+  const profile = resolution.profile!;
+  // The closeout captures Hobbs and Tach; it cannot yet capture custom-unit
+  // quantities (a return-capture UI feature). Refuse rather than bill $0.
+  if (profile.billingBasis === "CUSTOM_UNIT") {
+    return NextResponse.json({ error: `Pricing profile "${profile.name}" bills by a custom unit, which this closeout can't capture yet. Select an Hobbs/Tach/fixed profile.` }, { status: 400 });
+  }
+  const tachOut = Number(dispatch.tachOut ?? dispatch.aircraft.currentTach);
+  const rental = computeRentalCharge(profile, { hobbsOut, hobbsIn: data.hobbsIn, tachOut, tachIn: data.tachIn });
+  // Keep the billed total in Decimal — never a JS float on the money path.
+  const total = rental.amount.plus(charges.instructorCharge);
+  const totalNum = total.toNumber();
 
   const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
 
@@ -197,17 +209,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       action: "dispatch.close",
       entityType: "Dispatch",
       entityId: id,
-      newValue: { tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: total, landings: data.landings, squawk: data.squawk?.title },
+      newValue: { tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: totalNum, landings: data.landings, squawk: data.squawk?.title },
     });
-    logger.info("flight closed", { dispatchId: id, flightTime, billed: total });
+    logger.info("flight closed", { dispatchId: id, flightTime, billed: totalNum });
 
     // One emission; the event bus fans out to webhooks, automations, and
     // any future consumer — this route doesn't know who is listening.
     await emitDomainEvent(session.organizationId, "flight.closed", {
-      dispatchId: id, aircraftId: dispatch.aircraftId, tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: total,
+      dispatchId: id, aircraftId: dispatch.aircraftId, tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: totalNum,
     });
 
-    return NextResponse.json({ dispatch: closed, flightTime, total: charges.total });
+    return NextResponse.json({ dispatch: closed, flightTime, total: totalNum });
   } catch (e) {
     if (e instanceof DispatchAlreadyClosed) {
       return NextResponse.json({ error: "This dispatch has already been closed." }, { status: 409 });

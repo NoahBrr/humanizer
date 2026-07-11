@@ -74,18 +74,24 @@ function effectiveAndApproved(p: PricingCandidate, at: Date): boolean {
   return true;
 }
 
-/** Which resolution level a candidate competes at (highest specificity wins). */
+/**
+ * Which resolution level a candidate competes at, or null if ineligible.
+ * Eligibility is CONJUNCTIVE (doc 05 §3.3 point 4): every configured selector
+ * must match. The profile then competes at its highest-precedence selector
+ * (program → L2, membership/type → L3, location → L4, defaults → L5/L6).
+ */
 function levelOf(p: PricingCandidate, ctx: ResolutionContext): ResolutionLevel | null {
   if (ctx.explicitProfileId && p.id === ctx.explicitProfileId) return "L1";
-  if (p.eligibleProgramIds.length) {
-    return p.eligibleProgramIds.some((id) => ctx.programIds.includes(id)) ? "L2" : null;
-  }
-  if (p.eligibleMembershipRoles.length || p.eligibleCustomerTypes.length) {
-    const roleOk = p.eligibleMembershipRoles.some((r) => ctx.membershipRoles.includes(r));
-    const typeOk = p.eligibleCustomerTypes.some((t) => ctx.customerTypes.includes(t));
-    return roleOk || typeOk ? "L3" : null;
-  }
-  if (p.locationId) return p.locationId === ctx.locationId ? "L4" : null;
+  // Every configured selector must match — a program+location profile whose
+  // location differs is ineligible, not eligible-at-L2.
+  if (p.eligibleProgramIds.length && !p.eligibleProgramIds.some((id) => ctx.programIds.includes(id))) return null;
+  if (p.eligibleMembershipRoles.length && !p.eligibleMembershipRoles.some((r) => ctx.membershipRoles.includes(r))) return null;
+  if (p.eligibleCustomerTypes.length && !p.eligibleCustomerTypes.some((t) => ctx.customerTypes.includes(t))) return null;
+  if (p.locationId && p.locationId !== ctx.locationId) return null;
+  // Classify at the highest-precedence selector present.
+  if (p.eligibleProgramIds.length) return "L2";
+  if (p.eligibleMembershipRoles.length || p.eligibleCustomerTypes.length) return "L3";
+  if (p.locationId) return "L4";
   if (p.isDefault && !p.aircraftId) return "L5";
   if (p.isDefault && p.aircraftId) return "L6";
   return null;
@@ -106,6 +112,15 @@ export function resolvePricing(candidates: PricingCandidate[], ctx: ResolutionCo
     .filter((p) => p.isLegacyFallback || effectiveAndApproved(p, at))
     .map((p) => ({ p, level: levelOf(p, ctx) }))
     .filter((x): x is { p: PricingCandidate; level: ResolutionLevel } => x.level !== null);
+
+  // An explicit dispatch selection that is no longer resolvable (archived,
+  // out of window, wrong aircraft) degrades to normal resolution — but never
+  // silently (doc 05 §6 / V9). The warning rides through to the review.
+  const explicitInvalid =
+    ctx.explicitProfileId !== null && !eligible.some((x) => x.p.id === ctx.explicitProfileId);
+  const carryWarnings: ResolutionReason[] = explicitInvalid
+    ? [{ code: "EXPLICIT_SELECTION_INVALID", detail: `The pricing profile selected on the dispatch (${ctx.explicitProfileId}) is no longer applicable; resolution fell back to the standard rules.` }]
+    : [];
 
   for (const level of LEVELS) {
     const atLevel = eligible.filter((x) => x.level === level).map((x) => x.p);
@@ -128,7 +143,7 @@ export function resolvePricing(candidates: PricingCandidate[], ctx: ResolutionCo
     reasons.push({ code: `RESOLVED_${level}`, detail: `Selected "${chosen.name}" at level ${level}` });
     if (chosen.isLegacyFallback) reasons.push({ code: "LEGACY_FALLBACK", detail: "Zero-configuration org — billed at the aircraft's legacy wet rate" });
 
-    const warnings: ResolutionReason[] = [];
+    const warnings: ResolutionReason[] = [...carryWarnings];
     const ambiguous = top.length > 1;
     if (ambiguous) {
       warnings.push({
@@ -140,7 +155,7 @@ export function resolvePricing(candidates: PricingCandidate[], ctx: ResolutionCo
   }
 
   // Unreachable when a legacy fallback is supplied, but fail loud rather than silent.
-  return { profile: null, level: null, reasons: [{ code: "NO_PROFILE", detail: "No applicable pricing profile and no legacy fallback supplied" }], warnings: [], ambiguous: false };
+  return { profile: null, level: null, reasons: [{ code: "NO_PROFILE", detail: "No applicable pricing profile and no legacy fallback supplied" }], warnings: carryWarnings, ambiguous: false };
 }
 
 export type RentalCharge = {

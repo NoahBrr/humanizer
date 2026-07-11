@@ -71,7 +71,29 @@ describe("pricing resolution (L1–L6, doc 05)", () => {
     expect(r.profile?.id).toBe("s");
   });
 
-  it("historical rate: an approved review's rate must not move when a newer version becomes effective", () => {
+  it("eligibility is conjunctive — a program+location profile whose location differs is ineligible", () => {
+    const both = profile({ id: "pl", name: "Program at Loc A", eligibleProgramIds: ["syl1"], locationId: "locA" });
+    const orgDefault = profile({ id: "d", name: "Org default", isDefault: true, aircraftId: null });
+    // program matches but location does NOT → the combined profile must not win at L2.
+    const r = resolvePricing([both, orgDefault], ctx({ programIds: ["syl1"], locationId: "locB" }), at);
+    expect(r.profile?.id).toBe("d");
+    // when both match, it wins at its highest-precedence selector (L2).
+    const r2 = resolvePricing([both, orgDefault], ctx({ programIds: ["syl1"], locationId: "locA" }), at);
+    expect(r2.level).toBe("L2");
+    expect(r2.profile?.id).toBe("pl");
+  });
+
+  it("an invalid explicit dispatch selection degrades to normal resolution but warns (never silent)", () => {
+    const member = profile({ id: "m", name: "Member", eligibleCustomerTypes: ["member"] });
+    const r = resolvePricing([member], ctx({ explicitProfileId: "gone", customerTypes: ["member"] }), at);
+    expect(r.profile?.id).toBe("m"); // fell through to L3
+    expect(r.warnings.some((w) => w.code === "EXPLICIT_SELECTION_INVALID")).toBe(true);
+  });
+
+  // Verifies effective-window resolution (a flight resolves to the version whose
+  // window covers it). True snapshot immutability of an APPROVED review line is a
+  // Phase 3 guarantee (the approval transaction freezes the snapshot) — tested there.
+  it("resolution honors the effective window at flight time (June bills v1, July bills v2)", () => {
     // v1 effective Jan–Jun (superseded by an effectiveEnd), v2 effective from Jul.
     const v1 = profile({ id: "v1", name: "Member v1", eligibleCustomerTypes: ["member"], rateAmount: D("120.00"), effectiveStart: new Date("2026-01-01T00:00:00Z"), effectiveEnd: new Date("2026-07-01T00:00:00Z") });
     const v2 = profile({ id: "v2", name: "Member v2", eligibleCustomerTypes: ["member"], rateAmount: D("150.00"), effectiveStart: new Date("2026-07-01T00:00:00Z") });
@@ -107,5 +129,17 @@ describe("rental charge computation (doc 05 §3.4)", () => {
     const c = computeRentalCharge(base, { hobbsOut: "10.0", hobbsIn: "9.0" });
     expect(c.rawQuantity.toString()).toBe("0");
     expect(c.amount.toString()).toBe("0");
+  });
+
+  it("TACH basis uses the tach delta, not Hobbs", () => {
+    const c = computeRentalCharge({ ...base, billingBasis: "TACH" }, { hobbsOut: "0", hobbsIn: "5.0", tachOut: "2000.0", tachIn: "2001.4" });
+    expect(c.quantity.toString()).toBe("1.4");
+    expect(c.amount.toString()).toBe("210"); // 1.4 × 150
+  });
+
+  it("CUSTOM_UNIT basis bills the entered quantity", () => {
+    const c = computeRentalCharge({ ...base, billingBasis: "CUSTOM_UNIT", roundingRule: "NONE", rateAmount: new Prisma.Decimal("12.00") }, { customQuantity: "3" });
+    expect(c.quantity.toString()).toBe("3");
+    expect(c.amount.toString()).toBe("36");
   });
 });

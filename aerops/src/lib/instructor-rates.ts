@@ -143,7 +143,13 @@ export function resolveInstructorRate(
   };
 }
 
-/** Billing charge for a block of instructor time: hours × rate, half-up to cents. */
-export function computeInstructorCharge(hours: Prisma.Decimal.Value, rate: Prisma.Decimal): Prisma.Decimal {
-  return new Prisma.Decimal(hours).times(rate).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+/**
+ * Billing/compensation charge for a block of instructor time: apply the minimum
+ * billable hours (if the resolved line sets one), then hours × rate, half-up to
+ * cents. Decimal throughout.
+ */
+export function computeInstructorCharge(hours: Prisma.Decimal.Value, rate: Prisma.Decimal, minBillableHours?: Prisma.Decimal | null): Prisma.Decimal {
+  let h = new Prisma.Decimal(hours);
+  if (minBillableHours && h.lessThan(minBillableHours)) h = minBillableHours;
+  return h.times(rate).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }

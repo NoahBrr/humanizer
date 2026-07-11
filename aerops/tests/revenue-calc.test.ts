@@ -51,6 +51,11 @@ describe("instructor rate resolution (doc 04, 8 tiers)", () => {
     expect(computeInstructorCharge("1.5", D("85.00")).toString()).toBe("127.5");
     expect(computeInstructorCharge("1.333", D("85.00")).toString()).toBe("113.31"); // 113.305 → 113.31
   });
+
+  it("applies the minimum billable hours before multiplying", () => {
+    expect(computeInstructorCharge("0.3", D("85.00"), D("1.0")).toString()).toBe("85"); // min 1.0 h
+    expect(computeInstructorCharge("2.0", D("85.00"), D("1.0")).toString()).toBe("170"); // above min, unchanged
+  });
 });
 
 describe("tax computation (doc 07, stacked)", () => {
@@ -74,5 +79,24 @@ describe("tax computation (doc 07, stacked)", () => {
   it("no-tax when there are no rules (the default posture)", () => {
     const r = computeTax([line("l1", "100.00", "aircraft_rental")], []);
     expect(r.totalTax.toString()).toBe("0");
+  });
+
+  it("PER_LINE rounds each line×rule independently and can diverge from PER_RULE_TOTAL", () => {
+    const lines = [line("a", "10.10", "fee"), line("b", "10.10", "fee")];
+    const rules = [rule("s", "8.5000", [])];
+    const perLine = computeTax(lines, rules, { mode: "HALF_UP", level: "PER_LINE" });
+    // each line: 10.10 × 8.5% = 0.8585 → 0.86; total 1.72
+    expect(perLine.totalTax.toString()).toBe("1.72");
+    const perRule = computeTax(lines, rules, { mode: "HALF_UP", level: "PER_RULE_TOTAL" });
+    // aggregate: 20.20 × 8.5% = 1.717 → 1.72 (coincides here); shares reconcile exactly
+    const shareSum = perRule.lines.reduce((t, l) => t.plus(l.tax), D(0));
+    expect(shareSum.toString()).toBe(perRule.perRule[0].tax.toString()); // largest-remainder: no penny drift
+  });
+
+  it("PER_RULE_TOTAL line shares always sum exactly to the rule tax (no penny drift)", () => {
+    const lines = [line("a", "33.33", "fee"), line("b", "33.33", "fee"), line("c", "33.34", "fee")];
+    const r = computeTax(lines, [rule("s", "7.0000", [])], { mode: "HALF_UP", level: "PER_RULE_TOTAL" });
+    const shareSum = r.lines.reduce((t, l) => t.plus(l.tax), D(0));
+    expect(shareSum.toString()).toBe(r.perRule[0].tax.toString());
   });
 });

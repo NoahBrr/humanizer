@@ -80,11 +80,22 @@ export function computeTax(
     } else {
       ruleBase = applicable.reduce((t, l) => t.plus(l.amount), Z);
       ruleTax = ruleBase.times(factor).toDecimalPlaces(2, rounding);
-      // Attribute the rounded rule tax back proportionally for line-level records.
-      for (const l of applicable) {
-        const share = ruleBase.isZero() ? Z : l.amount.times(ruleTax).dividedBy(ruleBase).toDecimalPlaces(2, rounding);
-        lineResults.push({ lineId: l.lineId, ruleId: rule.id, ruleKey: rule.ruleKey, base: l.amount, ratePercent: rule.ratePercent, tax: share });
+      // Attribute the rounded rule tax back proportionally, then reconcile with a
+      // largest-remainder pass so the per-line shares sum EXACTLY to ruleTax (no
+      // penny drift between lines[].tax and perRule.tax/totalTax).
+      const raw = applicable.map((l) => (ruleBase.isZero() ? Z : l.amount.times(ruleTax).dividedBy(ruleBase)));
+      const floors = raw.map((s) => s.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN));
+      let residualCents = ruleTax.minus(floors.reduce((t, s) => t.plus(s), Z)).times(100).round().toNumber();
+      const order = raw.map((s, i) => ({ i, frac: s.minus(floors[i]) })).sort((a, b) => b.frac.comparedTo(a.frac));
+      const shares = [...floors];
+      for (const { i } of order) {
+        if (residualCents <= 0) break;
+        shares[i] = shares[i].plus("0.01");
+        residualCents--;
       }
+      applicable.forEach((l, i) => {
+        lineResults.push({ lineId: l.lineId, ruleId: rule.id, ruleKey: rule.ruleKey, base: l.amount, ratePercent: rule.ratePercent, tax: shares[i] });
+      });
     }
 
     perRule.push({ ruleId: rule.id, ruleKey: rule.ruleKey, jurisdictionLabel: rule.jurisdictionLabel, base: ruleBase, tax: ruleTax });
