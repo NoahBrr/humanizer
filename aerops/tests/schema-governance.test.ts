@@ -26,7 +26,11 @@ describe("organization FK integrity", () => {
   it("every organization FK declares an onDelete action (Cascade, or SetNull for logs)", () => {
     // SetNull is only for records that must outlive their org (security/audit
     // logs); everything operational Cascades. No FK may default to NoAction.
-    const SETNULL_OK = new Set(["AuditLog", "LoginEvent"]);
+    // PaymentProviderEvent is an audit-grade inbound-webhook forensic store
+    // (doc 09 R16): organizationId is resolved server-side and SetNull, and the
+    // table is excluded from org-snapshot wipe/restore "like AuditLog" — same
+    // outlive-the-org precedent as AuditLog/LoginEvent.
+    const SETNULL_OK = new Set(["AuditLog", "LoginEvent", "PaymentProviderEvent"]);
     const offenders = orgOwned()
       .map((m) => {
         const rel = m.body.match(/organization\s+Organization\??\s+@relation\([^)]*onDelete:\s*(\w+)/);
@@ -92,7 +96,16 @@ describe("tenant-scoped uniqueness", () => {
   // `invoiceId` is allowed for the same structural reason as `scheduleEventId`: it is the FK of a
   // 1:1 relation (Invoice 1:1 RevenueReview), a system cuid — never a tenant natural key — and a
   // 1:1-relation FK cannot be expressed as a composite @@unique; tenant-safe via the wrapped Invoice.
-  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email", "organizationId", "inviteTokenHash", "scheduleEventId", "invoiceId"]);
+  // Revenue Engine Phase 5 (payment execution + ledger) 1:1-relation FKs and
+  // opaque provider keys — same structural precedent as scheduleEventId/invoiceId
+  // (system cuids / opaque refs, never tenant natural keys; a 1:1-relation FK
+  // cannot be expressed as a composite @@unique):
+  //   paymentAttemptId — Payment 1:1 PaymentAttempt (one Payment per attempt)
+  //   timeEntryId      — InstructorEarning 1:1 InstructorTimeEntry (primary earning)
+  //   adjustmentId     — Refund 1:1 RevenueAdjustment (one refund per adjustment; replay guard)
+  //   revenueReviewId  — ScheduledCharge/PlatformFee 1:1 RevenueReview (one anchor/fee per review)
+  //   idempotencyKey   — PaymentAttempt's deterministic provider Idempotency-Key (opaque, exactly-once)
+  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email", "organizationId", "inviteTokenHash", "scheduleEventId", "invoiceId", "paymentAttemptId", "timeEntryId", "adjustmentId", "revenueReviewId", "idempotencyKey"]);
   it("no org-owned model declares a single-field @unique on a non-global field", () => {
     const offenders: string[] = [];
     for (const m of orgOwned()) {
@@ -114,6 +127,11 @@ describe("timestamp conventions", () => {
     SimulationRun: "startedAt",
     // A support session's creation IS its start (ADR-023); startedAt says more.
     ImpersonationSession: "startedAt",
+    // A payment's creation IS when it was recorded/settled (doc 13 §4.2 keeps
+    // paidAt, not createdAt); paidAt says more.
+    Payment: "paidAt",
+    // An inbound provider event's creation IS when we received it (doc 09).
+    PaymentProviderEvent: "receivedAt",
   };
 
   it("every org-owned model has createdAt or a documented creation stamp", () => {

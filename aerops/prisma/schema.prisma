@@ -120,7 +120,8 @@ model SubscriptionPlan {
   /// Module keys available on this plan (see lib/features.ts MODULES)
   modules           String[]
 
-  organizations Organization[]
+  organizations       Organization[]
+  platformFeePolicies PlatformFeePolicy[]
 }
 
 /// Immutable trail of every important action, tenant and platform alike.
@@ -315,6 +316,23 @@ model Organization {
   paymentCustomers         PaymentCustomer[]
   paymentMethodReferences  PaymentMethodReference[]
   paymentConsents          PaymentConsent[]
+
+  // Revenue Engine — Phase 5 (M10): payment execution + financial ledger
+  payments                 Payment[]
+  instructorEarnings       InstructorEarning[]
+  refunds                  Refund[]
+  disputes                 Dispute[]
+  scheduledCharges         ScheduledCharge[]
+  paymentAttempts          PaymentAttempt[]
+  paymentProviderEvents    PaymentProviderEvent[]
+  revenueAllocations       RevenueAllocation[]
+  platformFeePolicies      PlatformFeePolicy[]
+  platformFees             PlatformFee[]
+  ledgerEntries            LedgerEntry[]
+  providerPayouts          ProviderPayout[]
+  reconciliationExceptions ReconciliationException[]
+  connectedAccount         ConnectedAccount?
+  financialHolds           FinancialHold[]
 
   @@index([status])
   @@index([orgType])
@@ -620,6 +638,7 @@ model Student {
   studentPayerRelationships StudentPayerRelationship[]
   revenueReviews            RevenueReview[]
   paymentCustomers          PaymentCustomer[]
+  financialHolds            FinancialHold[]
 
   @@index([assignedInstructorId])
 }
@@ -648,6 +667,7 @@ model Instructor {
   instructorRateProfiles InstructorRateProfile[]
   revenueReviews         RevenueReview[]
   instructorTimeEntries  InstructorTimeEntry[]
+  earnings               InstructorEarning[]
 }
 
 model InstructorAvailability {
@@ -1197,6 +1217,14 @@ model Invoice {
   payments     Payment[]
   revenueReview RevenueReview?
 
+  // Revenue Engine — Phase 5 (M10). scheduledCharge is 1:1 (invoiceId @unique);
+  // platformFees/disputes/paymentAttempts/allocations are 1:many (FK not unique).
+  allocations     RevenueAllocation[]
+  platformFees    PlatformFee[]
+  disputes        Dispute[]
+  scheduledCharge ScheduledCharge?
+  paymentAttempts PaymentAttempt[]
+
   @@unique([organizationId, number])
   @@index([organizationId, status])
   @@index([studentId])
@@ -1239,15 +1267,31 @@ enum PaymentMethod {
 
 model Payment {
   id        String        @id @default(cuid())
+  /// NEW (Phase 5) — direct org scope for reporting/reconciliation (R19);
+  /// nullable, backfilled from invoice.organizationId, tightened later.
+  organizationId String?
   invoiceId String
   amount    Decimal       @db.Decimal(10, 2)
+  /// NEW (Phase 5) — ISO 4217; non-null with "USD" default.
+  currency  String        @default("USD") @db.Char(3)
   method    PaymentMethod @default(CARD)
   reference String? // Stripe payment intent id, check #, ...
+  /// NEW (Phase 5) — exactly one Payment per successful attempt (§7).
+  paymentAttemptId String? @unique
   paidAt    DateTime      @default(now())
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// CHANGED (Phase 5): Cascade → Restrict. A settled-money record must never
+  /// cascade-delete with its invoice (00's landmine). Metadata-only ALTER;
+  /// tenant wipe deletes payments before invoices (§10).
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  attempt PaymentAttempt? @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+
+  refunds  Refund[]
+  disputes Dispute[]
 
   @@index([invoiceId])
+  @@index([organizationId, paidAt]) // NEW — org/date payment reporting
 }
 
 // ---------------------------------------------------------------------------
@@ -2292,8 +2336,9 @@ model InstructorRateProfile {
   location     Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
   syllabus     Syllabus?    @relation(fields: [syllabusId], references: [id], onDelete: SetNull)
 
-  lines InstructorRateProfileLine[]
-  // TRIMMED (Phase 3): earnings InstructorEarning[]  /  invoiceLines InvoiceLine[]
+  lines    InstructorRateProfileLine[]
+  earnings InstructorEarning[]
+  // TRIMMED (Phase 3): invoiceLines InvoiceLine[]
 
   @@unique([organizationId, kind, familyId, version])
   @@index([organizationId, kind, status])
@@ -2633,9 +2678,17 @@ model RevenueReview {
 
   approvals   RevenueReviewApproval[]
   timeEntries InstructorTimeEntry[]
-  // TRIMMED (later phases): earnings, taxSnapshots, adjustments,
-  // allocations, creditApplications, promoRedemptions, targetedCredits,
-  // scheduledCharge, platformFee, disputes. paymentMethodRefId column kept (scalar).
+
+  // Revenue Engine — Phase 5 (M10). platformFee/scheduledCharge are 1:1
+  // (revenueReviewId @unique on those models); allocations/disputes/earnings
+  // are 1:many (FK not unique / nullable).
+  allocations     RevenueAllocation[]
+  platformFee     PlatformFee?
+  scheduledCharge ScheduledCharge?
+  disputes        Dispute[]
+  earnings        InstructorEarning[]
+  // TRIMMED (later phases): taxSnapshots, adjustments, creditApplications,
+  // promoRedemptions, targetedCredits (models not built).
 
   @@unique([organizationId, number])
   @@index([organizationId, status])
@@ -2697,7 +2750,8 @@ model InstructorTimeEntry {
   review        RevenueReview  @relation(fields: [revenueReviewId], references: [id], onDelete: Cascade)
   instructor    Instructor     @relation(fields: [instructorId], references: [id], onDelete: Restrict)
   scheduleEvent ScheduleEvent? @relation(fields: [scheduleEventId], references: [id], onDelete: SetNull)
-  // TRIMMED (Phase 3 later): earning InstructorEarning?  /  invoiceLines InvoiceLine[]
+  earning       InstructorEarning? // 1:1 (InstructorEarning.timeEntryId is the unique FK)
+  // TRIMMED (Phase 3 later): invoiceLines InvoiceLine[]
 
   @@index([organizationId, createdAt])
   @@index([revenueReviewId])
@@ -2781,9 +2835,9 @@ model PaymentMethodReference {
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer     PaymentCustomer @relation(fields: [paymentCustomerId], references: [id], onDelete: Cascade)
 
-  revenueReviews RevenueReview[]
-  consents       PaymentConsent[]
-  // TRIMMED (Phase 5): scheduledCharges ScheduledCharge[]
+  revenueReviews   RevenueReview[]
+  consents         PaymentConsent[]
+  scheduledCharges ScheduledCharge[]
 
   @@unique([organizationId, provider, providerPaymentMethodId])
   @@index([paymentCustomerId, status])
@@ -2833,4 +2887,637 @@ model PaymentConsent {
   @@index([paymentMethodReferenceId, revokedAt])
   @@index([organizationId, paymentCustomerId])
   @@index([organizationId, createdAt])
+}
+
+// ===========================================================================
+// Revenue Engine — Phase 5 (M10): payment execution + financial ledger.
+// Largest, financial layer. Models transcribed from
+// docs/architecture/revenue-engine/13-database-model.md and 34-part2-database-additions.md.
+// Forward relations to models not built in this phase (FinancialExportJob,
+// RevenueAdjustment, CustomerCredit) are TRIMMED — scalar id columns kept.
+// ===========================================================================
+
+enum InstructorEarningStatus {
+  PENDING   // written when compensationApprovalMode = SEPARATE_APPROVAL
+  APPROVED  // payable fact; AUTO_ON_REVIEW_APPROVAL writes rows here directly
+  EXPORTED  // stamped atomically by a FinancialExportJob (Part 3)
+  REVERSED  // fully offset by reversal rows
+  // PAID is deliberately absent — added additively if Part 3 ships payouts (R6)
+}
+
+/// Append-only Instructor Compensation snapshot written at Revenue Review
+/// approval (docs 04 + 12 merged per R6). Corrections/refund clawbacks are
+/// signed reversal rows — never updates.
+model InstructorEarning {
+  id              String  @id @default(cuid())
+  organizationId  String
+  instructorId    String
+  revenueReviewId String
+  timeEntryId     String? @unique // 1:1 for primary earnings; null on reversal rows
+
+  category    InstructorTimeCategory
+  customLabel String?
+
+  hours    Decimal @db.Decimal(6, 2)
+  rate     Decimal @db.Decimal(12, 2)  // resolved compensation rate snapshot (R11)
+  amount   Decimal @db.Decimal(12, 2)  // signed; reversal rows negative; round-half-up(hours × rate)
+  currency String  @db.Char(3)
+
+  classification     InstructorClassification // snapshot at approval
+  rateProfileId      String?                  // provenance — SetNull so history survives config cleanup
+  rateProfileVersion Int?
+  rateSource         Json?                    // resolution trace: tier, candidates, linkage math, ambiguity
+
+  status           InstructorEarningStatus @default(PENDING)
+  approvedByUserId String?
+  approvedAt       DateTime?
+  exportJobId      String?
+  exportedAt       DateTime?
+
+  reversesEarningId String? // set on reversal rows
+  reversalReason    String? // required on reversal rows (engine-enforced)
+  notes             String?
+
+  createdAt DateTime @default(now()) // = approval time for primary rows
+
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  instructor      Instructor             @relation(fields: [instructorId], references: [id], onDelete: Restrict)
+  revenueReview   RevenueReview          @relation(fields: [revenueReviewId], references: [id], onDelete: Restrict)
+  timeEntry       InstructorTimeEntry?   @relation(fields: [timeEntryId], references: [id], onDelete: SetNull)
+  rateProfile     InstructorRateProfile? @relation(fields: [rateProfileId], references: [id], onDelete: SetNull)
+  // TRIMMED (not in Phase 5): exportJob FinancialExportJob? — FinancialExportJob unbuilt; exportJobId scalar kept
+  reversesEarning InstructorEarning?     @relation("EarningReversal", fields: [reversesEarningId], references: [id], onDelete: Restrict)
+  reversals       InstructorEarning[]    @relation("EarningReversal")
+
+  @@index([organizationId, instructorId, createdAt])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([revenueReviewId])
+}
+
+enum RefundDestination {
+  ORIGINAL_METHOD
+  CUSTOMER_CREDIT
+  MANUAL
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+/// Refund execution record against one specific Payment (doc 08). Amount is
+/// capped at captured minus prior succeeded/in-flight refunds, checked
+/// in-transaction. Provider mechanics (Stripe test mode, webhooks) land in Part 2.
+model Refund {
+  id               String            @id @default(cuid())
+  organizationId   String
+  adjustmentId     String            @unique // one refund per adjustment — replay guard
+  paymentId        String
+  amount           Decimal           @db.Decimal(12, 2)
+  currency         String            @db.Char(3)
+  destination      RefundDestination
+  status           RefundStatus      @default(PENDING)
+  providerRefundId String?           // opaque re_... reference — safe metadata only
+  issuedCreditId   String?           // when destination = CUSTOMER_CREDIT
+  failureReason    String?
+  processedAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // TRIMMED (not in Phase 5): adjustment RevenueAdjustment — unbuilt; adjustmentId scalar kept
+  payment      Payment           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  // TRIMMED (not in Phase 5): issuedCredit CustomerCredit? — unbuilt; issuedCreditId scalar kept
+
+  @@index([organizationId, status]) // reconciliation queue
+  @@index([paymentId])
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  WON
+  LOST
+  WARNING_CLOSED
+}
+
+/// Provider dispute/chargeback record. Shape bound in Part 1; the writer is
+/// the Part 2 webhook processor (no dispute can exist before live provider
+/// events). Only opaque references and safe metadata are stored (principle 8).
+model Dispute {
+  id                String          @id @default(cuid())
+  organizationId    String
+  invoiceId         String
+  revenueReviewId   String?
+  paymentId         String?
+  provider          PaymentProvider @default(STRIPE)
+  providerDisputeId String
+  amount            Decimal         @db.Decimal(12, 2)
+  currency          String          @db.Char(3)
+  reason            String?         // provider reason code
+  status            DisputeStatus   @default(OPEN)
+  evidenceDueBy     DateTime?
+  openedAt          DateTime
+  resolvedAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  review       RevenueReview? @relation(fields: [revenueReviewId], references: [id], onDelete: SetNull)
+  payment      Payment?       @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerDisputeId])
+  @@index([organizationId, status])
+}
+
+enum ScheduledChargeStatus {
+  SCHEDULED
+  AWAITING_MANUAL
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED // R12 spelling
+}
+
+enum PaymentAttemptStatus {
+  CREATED
+  PROCESSING // holds the ACH pending window
+  SUCCEEDED
+  FAILED
+  CANCELLED // R12 spelling
+}
+
+enum PaymentAttemptTrigger {
+  IMMEDIATE_ON_APPROVAL
+  BATCH
+  MANUAL
+  AUTO_RETRY
+}
+
+/// The per-approval collection anchor and immutable payment-timing snapshot
+/// (doc 09). Exactly one per approved Revenue Review, created inside the
+/// approval transaction for EVERY policy (including MANUAL_INVOICE). Status
+/// moves only via guarded updateMany claims.
+model ScheduledCharge {
+  id              String              @id @default(cuid())
+  organizationId  String
+  revenueReviewId String              @unique // second link in the Dispatch→Review→Charge chain
+  invoiceId       String              @unique
+  policy          PaymentTimingPolicy // write-once snapshot of the effective policy
+  runAfter        DateTime?           // computed at approval in org timeZone; null for MANUAL_*; mutable only for retry slots
+  amount          Decimal             @db.Decimal(12, 2) // invoice total locked at approval
+  currency        String              @db.Char(3)
+  paymentMethodReferenceId String?    // re-pointable only in FAILED/AWAITING_MANUAL, audited
+  status          ScheduledChargeStatus @default(SCHEDULED)
+  attemptCount    Int                 @default(0)
+  lastAttemptId   String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  review       RevenueReview           @relation(fields: [revenueReviewId], references: [id], onDelete: Restrict)
+  invoice      Invoice                 @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  method       PaymentMethodReference? @relation(fields: [paymentMethodReferenceId], references: [id], onDelete: SetNull)
+  attempts     PaymentAttempt[]
+
+  @@index([organizationId, status, runAfter]) // per-org runner queue
+  @@index([status, runAfter])                 // platform batch sweep (cross-org, authorizePlatform-only)
+  @@index([organizationId, createdAt])        // reconciliation
+}
+
+/// Append-only record of each charge try (doc 09). Carries the deterministic
+/// per-attempt provider idempotency key; a stuck PROCESSING attempt is
+/// resolved reconcile-then-proceed, never paralleled.
+model PaymentAttempt {
+  id                      String               @id @default(cuid())
+  organizationId          String
+  scheduledChargeId       String
+  attemptNumber           Int
+  invoiceId               String
+  /// Deterministic: "sc_<scheduledChargeId>_a<attemptNumber>" — sent as the
+  /// provider Idempotency-Key header.
+  idempotencyKey          String               @unique
+  provider                PaymentProvider      @default(STRIPE)
+  providerPaymentIntentId String?              // opaque pi_... reference
+  status                  PaymentAttemptStatus @default(CREATED)
+  trigger                 PaymentAttemptTrigger
+  amount                  Decimal              @db.Decimal(12, 2) // server-resolved, never client-supplied
+  currency                String               @db.Char(3)
+  // Denormalized method snapshot — survives method detachment
+  methodType  StoredPaymentMethodType?
+  methodBrand String?
+  methodLast4 String?
+  failureCode    String? // decline / ACH return code (R01...)
+  failureMessage String?
+  initiatedByUserId String?
+  initiatedByLabel  String  // human, or "system:payment-runner"
+  createdAt    DateTime  @default(now())
+  processingAt DateTime?
+  settledAt    DateTime?
+  failedAt     DateTime?
+  cancelledAt  DateTime?
+
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scheduledCharge ScheduledCharge @relation(fields: [scheduledChargeId], references: [id], onDelete: Restrict)
+  invoice         Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  payment         Payment?        // 1:1 back-relation (FK on Payment)
+
+  @@unique([scheduledChargeId, attemptNumber])     // serializes retries
+  @@unique([provider, providerPaymentIntentId])    // one local attempt per provider intent
+  @@index([organizationId, status, createdAt])     // payment-status queues & reconciliation
+  @@index([invoiceId])
+}
+
+/// Inbound provider webhook idempotency + forensic store (doc 09) — the spec's
+/// "WebhookEvent" (R16). Unique-insert pattern: a duplicate delivery cannot
+/// double-apply. Audit-grade: organizationId is SetNull (resolved server-side
+/// from event metadata only) and the table is excluded from org-snapshot
+/// wipe/restore, like AuditLog.
+model PaymentProviderEvent {
+  id              String          @id @default(cuid())
+  provider        PaymentProvider @default(STRIPE)
+  providerEventId String          // evt_...
+  type            String
+  payload         Json            // retained for forensic replay; never card/bank data (provider events carry none for our object set)
+  organizationId  String?
+  receivedAt      DateTime        @default(now())
+  processedAt     DateTime?
+  processingError String?
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerEventId]) // Stripe event IDs must be unique (spec Part L)
+  @@index([organizationId, receivedAt])
+  @@index([type, receivedAt])
+}
+
+enum AllocationEvent {
+  APPROVAL
+  ADJUSTMENT
+  REFUND
+  VOID
+  WRITE_OFF
+}
+
+enum AllocationDimension {
+  REVENUE
+  PROCEEDS
+}
+
+enum AllocationCategory {
+  AIRCRAFT_REVENUE
+  INSTRUCTOR_SERVICE_REVENUE
+  AIRPORT_LANDING_FEES
+  FUEL_REVENUE
+  TAX
+  OTHER_REVENUE
+  PLATFORM_FEE            // PROCEEDS dimension only
+  SCHOOL_RETAINED_REVENUE // PROCEEDS dimension only
+}
+
+/// Immutable, signed, set-balanced split of every financial event on a review
+/// into Part B allocation categories, in two dimensions that each sum to the
+/// event amount (doc 12). Refunds/adjustments/voids write signed reversal sets.
+model RevenueAllocation {
+  id              String              @id @default(cuid())
+  organizationId  String
+  revenueReviewId String
+  invoiceId       String
+  setId           String              // groups one balanced set per financial event
+  event           AllocationEvent
+  dimension       AllocationDimension
+  category        AllocationCategory
+  amount          Decimal             @db.Decimal(12, 2) // signed; reversals negative
+  currency        String              @db.Char(3)
+  sourceType      String?             // provenance of non-approval sets (RevenueAdjustment | Refund | ...)
+  sourceId        String?
+  /// Accounting-period bucket — copied in the same transaction from the
+  /// effectiveAt of the triggering LedgerEntry journal (or of the adjustment/
+  /// refund source that produced the set). Binding rule: every reporting
+  /// surface and export (Revenue Dashboard, Revenue Reports, doc 12 §2.8
+  /// report set, FinancialExportJob outputs) buckets allocations on
+  /// effectiveAt, never createdAt, so correction/refund sets land in the same
+  /// period across reports, ledger, and exports.
+  effectiveAt     DateTime
+  createdAt       DateTime            @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  review       RevenueReview @relation(fields: [revenueReviewId], references: [id], onDelete: Restrict)
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([setId, dimension, category])
+  @@index([organizationId, category, effectiveAt]) // Revenue Dashboard / Revenue Reports (period bucketing)
+  @@index([organizationId, effectiveAt])
+  @@index([revenueReviewId])
+  @@index([invoiceId])
+}
+
+enum PlatformFeeBase {
+  COLLECTED_PRETAX
+  COLLECTED_TOTAL
+}
+
+enum PlatformFeeStatus {
+  ACCRUED
+  EARNED
+  PARTIALLY_REVERSED
+  REVERSED
+  VOIDED
+}
+
+/// Platform-owned, effective-dated pricing for AeroOps' fee on collected
+/// tenant revenue (doc 12). Resolution: org override → plan → global default
+/// (both FKs null). Managed only via authorizePlatform surfaces; versions are
+/// never overwritten.
+model PlatformFeePolicy {
+  id               String          @id @default(cuid())
+  planId           String?
+  organizationId   String?         // per-org override
+  feePercentBps    Int             @default(0)
+  feeFlatAmount    Decimal         @default(0) @db.Decimal(12, 2)
+  feeBase          PlatformFeeBase @default(COLLECTED_PRETAX)
+  minFee           Decimal?        @db.Decimal(12, 2)
+  maxFee           Decimal?        @db.Decimal(12, 2)
+  currency         String          @default("USD") @db.Char(3) // denominates feeFlatAmount/minFee/maxFee (§2.3)
+  refundReversesFee Boolean        @default(true)
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now())
+
+  plan         SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fees         PlatformFee[]
+
+  @@index([organizationId, effectiveFrom])
+  @@index([planId])
+}
+
+/// AeroOps' earned fee for one paid Revenue Review — accrued at approval with
+/// a full basis snapshot, earned at collection, reversed on refund (doc 12).
+/// Tenant-visible; bridges tenant revenue and the platform money system.
+model PlatformFee {
+  id                String            @id @default(cuid())
+  organizationId    String
+  revenueReviewId   String            @unique
+  invoiceId         String
+  status            PlatformFeeStatus @default(ACCRUED)
+  feePercentBps     Int
+  feeFlatAmount     Decimal           @db.Decimal(12, 2)
+  feeBase           PlatformFeeBase
+  appliedBaseAmount Decimal           @db.Decimal(12, 2)
+  amount            Decimal           @db.Decimal(12, 2)
+  reversedAmount    Decimal           @default(0) @db.Decimal(12, 2)
+  currency          String            @db.Char(3)
+  policyId          String?
+  policyVersion     Int?
+  providerRef       String?           // Stripe application-fee id (Part 2) — opaque only
+  /// Stamped in the settlement transaction that flips status → EARNED (doc 12).
+  /// Earned-by-period reporting (Revenue Dashboard tile, Platform Fee
+  /// Statement) buckets on this, never on createdAt (= accrual time).
+  earnedAt          DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  review       RevenueReview      @relation(fields: [revenueReviewId], references: [id], onDelete: Restrict)
+  invoice      Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  policy       PlatformFeePolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+}
+
+enum LedgerAccount {
+  ACCOUNTS_RECEIVABLE
+  PAYMENT_CLEARING
+  CASH_ON_PREMISES
+  REVENUE_AIRCRAFT
+  REVENUE_INSTRUCTION
+  REVENUE_AIRPORT_FEES
+  REVENUE_FUEL
+  REVENUE_OTHER
+  CONTRA_REVENUE_DISCOUNTS
+  TAX_PAYABLE
+  PLATFORM_FEE_EXPENSE
+  PLATFORM_FEE_PAYABLE
+  INSTRUCTOR_COMP_EXPENSE
+  INSTRUCTOR_COMP_PAYABLE
+  PROCESSOR_FEES_EXPENSE
+  BAD_DEBT_EXPENSE
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+/// Append-only double-entry spine (doc 12). Sole writer: src/lib/ledger.ts.
+/// Every journal balances (Σ debits = Σ credits, one currency per journal);
+/// corrections are reversing journals, never edits or deletes.
+model LedgerEntry {
+  id             String          @id @default(cuid())
+  organizationId String
+  journalId      String
+  event          String          // dot-namespaced financial event, e.g. "revenue_review.approved"
+  account        LedgerAccount
+  direction      LedgerDirection
+  amount         Decimal         @db.Decimal(12, 2) // always > 0 (engine-enforced)
+  currency       String          @db.Char(3)
+  sourceType     String          // RevenueReview | Payment | Refund | PlatformFee | InstructorEarning | ...
+  sourceId       String
+  effectiveAt    DateTime        // reporting bucket in org timeZone
+  createdAt      DateTime        @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, account, effectiveAt])
+  @@index([organizationId, journalId])
+  @@index([sourceType, sourceId]) // reconciliation lookups
+}
+
+enum PayoutStatus {
+  PENDING
+  IN_TRANSIT
+  PAID
+  FAILED
+  RECONCILED
+  RECONCILED_WITH_EXCEPTIONS
+}
+
+/// Provider payout record (populated by the Part 2 webhook processor) for
+/// payout ↔ ledger ↔ invoice matching (doc 12).
+model ProviderPayout {
+  id               String       @id @default(cuid())
+  organizationId   String
+  provider         String       @default("stripe")
+  providerPayoutId String       // po_...
+  status           PayoutStatus @default(PENDING)
+  amount           Decimal      @db.Decimal(12, 2)
+  grossAmount      Decimal      @db.Decimal(12, 2)
+  feesAmount       Decimal      @db.Decimal(12, 2)
+  currency         String       @db.Char(3)
+  arrivalDate      DateTime?
+  matchedCount     Int          @default(0)
+  unmatchedCount   Int          @default(0)
+  raw              Json?        // provider composition for forensics — never card/bank data
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider, providerPayoutId])
+  @@index([organizationId, status])
+}
+
+enum ReconciliationExceptionKind {
+  MISSING_LOCAL_TRANSACTION
+  MISSING_PROVIDER_TRANSACTION
+  AMOUNT_MISMATCH
+  FEE_MISMATCH
+  UNBALANCED_JOURNAL
+  ALLOCATION_MISMATCH
+  STALE_PENDING_PAYMENT
+}
+
+enum ReconciliationExceptionStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+/// One row per unmatched/inconsistent item from the structural invariant
+/// checks (R1–R6 in doc 12), payout matching, and staleness watches.
+model ReconciliationException {
+  id               String                        @id @default(cuid())
+  organizationId   String
+  kind             ReconciliationExceptionKind
+  status           ReconciliationExceptionStatus @default(OPEN)
+  providerRef      String?
+  sourceType       String?
+  sourceId         String?
+  payoutId         String?
+  expectedAmount   Decimal?                      @db.Decimal(12, 2)
+  actualAmount     Decimal?                      @db.Decimal(12, 2)
+  currency         String?                       @db.Char(3) // set whenever expectedAmount/actualAmount are recorded (§2.3)
+  detectedAt       DateTime                      @default(now())
+  resolvedByUserId String?
+  resolvedAt       DateTime?
+  resolutionNote   String?                       // required to resolve (audited)
+  createdAt        DateTime                      @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])         // exception queue
+  @@index([organizationId, kind, detectedAt])
+}
+
+enum ConnectedAccountStatus {
+  NOT_STARTED // reserved for completeness; an absent row represents it — no writer stores this value
+  PENDING
+  REQUIREMENTS_DUE
+  RESTRICTED
+  ENABLED
+  DISABLED
+  SUSPENDED
+}
+
+/// Org 1:1 mirror of the payment provider's connected account (spec Part P).
+/// Provider facts + AeroOps control fields — never a financial record: no
+/// balances, no payout amounts, no KYC values, no secrets. Absent row =
+/// NOT_STARTED. Charge gate (R-P2): chargesEnabled && status ∈ {ENABLED,
+/// REQUIREMENTS_DUE}. Written only by the doc 19 sync reducer + platform
+/// suspend/reinstate; every status change audited.
+model ConnectedAccount {
+  id                String                 @id @default(cuid())
+  organizationId    String                 @unique // structural 1:1 — an org cannot acquire two accounts (ADR-037)
+  provider          PaymentProvider        @default(STRIPE)
+  providerAccountId String?                // opaque acct_… — not a secret; null during the provisioning window
+  status            ConnectedAccountStatus @default(PENDING) // stored projection of the doc 19 derivation; recomputed on every sync
+
+  // ---- Provider-mirrored facts (sync reducer only) ----
+  chargesEnabled   Boolean @default(false)
+  payoutsEnabled   Boolean @default(false)
+  detailsSubmitted Boolean @default(false)
+  /// Requirement KEYS + deadline only — never submitted values:
+  /// { currentlyDue: string[], eventuallyDue: string[], pastDue: string[], currentDeadline: string | null }
+  requirementsDue     Json?
+  disabledReason      String? // provider vocabulary (e.g. "requirements.past_due"); catalog-validated in src/lib
+  country             String? @db.Char(2) // ISO 3166-1 alpha-2; "US" in Part 2
+  defaultCurrency     String? @db.Char(3) // ISO 4217 uppercase; must equal RevenueSettings.currency (R-P14)
+  businessType        String? // "individual" | "company" | "non_profit" — engine-validated catalog (R25)
+  statementDescriptor String? // what payers see on statements — mirrored display only; edited on Stripe-hosted surfaces
+  capabilities        Json?   // requested capability → status map, e.g. { card_payments: "active" }
+  providerStateAsOf   DateTime? // provider-clock watermark — out-of-order webhook guard
+  lastStatusSyncAt    DateTime? // our clock; staleness signal for the reconciliation sweep
+
+  // ---- AeroOps control fields ----
+  termsVersion                String?   // in-app AeroOps connected-payments terms version
+  termsAcceptedAt             DateTime?
+  termsAcceptedByUserId       String?
+  termsAcceptedByLabel        String?
+  onboardingInitiatedAt       DateTime?
+  onboardingInitiatedByUserId String?
+  onboardingInitiatedByLabel  String?
+  firstEnabledAt              DateTime? // write-once: first time chargesEnabled flipped true
+  suspendedAt                 DateTime? // sticky platform hold; status derives SUSPENDED while set
+  suspendedReason             String?
+  suspendedByLabel            String?   // platform-staff display label (doc 13 R18)
+  deauthorizedAt              DateTime? // account.application.deauthorized
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId]) // webhook tenancy: signed envelope account id → exactly one org (nulls exempt)
+  @@index([status, lastStatusSyncAt])     // platform console queue + staleness sweep (authorizePlatform-only cross-org read)
+}
+
+enum FinancialHoldStatus {
+  ACTIVE
+  LIFTED
+}
+
+enum FinancialHoldSource {
+  MANUAL            // staff-placed
+  POLICY_ESCALATION // auto-placed by the escalation pass (OrgPaymentPolicy.autoHoldAfterEscalation)
+}
+
+/// "Membership financial hold" (customer-facing name). Anchored to the
+/// Student — the dispatchable, billable subject (R-P16). Feeds the
+/// MEMBERSHIP_FINANCIAL_HOLD checkout-restriction key. Rows are never
+/// deleted — lifting stamps status/liftedAt (audit-shaped history).
+/// POLICY_ESCALATION holds auto-lift when the subject's Amount Due reaches
+/// zero; MANUAL holds lift only by a human with a reason.
+model FinancialHold {
+  id               String              @id @default(cuid())
+  organizationId   String
+  studentId        String
+  status           FinancialHoldStatus @default(ACTIVE)
+  source           FinancialHoldSource
+  reason           String              // required, non-empty
+  contextReviewIds String[]            @default([]) // advisory links to the failed reviews behind the hold
+  placedByUserId   String?             // null for POLICY_ESCALATION
+  placedByLabel    String              // "Sarah Chen" | "system:payment-runner"
+  liftedAt         DateTime?
+  liftedByUserId   String?
+  liftedByLabel    String?
+  liftedReason     String?             // required on manual lift (engine-enforced)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  // Raw-SQL partial unique (doc 13 R4 idiom; schema-governance allowlist, §13 Q3):
+  //   CREATE UNIQUE INDEX "FinancialHold_active_key"
+  //   ON "FinancialHold"("studentId") WHERE status = 'ACTIVE';
+  @@index([organizationId, status])
+  @@index([organizationId, studentId, createdAt])
 }

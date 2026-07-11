@@ -116,6 +116,6 @@ export type ApprovalSnapshot = {
   tax: { total: string; perRule: { ruleKey: string; jurisdiction: string; tax: string }[] };
   total: string;
   paymentPolicy: string;
-  platformFee: null; // placeholder only — computed/collected in Parts 2–3 (no value frozen yet)
+  platformFee: string | null; // AeroOps fee accrued at approval (0.00 when no policy)
   approvals: { kind: string; approverLabel: string; at: string }[];
 };

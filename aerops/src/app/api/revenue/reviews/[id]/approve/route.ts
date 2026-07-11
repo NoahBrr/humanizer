@@ -7,6 +7,11 @@ import { logger } from "@/lib/logger";
 import { emitDomainEvent } from "@/lib/events";
 import { APPROVABLE, requiredApprovalKinds, type ApprovalSnapshot } from "@/lib/revenue-review";
 import { computeTax, type TaxableLine, type TaxRuleInput } from "@/lib/tax";
+import { postJournal, debit, credit, nonZero, type JournalLine } from "@/lib/ledger";
+import { categorizeLines, buildApprovalAllocationRows, postAllocationSet } from "@/lib/revenue-allocation";
+import { resolvePlatformFeePolicy, feeBaseAmount, computePlatformFee, accruePlatformFee } from "@/lib/platform-fee";
+import { birthEarnings } from "@/lib/instructor-compensation";
+import type { AllocationCategory, LedgerAccount } from "@prisma/client";
 
 /**
  * Approve a Revenue Review (doc 03 §2). Records the actor's approval signature;
@@ -49,7 +54,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     include: {
       invoice: { include: { lines: true } },
       approvals: true,
-      organization: { select: { revenueWorkflowPolicy: true, orgPaymentPolicy: true, revenueSettings: true } },
+      timeEntries: true,
+      organization: { select: { planId: true, revenueWorkflowPolicy: true, orgPaymentPolicy: true, revenueSettings: true } },
     },
   });
   if (!review) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -83,6 +89,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (staleGuard.expectedTotal && staleGuard.expectedTotal !== total.toFixed(2)) {
     return NextResponse.json({ error: "The total changed since you opened this review — refresh and review the current numbers before approving." }, { status: 409 });
   }
+
+  // Platform fee — resolved + computed BEFORE the tx (deterministic) so the
+  // snapshot and the accrued row agree exactly. Default policy is 0 bps.
+  const feePolicy = await resolvePlatformFeePolicy(session.organizationId, review.organization.planId, new Date());
+  const feeAmount = computePlatformFee(feePolicy, feeBaseAmount(feePolicy.feeBase, subtotal, total));
 
   // ---- Determine required vs provided approval kinds ----
   const required = requiredApprovalKinds(policy, total.toNumber(), review.secondApprovalRequired);
@@ -164,7 +175,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         tax: { total: taxComputation.totalTax.toFixed(2), perRule: taxComputation.perRule.map((r) => ({ ruleKey: r.ruleKey, jurisdiction: r.jurisdictionLabel, tax: r.tax.toFixed(2) })) },
         total: total.toFixed(2),
         paymentPolicy,
-        platformFee: null,
+        platformFee: feeAmount.toFixed(2),
         approvals: [...active.map((a) => ({ kind: a.kind, approverLabel: a.approverLabel, at: a.createdAt.toISOString() })), { kind: nextKind, approverLabel: actorLabel, at: new Date().toISOString() }],
       };
 
@@ -183,6 +194,57 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
       // Finalize the wrapped invoice: DRAFT → OPEN (now a real receivable).
       await tx.invoice.update({ where: { id: review.invoiceId }, data: { status: "OPEN", dueAt: new Date(Date.now() + 14 * 86_400_000) } });
+
+      // ---- Financial core (doc 12/28). Every posting balances or the whole
+      // ---- approval aborts (assertions throw inside the tx). ----
+      const approvedAt = new Date();
+
+      // 1. Instructor compensation earnings (structurally separate from billing).
+      const compTotal = await birthEarnings(tx, {
+        organizationId: session.organizationId,
+        instructorId: review.instructorId ?? "",
+        revenueReviewId: review.id,
+        locationId: review.locationId,
+        currency: review.currency,
+        approvedAt,
+        timeEntries: review.timeEntries.map((t) => ({ id: t.id, category: t.category, customLabel: t.customLabel, hours: t.hours, compensable: t.compensable })),
+        compensationApprovalMode: settings?.compensationApprovalMode ?? "AUTO_ON_REVIEW_APPROVAL",
+      });
+
+      // 2. Platform fee — ACCRUED with a full basis snapshot (0.00 default).
+      await accruePlatformFee(tx, {
+        organizationId: session.organizationId, revenueReviewId: review.id, invoiceId: review.invoiceId,
+        policy: feePolicy, subtotal, total, currency: review.currency,
+      });
+
+      // 3. Balanced approval journal J1 (revenue recognized; A/R + comp accrual).
+      const catAmounts = categorizeLines(review.invoice.lines);
+      const revenueLines: JournalLine[] = [];
+      for (const [cat, amt] of catAmounts) {
+        if (amt.greaterThan(0)) revenueLines.push(credit(ledgerAccountForCategory(cat), amt));
+        else if (amt.lessThan(0)) revenueLines.push(debit("CONTRA_REVENUE_DISCOUNTS", amt.abs()));
+      }
+      const j1: JournalLine[] = nonZero([
+        debit("ACCOUNTS_RECEIVABLE", total),
+        ...(compTotal.greaterThan(0) ? [debit("INSTRUCTOR_COMP_EXPENSE", compTotal)] : []),
+        ...revenueLines,
+        ...(taxComputation.totalTax.greaterThan(0) ? [credit("TAX_PAYABLE", taxComputation.totalTax)] : []),
+        ...(compTotal.greaterThan(0) ? [credit("INSTRUCTOR_COMP_PAYABLE", compTotal)] : []),
+      ]);
+      await postJournal(tx, {
+        organizationId: session.organizationId, journalId: `jrnl_${review.id}_approved`,
+        event: "revenue_review.approved", sourceType: "RevenueReview", sourceId: review.id,
+        currency: review.currency, effectiveAt: approvedAt, lines: j1,
+      });
+
+      // 4. Balanced APPROVAL allocation set S1 (REVENUE + PROCEEDS dimensions).
+      const rows = buildApprovalAllocationRows({ categoryAmounts: catAmounts, taxAmount: taxComputation.totalTax, platformFee: feeAmount, total });
+      await postAllocationSet(tx, {
+        organizationId: session.organizationId, revenueReviewId: review.id, invoiceId: review.invoiceId,
+        setId: `set_${review.id}_approval`, event: "APPROVAL", currency: review.currency,
+        effectiveAt: approvedAt, amount: total, rows,
+      });
+
       return { status: "APPROVED" as const, approved: true };
     });
 
@@ -207,6 +269,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 class AlreadyResolved extends Error {}
+
+/** Revenue allocation category → its ledger revenue account (doc 28 taxonomy). */
+function ledgerAccountForCategory(cat: AllocationCategory): LedgerAccount {
+  switch (cat) {
+    case "AIRCRAFT_REVENUE": return "REVENUE_AIRCRAFT";
+    case "INSTRUCTOR_SERVICE_REVENUE": return "REVENUE_INSTRUCTION";
+    case "AIRPORT_LANDING_FEES": return "REVENUE_AIRPORT_FEES";
+    case "FUEL_REVENUE": return "REVENUE_FUEL";
+    default: return "REVENUE_OTHER";
+  }
+}
 
 // Invoice-line kind → tax charge-class + taxability (doc 07). Conservative
 // defaults; per-org Revenue Item taxability refines this in a later phase.
