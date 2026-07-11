@@ -83,7 +83,13 @@ describe("tenant-scoped uniqueness", () => {
   // etc.). It is tenant-safe by construction (the unique key IS the tenant), and
   // is the opposite of the natural-key-reverted-to-bare-@unique this rule guards
   // against. Contract expanded here when the Revenue Engine introduced singletons.
-  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email", "organizationId"]);
+  // `scheduleEventId` is allowed for the same structural reason: it is the FK of a
+  // 1:1 relation (ScheduleEvent 1:1 Dispatch), a system-generated cuid — never a
+  // tenant natural key. Dispatch became org-owned in Revenue Engine Phase 2 (it
+  // gained a nullable organizationId); its long-standing 1:1 `scheduleEventId
+  // @unique` is tenant-safe by construction (the referenced ScheduleEvent is itself
+  // org-scoped) and a 1:1-relation FK cannot be expressed as a composite @@unique.
+  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email", "organizationId", "inviteTokenHash", "scheduleEventId"]);
   it("no org-owned model declares a single-field @unique on a non-global field", () => {
     const offenders: string[] = [];
     for (const m of orgOwned()) {

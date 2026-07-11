@@ -297,6 +297,15 @@ model Organization {
   orgPaymentPolicy            OrgPaymentPolicy?
   accountingMappings          AccountingMapping[]
   revenueSettings             RevenueSettings?
+  // Revenue Engine — Phase 2 (M3–M7)
+  aircraftPricingProfiles      AircraftPricingProfile[]
+  instructorRateProfiles       InstructorRateProfile[]
+  revenueItems                 RevenueItem[]
+  taxRules                     TaxRule[]
+  responsiblePayers            ResponsiblePayer[]
+  studentPayerRelationships    StudentPayerRelationship[]
+  dispatchRestrictionDecisions DispatchRestrictionDecision[]
+  dispatches                   Dispatch[]
 
   @@index([status])
   @@index([orgType])
@@ -483,6 +492,8 @@ model User {
   impersonatedSessions ImpersonationSession[] @relation("ImpersonatedSessions")
   impersonatedAudits   AuditLog[]             @relation("ImpersonatedAudits")
 
+  responsiblePayers    ResponsiblePayer[]
+
   @@index([organizationId, role])
 }
 
@@ -510,6 +521,12 @@ model Location {
   primaryMemberships Membership[]    @relation("MembershipPrimaryLocation")
   aircraft           Aircraft[]
   scheduleEvents     ScheduleEvent[]
+
+  aircraftPricingProfiles AircraftPricingProfile[]
+  instructorRateProfiles  InstructorRateProfile[]
+  revenueItemLocations    RevenueItemLocation[]
+  taxRules                TaxRule[]
+  dispatches              Dispatch[]
 
   createdAt DateTime @default(now())
 
@@ -589,6 +606,8 @@ model Student {
   lessonRequests     LessonRequest[]
   waitlistEntries    WaitlistEntry[]
 
+  studentPayerRelationships StudentPayerRelationship[]
+
   @@index([assignedInstructorId])
 }
 
@@ -612,6 +631,8 @@ model Instructor {
   lessonRecords  LessonRecord[]
   checkrides     Checkride[]
   lessonRequests LessonRequest[]
+
+  instructorRateProfiles InstructorRateProfile[]
 }
 
 model InstructorAvailability {
@@ -705,6 +726,9 @@ model Aircraft {
   scheduleEvents ScheduleEvent[]
   dispatches     Dispatch[]
   documents      Document[]          @relation("AircraftDocuments")
+
+  aircraftPricingProfiles AircraftPricingProfile[]
+  revenueItemAircraft     RevenueItemAircraft[]
 
   createdAt DateTime @default(now())
 
@@ -911,12 +935,16 @@ enum DispatchStatus {
 }
 
 model Dispatch {
-  id              String         @id @default(cuid())
-  scheduleEventId String         @unique
-  aircraftId      String
-  studentId       String?
-  instructorId    String?
-  status          DispatchStatus @default(PENDING)
+  id               String         @id @default(cuid())
+  organizationId   String?
+  scheduleEventId  String         @unique
+  aircraftId       String
+  studentId        String?
+  instructorId     String?
+  locationId       String?
+  payerId          String?
+  pricingProfileId String?
+  status           DispatchStatus @default(PENDING)
 
   // Pre-flight release
   fuelQty             String?
@@ -927,28 +955,50 @@ model Dispatch {
   studentApproved     Boolean   @default(false)
   releasedAt          DateTime?
   releasedBy          String?
+  conditionOut        String?
+  squawksAcknowledged Boolean   @default(false)
+  intendedRoute       String?
+  releaseNotes        String?
+  restrictionSnapshot Json?
 
   // Post-flight closeout
-  hobbsOut       Decimal?  @db.Decimal(9, 1)
-  hobbsIn        Decimal?  @db.Decimal(9, 1)
-  tachOut        Decimal?  @db.Decimal(9, 1)
-  tachIn         Decimal?  @db.Decimal(9, 1)
-  flightTime     Decimal?  @db.Decimal(6, 1)
-  landings       Int?
-  nightTime      Decimal?  @db.Decimal(6, 1)
-  instrumentTime Decimal?  @db.Decimal(6, 1)
-  dualReceived   Decimal?  @db.Decimal(6, 1)
-  dualGiven      Decimal?  @db.Decimal(6, 1)
-  picTime        Decimal?  @db.Decimal(6, 1)
-  fuelAddedGal   Decimal?  @db.Decimal(6, 1)
-  closedAt       DateTime?
+  hobbsOut         Decimal?  @db.Decimal(9, 1)
+  hobbsIn          Decimal?  @db.Decimal(9, 1)
+  tachOut          Decimal?  @db.Decimal(9, 1)
+  tachIn           Decimal?  @db.Decimal(9, 1)
+  flightTime       Decimal?  @db.Decimal(6, 1)
+  landings         Int?
+  nightTime        Decimal?  @db.Decimal(6, 1)
+  instrumentTime   Decimal?  @db.Decimal(6, 1)
+  dualReceived     Decimal?  @db.Decimal(6, 1)
+  dualGiven        Decimal?  @db.Decimal(6, 1)
+  picTime          Decimal?  @db.Decimal(6, 1)
+  fuelAddedGal     Decimal?  @db.Decimal(6, 1)
+  closedAt         DateTime?
+  conditionIn      String?
+  oilAddedQt       Decimal?  @db.Decimal(4, 1)
+  airportsVisited  String?
+  returnNotes      String?
+  closedBy         String?
+  closeoutWarnings Json?
 
-  scheduleEvent ScheduleEvent @relation(fields: [scheduleEventId], references: [id], onDelete: Cascade)
-  aircraft      Aircraft      @relation(fields: [aircraftId], references: [id])
-  student       Student?      @relation(fields: [studentId], references: [id])
-  instructor    Instructor?   @relation(fields: [instructorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scheduleEvent  ScheduleEvent           @relation(fields: [scheduleEventId], references: [id], onDelete: Cascade)
+  aircraft       Aircraft                @relation(fields: [aircraftId], references: [id])
+  student        Student?                @relation(fields: [studentId], references: [id])
+  instructor     Instructor?             @relation(fields: [instructorId], references: [id])
+  organization   Organization?           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location       Location?               @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  payer          ResponsiblePayer?       @relation(fields: [payerId], references: [id], onDelete: SetNull)
+  pricingProfile AircraftPricingProfile? @relation(fields: [pricingProfileId], references: [id], onDelete: SetNull)
+
+  restrictionDecisions DispatchRestrictionDecision[]
 
   @@index([status])
+  @@index([organizationId, status])
+  @@index([organizationId, closedAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -966,6 +1016,9 @@ model Syllabus {
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   stages       SyllabusStage[]
   enrollments  SyllabusEnrollment[]
+
+  instructorRateProfiles InstructorRateProfile[]
+  revenueItemPrograms    RevenueItemProgram[]
 
   createdAt DateTime @default(now())
 
@@ -1237,6 +1290,8 @@ model Document {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   owner        User?        @relation("DocumentOwner", fields: [ownerId], references: [id])
   aircraft     Aircraft?    @relation("AircraftDocuments", fields: [aircraftId], references: [id])
+
+  payerConsentRelationships StudentPayerRelationship[] @relation("PayerConsentDocuments")
 
   @@index([organizationId, kind])
   @@index([ownerId])
@@ -2014,4 +2069,424 @@ model RevenueSettings {
   updatedAt DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ===========================================================================
+// Revenue Engine — Phase 2 (M3–M7): pricing/rate profiles, revenue items, tax
+// rules, responsible payers (dormant), and the Dispatch capture extension.
+// Additive, tenant-scoped. FORWARD RELATIONS TO PHASE-3+ MODELS ARE TRIMMED
+// (RevenueReview, InvoiceLine back-refs, InstructorEarning, TaxSnapshot,
+// CustomerCredit, PaymentCustomer, RevenueAdjustment) — they are re-added in
+// their owning phase. See docs/architecture/revenue-engine/13 §4.6–4.11.
+// ===========================================================================
+
+// ---- Shared enums (some already added in Phase 1: PricingBillingBasis,
+// ---- PricingRoundingRule, TaxProvider/RoundingMode/RoundingLevel — DO NOT
+// ---- re-declare those). New in Phase 2: ----
+
+enum ProfileStatus {
+  DRAFT
+  APPROVED
+  ARCHIVED
+}
+
+enum WetDryDesignation {
+  WET
+  DRY
+  NOT_APPLICABLE
+}
+
+enum TaxTreatment {
+  TAXABLE
+  NON_TAXABLE
+  INHERIT
+}
+
+enum InstructorRateKind {
+  BILLING
+  COMPENSATION
+}
+
+enum InstructorClassification {
+  EMPLOYEE
+  CONTRACTOR
+  UNSPECIFIED
+}
+
+enum InstructorTimeCategory {
+  FLIGHT_INSTRUCTION
+  GROUND_INSTRUCTION
+  PREFLIGHT_BRIEFING
+  POSTFLIGHT_DEBRIEFING
+  SIMULATOR_INSTRUCTION
+  ORAL_PREPARATION
+  CHECKRIDE_PREPARATION
+  STAGE_CHECK
+  GROUND_SCHOOL
+  ADMINISTRATIVE
+  CUSTOM
+}
+
+enum RevenueItemCategory {
+  AIRPORT_FEE
+  FUEL_OIL
+  AIRCRAFT_FEE
+  SCHEDULING_FEE
+  INSTRUCTION
+  RETAIL
+  MEMBERSHIP
+  ADMINISTRATIVE
+  CUSTOM
+}
+
+enum RevenueItemUnitBasis {
+  PER_HOUR
+  PER_LANDING
+  PER_FLIGHT
+  PER_DAY
+  PER_UNIT
+  FIXED
+}
+
+enum RevenueItemAmountMode {
+  FIXED
+  VARIABLE
+}
+
+enum RevenueItemRisk {
+  NORMAL
+  HIGH
+}
+
+enum PayerType {
+  PARENT
+  GUARDIAN
+  EMPLOYER
+  SCHOLARSHIP_SPONSOR
+  UNIVERSITY
+  CLUB_SPONSOR
+  OTHER
+}
+
+enum PayerStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum PayerRelationshipStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+// NOTE: enum RevenueLineOrigin (PRICING/INSTRUCTOR_TIME/RULE/RETURN_CAPTURE/
+// MANUAL/ADJUSTMENT) is NOT added in Phase 2 — its first writer is InvoiceLine.origin
+// (Phase 3 M11). Add it then. TaxTreatment above uses INHERIT to represent the
+// "null = inherit" fields (columns are nullable; INHERIT is available for
+// explicit selection).
+
+// --- M4: Aircraft pricing profiles (doc 05) ---
+model AircraftPricingProfile {
+  id             String        @id @default(cuid())
+  organizationId String
+  aircraftId     String?
+  locationId     String?
+  familyId       String
+  version        Int           @default(1)
+  name           String
+  description    String?
+  status         ProfileStatus @default(DRAFT)
+  isDefault      Boolean       @default(false)
+  priority       Int           @default(100)
+
+  billingBasis        PricingBillingBasis @default(HOBBS)
+  customUnitLabel     String?
+  wetDry              WetDryDesignation   @default(WET)
+  rateAmount          Decimal             @db.Decimal(12, 2)
+  currency            String              @default("USD") @db.Char(3)
+  minBillableQuantity Decimal?            @db.Decimal(6, 2)
+  roundingRule        PricingRoundingRule @default(NEAREST_TENTH)
+  taxTreatment        TaxTreatment?
+  includedFeeItemIds  String[]            @default([])
+
+  eligibleMembershipRoles String[] @default([])
+  eligibleCustomerTypes   String[] @default([])
+  eligibleProgramIds      String[] @default([])
+
+  effectiveStart DateTime
+  effectiveEnd   DateTime?
+
+  createdById     String
+  createdByLabel  String
+  approvedById    String?
+  approvedByLabel String?
+  approvedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  aircraft     Aircraft?    @relation(fields: [aircraftId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  dispatches Dispatch[]
+  // TRIMMED (Phase 3 M11): invoiceLines InvoiceLine[]
+
+  @@unique([organizationId, familyId, version])
+  @@index([organizationId, status])
+  @@index([organizationId, aircraftId, effectiveStart])
+  @@index([organizationId, effectiveStart])
+}
+
+// --- M4: Instructor rate profiles (billing vs compensation, doc 04) ---
+model InstructorRateProfile {
+  id             String                   @id @default(cuid())
+  organizationId String
+  kind           InstructorRateKind
+  instructorId   String?
+  locationId     String?
+  syllabusId     String?
+  name           String
+  notes          String?
+  familyId       String
+  version        Int                      @default(1)
+  status         ProfileStatus            @default(DRAFT)
+  priority       Int                      @default(100)
+  classification InstructorClassification @default(UNSPECIFIED)
+  currency       String                   @default("USD") @db.Char(3)
+  taxTreatment   TaxTreatment?
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+
+  createdByLabel  String
+  approvedById    String?
+  approvedByLabel String?
+  approvedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  instructor   Instructor?  @relation(fields: [instructorId], references: [id], onDelete: Restrict)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  syllabus     Syllabus?    @relation(fields: [syllabusId], references: [id], onDelete: SetNull)
+
+  lines InstructorRateProfileLine[]
+  // TRIMMED (Phase 3): earnings InstructorEarning[]  /  invoiceLines InvoiceLine[]
+
+  @@unique([organizationId, kind, familyId, version])
+  @@index([organizationId, kind, status])
+  @@index([organizationId, instructorId, kind])
+  @@index([organizationId, effectiveFrom])
+}
+
+model InstructorRateProfileLine {
+  id               String                 @id @default(cuid())
+  profileId        String
+  category         InstructorTimeCategory
+  customLabel      String                 @default("")
+  rate             Decimal?               @db.Decimal(12, 2)
+  percentOfBilling Decimal?               @db.Decimal(5, 2)
+  minBillableHours Decimal?               @db.Decimal(4, 2)
+  createdAt        DateTime               @default(now())
+
+  profile InstructorRateProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, category, customLabel])
+}
+
+// --- M5: Revenue Item catalog (doc 06) ---
+model RevenueItem {
+  id             String                @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  description    String?
+  category       RevenueItemCategory
+  unitBasis      RevenueItemUnitBasis
+  unitLabel      String?
+  amountMode     RevenueItemAmountMode
+  defaultAmount  Decimal?              @db.Decimal(12, 2)
+  minAmount      Decimal?              @db.Decimal(12, 2)
+  maxAmount      Decimal?              @db.Decimal(12, 2)
+  currency       String                @default("USD") @db.Char(3)
+  isTaxable      Boolean               @default(false)
+  riskLevel      RevenueItemRisk       @default(NORMAL)
+  requiresNote           Boolean       @default(false)
+  requiresAttachment     Boolean       @default(false)
+  requiresSecondApproval Boolean       @default(false)
+  defaultAccountingCategoryCode String?
+  isActive       Boolean               @default(true)
+  effectiveFrom  DateTime?
+  effectiveTo    DateTime?
+  isSystem       Boolean               @default(false)
+  displayOrder   Int                   @default(0)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  locations    RevenueItemLocation[]
+  programs     RevenueItemProgram[]
+  aircraft     RevenueItemAircraft[]
+  // TRIMMED (Phase 3 M11): invoiceLines InvoiceLine[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive, category])
+}
+
+model RevenueItemLocation {
+  id            String   @id @default(cuid())
+  revenueItemId String
+  locationId    String
+  createdAt     DateTime @default(now())
+
+  revenueItem RevenueItem @relation(fields: [revenueItemId], references: [id], onDelete: Cascade)
+  location    Location    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([revenueItemId, locationId])
+  @@index([locationId])
+}
+
+model RevenueItemProgram {
+  id            String   @id @default(cuid())
+  revenueItemId String
+  syllabusId    String
+  createdAt     DateTime @default(now())
+
+  revenueItem RevenueItem @relation(fields: [revenueItemId], references: [id], onDelete: Cascade)
+  syllabus    Syllabus    @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+
+  @@unique([revenueItemId, syllabusId])
+  @@index([syllabusId])
+}
+
+model RevenueItemAircraft {
+  id            String   @id @default(cuid())
+  revenueItemId String
+  aircraftId    String
+  createdAt     DateTime @default(now())
+
+  revenueItem RevenueItem @relation(fields: [revenueItemId], references: [id], onDelete: Cascade)
+  aircraft    Aircraft    @relation(fields: [aircraftId], references: [id], onDelete: Cascade)
+
+  @@unique([revenueItemId, aircraftId])
+  @@index([aircraftId])
+}
+
+// --- M6: Tax rules (doc 07). TaxSnapshot is Phase 3. ---
+model TaxRule {
+  id                String    @id @default(cuid())
+  organizationId    String
+  locationId        String?
+  ruleKey           String
+  version           Int       @default(1)
+  name              String
+  jurisdictionLabel String
+  ratePercent       Decimal   @db.Decimal(7, 4)
+  appliesToKinds    String[]  @default([])
+  effectiveStart    DateTime
+  effectiveEnd      DateTime?
+  isActive          Boolean   @default(true)
+  deactivatedAt     DateTime?
+  createdAt         DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location     Location?    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  // TRIMMED (Phase 3 M12): snapshots TaxSnapshot[]
+
+  @@unique([organizationId, ruleKey, version])
+  @@index([organizationId, isActive])
+  @@index([organizationId, locationId, isActive])
+}
+
+// --- M3: Responsible payers (doc 11) — tables land DORMANT (workflow Phase 4) ---
+model ResponsiblePayer {
+  id             String      @id @default(cuid())
+  organizationId String
+  userId         String?
+  payerType      PayerType
+  displayName    String
+  companyName    String?
+  email          String
+  phone          String?
+  status         PayerStatus @default(INVITED)
+  billingAuthorizationVersion    String?
+  billingAuthorizationAcceptedAt DateTime?
+  inviteTokenHash String?   @unique
+  inviteExpiresAt DateTime?
+  invitedByLabel  String?
+  notes           String?
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  relationships StudentPayerRelationship[]
+  dispatches    Dispatch[]
+  // TRIMMED (Phase 3+): revenueReviews, invoices, credits, paymentCustomers,
+  // transfersFrom, transfersTo — re-added in their owning phases.
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, status])
+  @@index([organizationId, email])
+  @@index([userId])
+}
+
+model StudentPayerRelationship {
+  id             String                  @id @default(cuid())
+  organizationId String
+  studentId      String
+  payerId        String
+  status         PayerRelationshipStatus @default(ACTIVE)
+  isDefault      Boolean                 @default(false)
+  canViewInvoices         Boolean @default(true)
+  canManagePaymentMethods Boolean @default(true)
+  receivesNotifications   Boolean @default(true)
+  chargeApprovalRequired  Boolean @default(false)
+  guardianConsentAt      DateTime?
+  guardianConsentByLabel String?
+  consentDocumentId      String?
+  studentAcknowledgedAt  DateTime?
+  revokedAt      DateTime?
+  revokedReason  String?
+  createdByLabel String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  payer           ResponsiblePayer @relation(fields: [payerId], references: [id], onDelete: Restrict)
+  consentDocument Document?        @relation("PayerConsentDocuments", fields: [consentDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, payerId])
+  @@index([organizationId, status])
+  @@index([payerId, status])
+  @@index([studentId, status])
+}
+
+// --- M7: DispatchRestrictionDecision (doc 10) ---
+model DispatchRestrictionDecision {
+  id                String                  @id @default(cuid())
+  organizationId    String
+  dispatchId        String
+  key               CheckoutRestrictionKey
+  kind              RestrictionDecisionKind
+  category          RestrictionCategory
+  enforcementAtTime RestrictionEnforcement
+  findingDetail     String
+  reason            String
+  actorUserId       String
+  actorLabel        String
+  createdAt         DateTime                @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dispatch     Dispatch     @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+
+  @@unique([dispatchId, key])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, key, createdAt])
 }
