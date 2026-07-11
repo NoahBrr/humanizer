@@ -22,6 +22,8 @@ export const SECTION_PERMISSIONS: Record<string, Permission> = {
   "/maintenance": "maintenance.view",
   "/billing": "billing.view",
   "/billing/reviews": "revenue.review_view",
+  "/billing/my": "revenue.self_view", // student/self surface — own financials only
+
   "/reports": "reports.view",
   "/executive": "reports.view",
   "/notifications": "notifications.view",

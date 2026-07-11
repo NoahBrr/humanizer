@@ -311,6 +311,11 @@ model Organization {
   revenueReviewApprovals  RevenueReviewApproval[]
   instructorTimeEntries   InstructorTimeEntry[]
 
+  // Revenue Engine — Phase 4 (M8)
+  paymentCustomers         PaymentCustomer[]
+  paymentMethodReferences  PaymentMethodReference[]
+  paymentConsents          PaymentConsent[]
+
   @@index([status])
   @@index([orgType])
 }
@@ -614,6 +619,7 @@ model Student {
 
   studentPayerRelationships StudentPayerRelationship[]
   revenueReviews            RevenueReview[]
+  paymentCustomers          PaymentCustomer[]
 
   @@index([assignedInstructorId])
 }
@@ -2441,7 +2447,8 @@ model ResponsiblePayer {
   relationships StudentPayerRelationship[]
   dispatches    Dispatch[]
   revenueReviews RevenueReview[]
-  // TRIMMED (Phase 3+): invoices, credits, paymentCustomers,
+  paymentCustomers PaymentCustomer[]
+  // TRIMMED (Phase 3+): invoices, credits,
   // transfersFrom, transfersTo — re-added in their owning phases.
 
   @@unique([organizationId, userId])
@@ -2459,6 +2466,13 @@ model StudentPayerRelationship {
   isDefault      Boolean                 @default(false)
   canViewInvoices         Boolean @default(true)
   canManagePaymentMethods Boolean @default(true)
+  /// Whether this payer sees the student's ENTIRE financial history (all their
+  /// reviews/invoices), not just the ones billed to this payer. Narrow default
+  /// is deliberate (doc 11 §3.9): an employer/sponsor never gains an adult
+  /// student's whole financial history without an explicit grant. Bill-to
+  /// visibility (reviews where payerId = this payer) is always allowed and does
+  /// not depend on this flag.
+  fullFinancialVisibility Boolean @default(false)
   receivesNotifications   Boolean @default(true)
   chargeApprovalRequired  Boolean @default(false)
   guardianConsentAt      DateTime?
@@ -2615,10 +2629,11 @@ model RevenueReview {
   instructor   Instructor?       @relation(fields: [instructorId], references: [id], onDelete: SetNull)
   location     Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
   payer        ResponsiblePayer? @relation(fields: [payerId], references: [id], onDelete: Restrict)
+  paymentMethodRef PaymentMethodReference? @relation(fields: [paymentMethodRefId], references: [id], onDelete: SetNull)
 
   approvals   RevenueReviewApproval[]
   timeEntries InstructorTimeEntry[]
-  // TRIMMED (later phases): paymentMethodRef, earnings, taxSnapshots, adjustments,
+  // TRIMMED (later phases): earnings, taxSnapshots, adjustments,
   // allocations, creditApplications, promoRedemptions, targetedCredits,
   // scheduledCharge, platformFee, disputes. paymentMethodRefId column kept (scalar).
 
@@ -2687,4 +2702,135 @@ model InstructorTimeEntry {
   @@index([organizationId, createdAt])
   @@index([revenueReviewId])
   @@index([instructorId, createdAt])
+}
+
+// ===========================================================================
+// Revenue Engine — Phase 4 (M8): payment-method foundation. Provider references
+// + safe-metadata ONLY (principle 8: never a PAN/CVV/bank number/raw token).
+// No charging in this phase. ScheduledCharge relations are TRIMMED (Phase 5).
+// See docs/architecture/revenue-engine/13 §4.12 + 34 §4.2.
+// ===========================================================================
+
+enum PaymentProvider {
+  STRIPE
+}
+
+enum StoredPaymentMethodType {
+  CARD
+  US_BANK_ACCOUNT
+}
+
+enum StoredPaymentMethodStatus {
+  ACTIVE
+  REQUIRES_VERIFICATION
+  SUSPENDED
+  DETACHED
+}
+
+enum PaymentConsentChannel {
+  METHOD_SETUP
+  RE_ACCEPTANCE
+}
+
+/// Org-scoped map of a paying party (payer XOR student, app-enforced) to a
+/// provider customer object. Created lazily on first method save. Opaque
+/// providerCustomerId is a reference, never a secret.
+model PaymentCustomer {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  provider           PaymentProvider @default(STRIPE)
+  providerCustomerId String
+  payerId            String?
+  studentId          String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  payer        ResponsiblePayer? @relation(fields: [payerId], references: [id], onDelete: SetNull)
+  student      Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  methods      PaymentMethodReference[]
+  consents     PaymentConsent[]
+
+  @@unique([organizationId, provider, providerCustomerId])
+  @@unique([organizationId, payerId])
+  @@unique([organizationId, studentId])
+  @@index([organizationId])
+}
+
+/// Saved Payment Method: opaque provider reference + the safe-metadata allowlist
+/// below — NOTHING else is ever stored (principle 8). Rows detach, never delete.
+model PaymentMethodReference {
+  id                      String                    @id @default(cuid())
+  organizationId          String
+  paymentCustomerId       String
+  provider                PaymentProvider           @default(STRIPE)
+  providerPaymentMethodId String
+  type                    StoredPaymentMethodType
+  status                  StoredPaymentMethodStatus @default(ACTIVE)
+  brand       String?
+  last4       String?
+  expMonth    Int?
+  expYear     Int?
+  bankName    String?
+  fingerprint String?
+  isDefault   Boolean   @default(false)
+  detachedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     PaymentCustomer @relation(fields: [paymentCustomerId], references: [id], onDelete: Cascade)
+
+  revenueReviews RevenueReview[]
+  consents       PaymentConsent[]
+  // TRIMMED (Phase 5): scheduledCharges ScheduledCharge[]
+
+  @@unique([organizationId, provider, providerPaymentMethodId])
+  @@index([paymentCustomerId, status])
+}
+
+/// Off-session charging consent — append-only, evidence-grade (spec Part Q).
+/// Validity is DERIVED at read (bound + unrevoked + unsuperseded + version-
+/// current), never a stored status (R-P12). No raw secrets — only opaque refs.
+model PaymentConsent {
+  id                String @id @default(cuid())
+  organizationId    String
+  paymentCustomerId String
+  payerId           String?
+  studentId         String?
+
+  paymentMethodReferenceId String?
+  methodType  StoredPaymentMethodType?
+  methodBrand String?
+  methodLast4 String?
+
+  consentVersion   String
+  consentTextHash  String
+  channel          PaymentConsentChannel
+  acceptedAt       DateTime
+  acceptedByUserId String?
+  acceptedByLabel  String
+  ipAddress        String?
+  userAgent        String?
+
+  provider              PaymentProvider @default(STRIPE)
+  providerSetupIntentId String?
+  providerMandateRef    String?
+
+  revokedAt       DateTime?
+  revokedByUserId String?
+  revokedByLabel  String?
+  revokedReason   String?
+  supersededAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     PaymentCustomer         @relation(fields: [paymentCustomerId], references: [id], onDelete: Restrict)
+  method       PaymentMethodReference? @relation(fields: [paymentMethodReferenceId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerSetupIntentId])
+  @@index([paymentMethodReferenceId, revokedAt])
+  @@index([organizationId, paymentCustomerId])
+  @@index([organizationId, createdAt])
 }

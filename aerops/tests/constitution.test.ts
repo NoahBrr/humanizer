@@ -72,7 +72,11 @@ describe("every API route authorizes (one gate, no exceptions)", () => {
     }
     it(`${name} calls authorize()/authorizePlatform()`, () => {
       const src = readFileSync(route, "utf8");
-      expect(/\b(authorize|authorizePlatform|authorizeFounder)\(/.test(src), `${name} has no authorization gate`).toBe(true);
+      // authorizePayer is the third first-class gate (session.ts) — the
+      // self-service boundary for /api/payer/*. It resolves the session and
+      // fails closed exactly like authorize()/authorizePlatform(), so the scan
+      // recognizes it as a real gate rather than an ungated route.
+      expect(/\b(authorize|authorizePlatform|authorizeFounder|authorizePayer)\(/.test(src), `${name} has no authorization gate`).toBe(true);
     });
   }
 });

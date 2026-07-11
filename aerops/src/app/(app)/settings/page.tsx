@@ -44,6 +44,11 @@ export default async function SettingsPage() {
         <a href="/settings/locations" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
           Locations →
         </a>
+        {session!.permissions.has("revenue.payment_methods_manage") && (
+          <a href="/settings/payers" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
+            Payers →
+          </a>
+        )}
         <a href="/settings/security" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
           Security →
         </a>

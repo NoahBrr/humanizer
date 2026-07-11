@@ -11,6 +11,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import { hashToken } from "../src/lib/tokens";
 import { systemOrgRoleSeed } from "../src/lib/permissions";
+import { CONSENT_VERSION, CONSENT_TEXT_HASH } from "../src/lib/payment-methods";
 
 const db = new PrismaClient();
 
@@ -538,9 +539,54 @@ async function main() {
     ],
   });
 
+  // --- Responsible payer + saved payment method (Phase 4 foundation) --------
+  // A parent who bills for Taylor: ACTIVE payer, default relationship, one saved
+  // card + a valid off-session consent. The card is a DEV FIXTURE — only the
+  // safe-metadata allowlist (brand/last4/exp) and opaque refs, NEVER a real PAN,
+  // CVV, or provider secret (principle 8). The parent is an org-less login, so
+  // they reach only the /payer portal, never an organization surface.
+  const parentUser = await db.user.create({
+    data: { email: "parent@aerops.demo", passwordHash: password, firstName: "Jordan", lastName: "Nguyen", role: Role.STUDENT },
+  });
+  const parentPayer = await db.responsiblePayer.create({
+    data: {
+      organizationId: org.id, userId: parentUser.id, payerType: "PARENT",
+      displayName: "Jordan Nguyen", email: "parent@aerops.demo", status: "ACTIVE",
+      billingAuthorizationVersion: CONSENT_VERSION, billingAuthorizationAcceptedAt: new Date(),
+      invitedByLabel: "System",
+    },
+  });
+  await db.studentPayerRelationship.create({
+    data: {
+      organizationId: org.id, studentId: taylor.id, payerId: parentPayer.id,
+      status: "ACTIVE", isDefault: true, createdByLabel: "System",
+    },
+  });
+  const parentCustomer = await db.paymentCustomer.create({
+    data: { organizationId: org.id, provider: "STRIPE", providerCustomerId: `cus_stub_${parentPayer.id}`, payerId: parentPayer.id },
+  });
+  const parentMethod = await db.paymentMethodReference.create({
+    data: {
+      organizationId: org.id, paymentCustomerId: parentCustomer.id, provider: "STRIPE",
+      providerPaymentMethodId: `pm_stub_seed_${parentPayer.id}`, type: "CARD", status: "ACTIVE",
+      brand: "visa", last4: "4242", expMonth: 12, expYear: new Date().getFullYear() + 3,
+      fingerprint: "fp_stub_seed", isDefault: true,
+    },
+  });
+  await db.paymentConsent.create({
+    data: {
+      organizationId: org.id, paymentCustomerId: parentCustomer.id, payerId: parentPayer.id,
+      paymentMethodReferenceId: parentMethod.id, methodType: "CARD", methodBrand: "visa", methodLast4: "4242",
+      consentVersion: CONSENT_VERSION, consentTextHash: CONSENT_TEXT_HASH, channel: "METHOD_SETUP",
+      acceptedAt: new Date(), acceptedByUserId: parentUser.id, acceptedByLabel: "Jordan Nguyen",
+      provider: "STRIPE", providerSetupIntentId: `seti_stub_seed_${parentPayer.id}`,
+    },
+  });
+
   await backfillSeedMemberships();
 
   console.log("Seed complete.");
+  console.log("Payer portal (password: demo1234): parent@aerops.demo → /payer");
   console.log("Platform staff (password: demo1234): founder@aerops.io · support@aerops.io · auditor@aerops.io");
   console.log("Second tenant: admin@blueridge.demo / demo1234");
   console.log("Logins (password: demo1234):");

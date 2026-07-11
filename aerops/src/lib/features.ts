@@ -43,6 +43,7 @@ export const SECTION_MODULES: Record<string, ModuleKey> = {
   "/maintenance": "maintenance",
   "/billing": "billing",
   "/billing/reviews": "billing",
+  "/billing/my": "billing",
   "/reports": "reports",
   "/executive": "reports",
   "/documents": "documents",
