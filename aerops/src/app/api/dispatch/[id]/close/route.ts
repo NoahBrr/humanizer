@@ -5,6 +5,7 @@ import { authorize } from "@/lib/session";
 import { recordAudit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import { computeFlightCharges, flightTimeFromHobbs } from "@/lib/billing";
+import { resolvePricing, computeRentalCharge, legacyFallbackProfile, type PricingCandidate } from "@/lib/pricing";
 import { emitDomainEvent } from "@/lib/events";
 
 const closeSchema = z.object({
@@ -59,6 +60,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     isDual,
   });
 
+  // Aircraft rental via the Phase 2 pricing resolver (doc 05 / ADR-030). Pure
+  // resolution over profiles loaded BEFORE the transaction — no I/O added to the
+  // atomic closeout (do-not-break rule 5). A zero-config org has no APPROVED
+  // profiles, so the synthesized legacy fallback (L6) reproduces today's exact
+  // wet-rate total; a profiled org bills its profile. The instructor line stays
+  // on the legacy rate until Phase 3 brings instructor time entry into the review.
+  const profiles = await db.aircraftPricingProfile.findMany({
+    where: {
+      organizationId: session.organizationId,
+      status: "APPROVED",
+      OR: [{ aircraftId: dispatch.aircraftId }, { aircraftId: null }],
+    },
+  });
+  const candidates: PricingCandidate[] = [
+    ...(profiles as unknown as PricingCandidate[]),
+    legacyFallbackProfile(dispatch.aircraftId, dispatch.aircraft.hourlyRateWet.toString(), "USD"),
+  ];
+  const resolution = resolvePricing(candidates, {
+    aircraftId: dispatch.aircraftId,
+    explicitProfileId: dispatch.pricingProfileId,
+    customerTypes: dispatch.studentId ? ["student"] : [],
+    membershipRoles: [],
+    programIds: [],
+    locationId: dispatch.locationId,
+  }, new Date());
+  const rental = computeRentalCharge(resolution.profile!, { hobbsOut, hobbsIn: data.hobbsIn });
+  const aircraftCharge = Number(rental.amount);
+  const total = aircraftCharge + charges.instructorCharge;
+
   const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
 
   try {
@@ -107,7 +137,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           data: {
             totalHours: { increment: flightTime },
             ...(isDual ? {} : { soloHours: { increment: flightTime } }),
-            accountBalance: { decrement: charges.total },
+            accountBalance: { decrement: total },
           },
         });
         await tx.invoice.create({
@@ -121,9 +151,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
               create: [
                 {
                   kind: "AIRCRAFT_RENTAL",
-                  description: `${dispatch.aircraft.tailNumber} rental (wet) — ${flightTime.toFixed(1)} hrs`,
-                  quantity: flightTime,
-                  unitPrice: dispatch.aircraft.hourlyRateWet,
+                  description: `${dispatch.aircraft.tailNumber} rental (${resolution.profile!.wetDry.toLowerCase()}) — ${rental.quantity.toString()} ${resolution.profile!.billingBasis.toLowerCase()} @ ${resolution.profile!.name}`,
+                  quantity: rental.quantity,
+                  unitPrice: rental.rateAmount,
                 },
                 ...(isDual
                   ? [{
@@ -167,14 +197,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       action: "dispatch.close",
       entityType: "Dispatch",
       entityId: id,
-      newValue: { tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: charges.total, landings: data.landings, squawk: data.squawk?.title },
+      newValue: { tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: total, landings: data.landings, squawk: data.squawk?.title },
     });
-    logger.info("flight closed", { dispatchId: id, flightTime, billed: charges.total });
+    logger.info("flight closed", { dispatchId: id, flightTime, billed: total });
 
     // One emission; the event bus fans out to webhooks, automations, and
     // any future consumer — this route doesn't know who is listening.
     await emitDomainEvent(session.organizationId, "flight.closed", {
-      dispatchId: id, aircraftId: dispatch.aircraftId, tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: charges.total,
+      dispatchId: id, aircraftId: dispatch.aircraftId, tailNumber: dispatch.aircraft.tailNumber, flightTime, billed: total,
     });
 
     return NextResponse.json({ dispatch: closed, flightTime, total: charges.total });
