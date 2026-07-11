@@ -21,7 +21,7 @@ type EarningInput = {
   locationId: string | null;
   currency: string;
   approvedAt: Date;
-  timeEntries: { id: string; category: RateProfileCandidate["lines"][number]["category"]; customLabel: string | null; hours: Prisma.Decimal; compensable: boolean }[];
+  timeEntries: { id: string; instructorId: string; category: RateProfileCandidate["lines"][number]["category"]; customLabel: string | null; hours: Prisma.Decimal; compensable: boolean }[];
   compensationApprovalMode: CompensationApprovalMode;
 };
 
@@ -34,21 +34,21 @@ export async function birthEarnings(tx: Prisma.TransactionClient, input: Earning
   const compensable = input.timeEntries.filter((t) => t.compensable);
   if (compensable.length === 0) return Z;
 
-  // Load the instructor's + org-wide COMPENSATION profiles (with lines).
+  // Load ALL of the org's COMPENSATION profiles (instructor-specific + org-wide).
+  // Each time entry is then resolved against ITS OWN instructor — on a
+  // multi-instructor review, each CFI is paid from their own rate, never the
+  // review's nominal instructor (resolveInstructorRate excludes profiles scoped
+  // to a different instructor, so loading them all is safe).
   const profiles = await tx.instructorRateProfile.findMany({
-    where: {
-      organizationId: input.organizationId,
-      kind: "COMPENSATION",
-      status: "APPROVED",
-      OR: [{ instructorId: input.instructorId }, { instructorId: null }],
-    },
+    where: { organizationId: input.organizationId, kind: "COMPENSATION", status: "APPROVED" },
     include: { lines: true },
   });
   const candidates = profiles as unknown as RateProfileCandidate[];
-  const ctx = { instructorId: input.instructorId, syllabusId: null, locationId: input.locationId, explicitProfileId: null };
 
   let total = Z;
   for (const te of compensable) {
+    const instructorId = te.instructorId || input.instructorId; // entry's instructor is authoritative
+    const ctx = { instructorId, syllabusId: null, locationId: input.locationId, explicitProfileId: null };
     const res = resolveInstructorRate(candidates, ctx, "COMPENSATION", te.category, input.approvedAt, te.customLabel ?? "");
     if (res.rate == null) continue; // compensation not configured for this instructor/category
     const amount = computeInstructorCharge(te.hours, res.rate);
@@ -56,7 +56,7 @@ export async function birthEarnings(tx: Prisma.TransactionClient, input: Earning
     await tx.instructorEarning.create({
       data: {
         organizationId: input.organizationId,
-        instructorId: input.instructorId,
+        instructorId,
         revenueReviewId: input.revenueReviewId,
         timeEntryId: te.id,
         category: te.category,

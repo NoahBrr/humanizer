@@ -4,7 +4,7 @@
  *
  * Every engine that will move money is typed against this interface from
  * birth (Phase 1), long before an implementation exists. The deterministic
- * `FakePaymentProvider` (tests) and the real `StripeProvider` (`src/lib/stripe.ts`,
+ * `FakePaymentProvider` (tests) and the real `StripeProvider` (`src/lib/stripe-connect.ts`,
  * added in Phase 5) both satisfy it, so they cannot drift.
  *
  * Money is always integer minor units at the provider boundary (`amount` in

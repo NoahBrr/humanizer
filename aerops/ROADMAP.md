@@ -12,6 +12,38 @@ Companion to
 **Priorities:** `Critical` · `High` · `Medium` · `Low` · `Future`
 **Effort:** S (≤1 day) · M (days) · L (week+) · XL (multi-week)
 
+_Last session update: 2026-07-11 — Revenue Engine Phase 5: payment execution
+(Stripe Connect, **TEST MODE ONLY — not deployed, no live keys/charges**).
+Merchant-of-record direct charges with `application_fee_amount` (ADR-037). The
+spine is exactly-once and money-conserving: an **outbox** ScheduledCharge is
+written inside the approval transaction (no provider call there); a background
+**runner** claims it (guarded `updateMany`), creates a PaymentAttempt with a
+durable idempotency key `sc_<id>_a<n>`, and calls the provider OUTSIDE the tx —
+a timeout resumes the SAME key so a charge is never duplicated. **Settlement has
+a single writer** (the signature-verified webhook): an atomic PROCESSING→SUCCEEDED
+flip posts the balanced J2 journal + PlatformFee EARNED + Payment row, so replays
+are no-ops. Refunds post a reversing J3 with a proportional, capped platform-fee
+reversal; disputes open a Dispute + FinancialHold and resolve WON→PAID /
+LOST→REFUNDED. Provider seam: types-only `PaymentProvider`, a deterministic
+`FakePaymentProvider` (what the simulation runs on), and a `StripeProvider`
+loaded by **dynamic import only** (never in the client bundle); a fail-closed
+config (`REVENUE_CHARGING` off|test, no live value; live-prefixed keys throw).
+J1/J2/J3 are built in ONE place (`revenue-journals.ts`) and reused by the approve
+route, webhook, and refund engine. **Release gate:** a 20-scenario
+Day-in-the-Life simulation (happy path, decline, ACH pending/return, full+partial
+refund, two instructors, parent pays, no method, fees, manual item, discount,
+multi-location, custom pricing, manual billing, changes-requested, concurrent
+approval, webhook replay, duplicate intent, account-not-ready) proving every
+journal balances, allocation sets balance on both dimensions, fee reconciles,
+duplicate charging is impossible, and the whole day's debits = credits. A
+6-reviewer board (Architect, Security, QA, **Financial Integrity**, Aviation,
+Customer Advisory Board) ran; the Financial Integrity **BLOCKER** (sub-cent line
+products drifting a cent in the persisted `Decimal(12,2)` ledger) was fixed by
+rounding each line to 2dp before summing (regression-tested), plus fixes for
+webhook redelivery completeness, silent post-settlement ACH returns (now a
+reconciliation exception), and stuck dispute/cancel review states. 415 tests
+(+53 this phase), tsc + lint + build green. **Not deployed; test mode only.**_
+
 _Last session update: 2026-07-10 — Phase D3-A Founder & Platform User hardening
 (ADR-024). Highest platform tier `FOUNDER_SUPER_ADMIN`, held only by the two
 bootstrapped founders (Noah, Jack). Founder power keys on an **immutable

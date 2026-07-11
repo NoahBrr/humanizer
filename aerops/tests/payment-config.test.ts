@@ -92,7 +92,7 @@ describe("payment-config — fail-closed, test-mode-only (doc 39 §3)", () => {
 });
 
 describe("stripe adapter — source discipline (doc 33 §5.4)", () => {
-  const stripeSrc = read("stripe.ts");
+  const stripeSrc = read("stripe-connect.ts");
 
   it("has NO top-level `import ... from \"stripe\"` — dynamic import only", () => {
     const topLevelImport = /^\s*import\b[^\n]*\bfrom\s+["']stripe["']/m;
@@ -112,7 +112,7 @@ describe("stripe adapter — source discipline (doc 33 §5.4)", () => {
       /\baccount_number\b/i,
       /\brouting_number\b/i,
     ];
-    for (const file of ["stripe.ts", "fake-provider.ts", "payment-service.ts", "payment-provider.ts"]) {
+    for (const file of ["stripe-connect.ts", "fake-provider.ts", "payment-service.ts", "payment-provider.ts"]) {
       const src = read(file);
       for (const pat of forbidden) {
         expect(pat.test(src), `${file} must not reference ${pat}`).toBe(false);
@@ -121,7 +121,7 @@ describe("stripe adapter — source discipline (doc 33 §5.4)", () => {
   });
 
   it("never console-logs from the payment layer (secrets must not leak to logs)", () => {
-    for (const file of ["stripe.ts", "fake-provider.ts", "payment-service.ts"]) {
+    for (const file of ["stripe-connect.ts", "fake-provider.ts", "payment-service.ts"]) {
       expect(/console\.(log|info|warn|error)/.test(read(file))).toBe(false);
     }
   });

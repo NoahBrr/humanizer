@@ -1,6 +1,9 @@
 /**
  * Real Stripe `PaymentProvider` adapter (Phase 5; ADR-032 base + ADR-037 Connect
- * finalization, doc 18 §9.2). Every money-moving call is a **direct charge on the
+ * finalization, doc 18 §9.2). This is the **System-2 (Connect / marketplace)**
+ * adapter and lives at `stripe-connect.ts` per doc 17 §"two financial systems" —
+ * the bare `stripe.ts` path is reserved for System-1 SaaS subscription billing so
+ * the two never collide. Every money-moving call is a **direct charge on the
  * org's Express connected account** (`Stripe-Account` context, resolved server-
  * side from the session org), with the AeroOps platform fee collected atomically
  * via `application_fee_amount`. The two ⊙ operations (`refundApplicationFee`,

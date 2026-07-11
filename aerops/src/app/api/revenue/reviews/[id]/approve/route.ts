@@ -213,7 +213,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         locationId: review.locationId,
         currency: review.currency,
         approvedAt,
-        timeEntries: review.timeEntries.map((t) => ({ id: t.id, category: t.category, customLabel: t.customLabel, hours: t.hours, compensable: t.compensable })),
+        timeEntries: review.timeEntries.map((t) => ({ id: t.id, instructorId: t.instructorId, category: t.category, customLabel: t.customLabel, hours: t.hours, compensable: t.compensable })),
         compensationApprovalMode: settings?.compensationApprovalMode ?? "AUTO_ON_REVIEW_APPROVAL",
       });
 

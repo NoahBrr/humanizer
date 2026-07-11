@@ -66,7 +66,10 @@ export function buildApprovalJournalLines(input: {
  *   credit ACCOUNTS_RECEIVABLE   total
  */
 export function buildSettlementJournalLines(input: { total: Prisma.Decimal; platformFee: Prisma.Decimal }): JournalLine[] {
-  const fee = input.platformFee.greaterThan(0) ? input.platformFee : Z;
+  // Defensive cap (ADR-037 item 8): the fee can never exceed the total, so the
+  // clearing line can never go negative and J2 can never fail to balance.
+  const raw = input.platformFee.greaterThan(0) ? input.platformFee : Z;
+  const fee = raw.greaterThan(input.total) ? input.total : raw;
   const net = input.total.minus(fee);
   return nonZero([
     debit("PAYMENT_CLEARING", net),

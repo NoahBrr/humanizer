@@ -49,6 +49,11 @@ export default async function SettingsPage() {
             Payers →
           </a>
         )}
+        {session!.permissions.has("revenue.connect_manage") && (
+          <a href="/settings/payments" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
+            Connected Payments →
+          </a>
+        )}
         <a href="/settings/security" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium shadow-sm hover:bg-muted">
           Security →
         </a>

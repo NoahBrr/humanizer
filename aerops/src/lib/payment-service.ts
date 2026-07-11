@@ -45,7 +45,7 @@ export async function getPaymentProviderAsync(): Promise<PaymentProvider | null>
     building = (async () => {
       const secrets = chargingSecrets();
       if (!secrets) return null;
-      const { StripeProvider } = await import("./stripe");
+      const { StripeProvider } = await import("./stripe-connect");
       cachedStripe = await StripeProvider.create(secrets);
       return cachedStripe;
     })().finally(() => {

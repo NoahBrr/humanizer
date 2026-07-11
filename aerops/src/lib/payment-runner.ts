@@ -109,7 +109,9 @@ async function claimCharge(scheduledChargeId: string, now: Date): Promise<ClaimR
     // The platform's cut sent as application_fee_amount — the amount ACCRUED at
     // approval, so the fee charged matches the fee booked (reconciled at settle).
     const fee = await tx.platformFee.findUnique({ where: { revenueReviewId: sc.revenueReviewId }, select: { amount: true, reversedAmount: true } });
-    const feeMinor = fee ? toMinorUnits(fee.amount.minus(fee.reversedAmount)) : 0;
+    // application_fee must never exceed the charge (ADR-037 item 8) — Stripe
+    // rejects the whole PaymentIntent otherwise. Cap at the amount.
+    const feeMinor = fee ? Math.min(toMinorUnits(fee.amount.minus(fee.reversedAmount)), toMinorUnits(sc.amount)) : 0;
 
     // ---- Recovery path: a PROCESSING row with a still-CREATED latest attempt ----
     const latest = sc.attempts[0];
