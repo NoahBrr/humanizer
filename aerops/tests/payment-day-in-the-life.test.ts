@@ -138,11 +138,14 @@ describe("Day-in-the-Life — 20 scenarios (Phase 5 release gate)", () => {
     fold(r.journals);
   });
 
-  it("S4: ACH returned (R01) — ACH_PENDING → PAYMENT_FAILED is legal", () => {
+  it("S4: ACH returned (R01) — pending return fails cleanly; post-settlement return is flagged, never silently dropped", () => {
+    // A return during the pending window is a clean failure.
     expect(canTransition("ACH_PENDING", "PAYMENT_FAILED")).toBe(true);
-    // A return arriving after a (wrong) provisional paid must NOT silently pass:
-    // there is no PAID → PAYMENT_FAILED edge, so a late return is handled as a
-    // dispute/adjustment, never a silent status flip.
+    // A return AFTER settlement has no PAID→PAYMENT_FAILED edge — and the webhook
+    // handler does NOT silently swallow it: handleFailed raises an AMOUNT_MISMATCH
+    // ReconciliationException (money booked but clawed back) for a human to
+    // reverse. The absence of this edge is intentional (settlement is not undone
+    // by a status flip), not a gap.
     expect(canTransition("PAID", "PAYMENT_FAILED")).toBe(false);
   });
 

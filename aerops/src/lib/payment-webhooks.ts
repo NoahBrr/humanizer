@@ -35,8 +35,12 @@ export type IngestResult =
   | { status: "processed"; providerEventId: string; outcome: string }
   | { status: "deferred"; providerEventId: string; error: string }; // stored, will retry
 
-/** Verify, store, and process one raw webhook delivery. */
-export async function ingestWebhookEvent(signature: string, raw: string, endpoint: "connect" | "platform"): Promise<IngestResult> {
+/**
+ * Verify, store, and process one raw webhook delivery. `now` is caller-passed so
+ * every settlement/earned/effective timestamp is deterministic and this engine
+ * stays reproducible (parity with the runner/refund engines).
+ */
+export async function ingestWebhookEvent(signature: string, raw: string, endpoint: "connect" | "platform", now: Date): Promise<IngestResult> {
   const provider = getPaymentProvider();
   if (!provider) return { status: "ignored_no_provider" };
 
@@ -52,14 +56,23 @@ export async function ingestWebhookEvent(signature: string, raw: string, endpoin
     ? (await db.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: "STRIPE", providerAccountId: event.accountRef } }, select: { organizationId: true } }))?.organizationId ?? null
     : null;
 
-  // Store first (durability + dedupe). A duplicate delivery throws P2002.
+  // Store first (durability + dedupe). A duplicate delivery throws P2002 — but a
+  // redelivery of an event we stored yet never finished processing (it deferred
+  // on a race) must be REPROCESSED, not dropped, or a raced settlement would
+  // stall forever waiting on an internal sweep. So: drop only if it already
+  // processed; otherwise fall through and retry it.
   try {
     await db.paymentProviderEvent.create({
       data: { provider: "STRIPE", providerEventId: event.providerEventId, type: event.type, payload: raw as unknown as Prisma.InputJsonValue, organizationId },
     });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { status: "duplicate", providerEventId: event.providerEventId };
-    throw e;
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const prior = await db.paymentProviderEvent.findUnique({ where: { provider_providerEventId: { provider: "STRIPE", providerEventId: event.providerEventId } }, select: { processedAt: true } });
+      if (prior?.processedAt) return { status: "duplicate", providerEventId: event.providerEventId };
+      // stored-but-unprocessed → fall through and reprocess (idempotent handlers)
+    } else {
+      throw e;
+    }
   }
 
   // account.updated can arrive before any org-scoped charge; it still resolves an
@@ -69,8 +82,8 @@ export async function ingestWebhookEvent(signature: string, raw: string, endpoin
   }
 
   try {
-    const outcome = await processEvent(event, organizationId);
-    await db.paymentProviderEvent.updateMany({ where: { provider: "STRIPE", providerEventId: event.providerEventId }, data: { processedAt: new Date() } });
+    const outcome = await processEvent(event, organizationId, now);
+    await db.paymentProviderEvent.updateMany({ where: { provider: "STRIPE", providerEventId: event.providerEventId }, data: { processedAt: now } });
     return { status: "processed", providerEventId: event.providerEventId, outcome };
   } catch (e) {
     // Leave processedAt null so a retry (or the reconciliation sweep) picks it up.
@@ -93,20 +106,20 @@ function paymentIntentRef(obj: EventObject): string | null {
   return obj.payment_intent ?? null;
 }
 
-async function processEvent(event: ProviderWebhookEvent, organizationId: string | null): Promise<string> {
+async function processEvent(event: ProviderWebhookEvent, organizationId: string | null, now: Date): Promise<string> {
   switch (event.type) {
     case "payment_intent.succeeded":
-      return settleSucceeded(event, organizationId!);
+      return settleSucceeded(event, organizationId!, now);
     case "payment_intent.payment_failed":
-      return handleFailed(event, organizationId!);
+      return handleFailed(event, organizationId!, now);
     case "payment_intent.processing":
       return handleProcessing(event, organizationId!);
     case "account.updated":
-      return handleAccountUpdated(event, organizationId);
+      return handleAccountUpdated(event, organizationId, now);
     case "charge.dispute.created":
-      return handleDisputeOpened(event, organizationId!);
+      return handleDisputeOpened(event, organizationId!, now);
     case "charge.dispute.closed":
-      return handleDisputeClosed(event, organizationId!);
+      return handleDisputeClosed(event, organizationId!, now);
     default:
       return `ignored:${event.type}`; // charge.refunded is driven by the refund engine's own record
   }
@@ -118,7 +131,7 @@ const REVIEW_PAID: Record<"CARD" | "US_BANK_ACCOUNT", RevenueReviewStatus> = { C
  * Settle a successful charge — the money-moving path. Exactly-once via the
  * conditional attempt flip; balanced via postJournal's assertion.
  */
-async function settleSucceeded(event: ProviderWebhookEvent, organizationId: string): Promise<string> {
+async function settleSucceeded(event: ProviderWebhookEvent, organizationId: string, now: Date): Promise<string> {
   const piRef = paymentIntentRef(eventObject(event));
   if (!piRef) throw new Error("payment_intent.succeeded without a resolvable intent id");
 
@@ -136,7 +149,7 @@ async function settleSucceeded(event: ProviderWebhookEvent, organizationId: stri
     // Atomic exactly-once flip. count 0 ⇒ already settled (replay) ⇒ no posting.
     const claim = await tx.paymentAttempt.updateMany({
       where: { id: attempt.id, status: { in: ["PROCESSING", "CREATED"] } },
-      data: { status: "SUCCEEDED", settledAt: new Date(), providerPaymentIntentId: piRef },
+      data: { status: "SUCCEEDED", settledAt: now, providerPaymentIntentId: piRef },
     });
     if (claim.count === 0) return "already_settled";
 
@@ -152,12 +165,12 @@ async function settleSucceeded(event: ProviderWebhookEvent, organizationId: stri
     await postJournal(tx, {
       organizationId, journalId: `jrnl_${attempt.scheduledCharge.revenueReviewId}_settled`,
       event: "payment.settled", sourceType: "PaymentAttempt", sourceId: attempt.id,
-      currency: attempt.currency, effectiveAt: new Date(), lines,
+      currency: attempt.currency, effectiveAt: now, lines,
     });
 
     // Platform fee → EARNED (idempotent: only from ACCRUED).
     if (fee) {
-      await tx.platformFee.updateMany({ where: { id: fee.id, status: "ACCRUED" }, data: { status: "EARNED", earnedAt: new Date(), providerRef: eventObject(event).application_fee ?? null } });
+      await tx.platformFee.updateMany({ where: { id: fee.id, status: "ACCRUED" }, data: { status: "EARNED", earnedAt: now, providerRef: eventObject(event).application_fee ?? null } });
     }
 
     const legacyMethod: LegacyPaymentMethod = attempt.methodType === "US_BANK_ACCOUNT" ? "ACH" : "CARD";
@@ -176,7 +189,7 @@ async function settleSucceeded(event: ProviderWebhookEvent, organizationId: stri
 }
 
 /** A charge failed at the provider (sync decline late, or an ACH return R01…). */
-async function handleFailed(event: ProviderWebhookEvent, organizationId: string): Promise<string> {
+async function handleFailed(event: ProviderWebhookEvent, organizationId: string, now: Date): Promise<string> {
   const obj = eventObject(event);
   const piRef = paymentIntentRef(obj);
   if (!piRef) throw new Error("payment_failed without a resolvable intent id");
@@ -186,9 +199,27 @@ async function handleFailed(event: ProviderWebhookEvent, organizationId: string)
     if (attempt.organizationId !== organizationId) throw new Error("account/org mismatch on failure");
     const claim = await tx.paymentAttempt.updateMany({
       where: { id: attempt.id, status: { in: ["PROCESSING", "CREATED"] } },
-      data: { status: "FAILED", failedAt: new Date(), failureCode: String(obj.status ?? "failed"), failureMessage: "The payment failed at the provider." },
+      data: { status: "FAILED", failedAt: now, failureCode: String(obj.status ?? "failed"), failureMessage: "The payment failed at the provider." },
     });
-    if (claim.count === 0) return "already_terminal";
+    if (claim.count === 0) {
+      // The attempt already SUCCEEDED — this is a POST-SETTLEMENT return/reversal
+      // (e.g. a late ACH R-code). Money we booked as collected is being clawed
+      // back. We must NEVER silently drop it: raise a reconciliation exception so
+      // a human reverses the settlement. (Auto-reversal of a settled ACH is a
+      // tracked follow-up; the review stays paid until then, but flagged.)
+      if (attempt.status === "SUCCEEDED") {
+        await tx.reconciliationException.create({
+          data: {
+            organizationId, kind: "AMOUNT_MISMATCH", status: "OPEN", providerRef: piRef,
+            sourceType: "PaymentAttempt", sourceId: attempt.id, currency: attempt.currency,
+            expectedAmount: attempt.amount, actualAmount: new Prisma.Decimal(0), detectedAt: now,
+          },
+        });
+        logger.error("post-settlement payment failure — reconciliation exception raised", { attemptId: attempt.id, piRef });
+        return "post_settlement_return_flagged";
+      }
+      return "already_terminal";
+    }
     await tx.scheduledCharge.update({ where: { id: attempt.scheduledChargeId }, data: { status: "FAILED" } });
     await transitionReview(tx, attempt.scheduledCharge.revenueReviewId, "PAYMENT_FAILED");
     return "failed";
@@ -206,10 +237,9 @@ async function handleProcessing(event: ProviderWebhookEvent, organizationId: str
 }
 
 /** Mirror connected-account state changes (doc 19), out-of-order safe. */
-async function handleAccountUpdated(event: ProviderWebhookEvent, organizationId: string | null): Promise<string> {
+async function handleAccountUpdated(event: ProviderWebhookEvent, organizationId: string | null, now: Date): Promise<string> {
   if (!organizationId || !event.accountRef) return "unmapped";
   const obj = eventObject(event) as Record<string, unknown>;
-  const now = new Date();
   return db.$transaction(async (tx) => {
     const current = await tx.connectedAccount.findUnique({ where: { organizationId } });
     if (!current) return "no_account";
@@ -244,7 +274,7 @@ async function handleAccountUpdated(event: ProviderWebhookEvent, organizationId:
  * a student-billed review — place a FinancialHold so ops sees the risk. No money
  * moves yet; the funds are held by the provider until the dispute resolves.
  */
-async function handleDisputeOpened(event: ProviderWebhookEvent, organizationId: string): Promise<string> {
+async function handleDisputeOpened(event: ProviderWebhookEvent, organizationId: string, now: Date): Promise<string> {
   const obj = eventObject(event);
   const piRef = paymentIntentRef(obj);
   if (!piRef) throw new Error("dispute without a resolvable intent id");
@@ -263,7 +293,7 @@ async function handleDisputeOpened(event: ProviderWebhookEvent, organizationId: 
           provider: "STRIPE", providerDisputeId: disputeId, amount: attempt.amount, currency: attempt.currency,
           reason: (obj.reason as string) ?? null, status: "OPEN",
           evidenceDueBy: obj.evidence_due_by ? new Date(Number(obj.evidence_due_by) * 1000) : null,
-          openedAt: new Date(),
+          openedAt: now,
         },
       });
     } catch (e) {
@@ -289,7 +319,7 @@ async function handleDisputeOpened(event: ProviderWebhookEvent, organizationId: 
  * (the provider has already pulled the funds + fee), so we reverse the platform
  * fee to match economic reality and leave the review DISPUTED-resolved.
  */
-async function handleDisputeClosed(event: ProviderWebhookEvent, organizationId: string): Promise<string> {
+async function handleDisputeClosed(event: ProviderWebhookEvent, organizationId: string, now: Date): Promise<string> {
   const obj = eventObject(event);
   const disputeId = String(obj.id ?? "");
   const won = obj.status === "won" || (obj as { resolution?: string }).resolution === "won";
@@ -297,13 +327,22 @@ async function handleDisputeClosed(event: ProviderWebhookEvent, organizationId: 
     const dispute = await tx.dispute.findUnique({ where: { provider_providerDisputeId: { provider: "STRIPE", providerDisputeId: disputeId } } });
     if (!dispute || dispute.organizationId !== organizationId) return "unknown_dispute";
     if (dispute.status === "WON" || dispute.status === "LOST") return "already_resolved";
-    await tx.dispute.update({ where: { id: dispute.id }, data: { status: won ? "WON" : "LOST", resolvedAt: new Date() } });
+    await tx.dispute.update({ where: { id: dispute.id }, data: { status: won ? "WON" : "LOST", resolvedAt: now } });
 
-    if (!won && dispute.revenueReviewId) {
-      // Lost: reverse the platform fee for this review (fee is refunded to the school by AeroOps).
-      const fee = await tx.platformFee.findUnique({ where: { revenueReviewId: dispute.revenueReviewId }, select: { id: true, amount: true, reversedAmount: true } });
-      if (fee && fee.reversedAmount.lessThan(fee.amount)) {
-        await tx.platformFee.update({ where: { id: fee.id }, data: { reversedAmount: fee.amount, status: "REVERSED" } });
+    if (dispute.revenueReviewId) {
+      if (won) {
+        // Won: funds retained. The review returns to paid — never leave it stuck
+        // in DISPUTED. (Card path was CARD_PAID before the dispute; DISPUTED→PAID
+        // is the resolved-paid terminal.)
+        await transitionReview(tx, dispute.revenueReviewId, "PAID");
+      } else {
+        // Lost: the provider pulled the funds + fee back. Reverse the platform fee
+        // to match reality and move the review to REFUNDED (money left the school).
+        const fee = await tx.platformFee.findUnique({ where: { revenueReviewId: dispute.revenueReviewId }, select: { id: true, amount: true, reversedAmount: true } });
+        if (fee && fee.reversedAmount.lessThan(fee.amount)) {
+          await tx.platformFee.update({ where: { id: fee.id }, data: { reversedAmount: fee.amount, status: "REVERSED" } });
+        }
+        await transitionReview(tx, dispute.revenueReviewId, "REFUNDED");
       }
     }
     return won ? "dispute_won" : "dispute_lost";

@@ -68,8 +68,13 @@ export const isFrozen = (status: RevenueReviewStatus) => APPROVED_OR_LATER.inclu
 export const SUBMITTABLE: RevenueReviewStatus[] = ["DRAFT", "AWAITING_INSTRUCTOR_REVIEW", "CHANGES_REQUESTED"];
 /** Statuses Operations may approve / request changes / void from. */
 export const APPROVABLE: RevenueReviewStatus[] = ["AWAITING_OPERATIONS_REVIEW"];
-/** Statuses a review may still be voided from (pre-payment only). */
-export const VOIDABLE: RevenueReviewStatus[] = ["DRAFT", "AWAITING_INSTRUCTOR_REVIEW", "AWAITING_OPERATIONS_REVIEW", "CHANGES_REQUESTED", "APPROVED"];
+/**
+ * Statuses a review may be voided from. Pre-payment states plus PAYMENT_FAILED —
+ * an uncollectable charge (card dead, ACH returned, no working method) needs a
+ * terminal exit; voiding it is the correct close until write-off ships. The
+ * REVIEW_TRANSITIONS table already permits PAYMENT_FAILED → VOIDED.
+ */
+export const VOIDABLE: RevenueReviewStatus[] = ["DRAFT", "AWAITING_INSTRUCTOR_REVIEW", "AWAITING_OPERATIONS_REVIEW", "CHANGES_REQUESTED", "APPROVED", "PAYMENT_FAILED"];
 
 type PolicyInputs = {
   operationsApprovalRequired: boolean;

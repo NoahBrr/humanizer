@@ -26,13 +26,24 @@ export function categoryForLineKind(kind: LineItemKind): AllocationCategory {
   }
 }
 
-/** Sum invoice line totals (signed) by REVENUE category. */
+/**
+ * A single line's total, ROUNDED to 2 dp (half-up) — the money value that will
+ * be persisted. quantity is Decimal(8,2) and unitPrice Decimal(10,2), so the raw
+ * product can carry up to 4 dp; rounding here (before any sum) is what keeps
+ * every downstream journal/allocation amount exactly 2 dp. Summing rounded parts
+ * — rather than rounding the sum — is the ONLY way Σ(persisted lines) equals the
+ * persisted total, so the ledger cannot drift a cent (see INV-8).
+ */
+export function lineTotal(line: { quantity: Prisma.Decimal.Value; unitPrice: Prisma.Decimal.Value }): Prisma.Decimal {
+  return D(line.quantity).times(line.unitPrice).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+}
+
+/** Sum invoice line totals (signed, each rounded to 2 dp) by REVENUE category. */
 export function categorizeLines(lines: { kind: LineItemKind; quantity: Prisma.Decimal; unitPrice: Prisma.Decimal }[]): Map<AllocationCategory, Prisma.Decimal> {
   const m = new Map<AllocationCategory, Prisma.Decimal>();
   for (const l of lines) {
     const cat = categoryForLineKind(l.kind);
-    const amt = D(l.quantity).times(l.unitPrice);
-    m.set(cat, (m.get(cat) ?? Z).plus(amt));
+    m.set(cat, (m.get(cat) ?? Z).plus(lineTotal(l)));
   }
   return m;
 }

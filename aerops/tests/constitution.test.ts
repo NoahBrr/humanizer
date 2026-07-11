@@ -34,6 +34,7 @@ describe("every API route authorizes (one gate, no exceptions)", () => {
     "app/api/invitations/accept/route.ts", // token-authenticated public onboarding
     "app/api/platform/activate/route.ts", // token-authenticated Platform User setup (D3-A), rate limited
     "app/api/demo-requests/route.ts", // marketing form intake, rate limited, data-free response
+    "app/api/revenue/webhooks/stripe/route.ts", // Stripe webhook: authenticated by HMAC signature (verified before any processing), not a session; org resolved from the signed account id only
   ]);
 
   // Self-service identity routes: any signed-in user acts on their OWN

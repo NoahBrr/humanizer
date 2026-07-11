@@ -8,7 +8,7 @@ import { emitDomainEvent } from "@/lib/events";
 import { APPROVABLE, requiredApprovalKinds, type ApprovalSnapshot } from "@/lib/revenue-review";
 import { computeTax, type TaxableLine, type TaxRuleInput } from "@/lib/tax";
 import { postJournal } from "@/lib/ledger";
-import { categorizeLines, buildApprovalAllocationRows, postAllocationSet } from "@/lib/revenue-allocation";
+import { categorizeLines, buildApprovalAllocationRows, postAllocationSet, lineTotal } from "@/lib/revenue-allocation";
 import { buildApprovalJournalLines } from "@/lib/revenue-journals";
 import { resolvePlatformFeePolicy, feeBaseAmount, computePlatformFee, accruePlatformFee } from "@/lib/platform-fee";
 import { birthEarnings } from "@/lib/instructor-compensation";
@@ -75,13 +75,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const paymentPolicy = review.organization.orgPaymentPolicy?.defaultTimingPolicy ?? "IMMEDIATE_ON_APPROVAL";
 
   // ---- Compute the total (subtotal + tax) from the current invoice lines ----
-  const subtotal = review.invoice.lines.reduce((t, l) => t.plus(new Prisma.Decimal(l.quantity).times(l.unitPrice)), new Prisma.Decimal(0));
+  // Round each line to 2 dp BEFORE summing so subtotal/total match the persisted
+  // per-line/per-category amounts exactly (INV-8 — no sum-of-rounded drift).
+  const subtotal = review.invoice.lines.reduce((t, l) => t.plus(lineTotal(l)), new Prisma.Decimal(0));
   let taxComputation = computeTax([], []);
   if (settings?.taxEnabled) {
     const rules = await db.taxRule.findMany({ where: { organizationId: session.organizationId, isActive: true } });
     const taxable: TaxableLine[] = review.invoice.lines.map((l) => ({
       lineId: l.id,
-      amount: new Prisma.Decimal(l.quantity).times(l.unitPrice),
+      amount: lineTotal(l),
       chargeClass: chargeClassFor(l.kind),
       taxable: isTaxable(l.kind),
     }));

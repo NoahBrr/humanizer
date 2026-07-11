@@ -258,6 +258,7 @@ async function recordChargeOutcome(
       case "canceled":
         await tx.paymentAttempt.update({ where: { id: attemptId }, data: { providerPaymentIntentId: charge.paymentIntentRef, status: "CANCELLED", cancelledAt: now } });
         await tx.scheduledCharge.update({ where: { id: scheduledChargeId }, data: { status: "FAILED" } });
+        await transitionReview(tx, reviewId, "PAYMENT_FAILED"); // never leave the review stuck in PROCESSING
         return "canceled";
     }
   });
