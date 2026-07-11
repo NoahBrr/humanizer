@@ -75,7 +75,14 @@ Part 1 stays binding: Part 2 docs extend 00–16 by reference and never reinterp
 | [34-part2-database-additions.md](./34-part2-database-additions.md) | **Canonical and binding for every NEW Part 2 model, enum, column, constraint, and index** (e.g. `ConnectedAccount`, `PaymentConsent`, extensions to `PaymentProviderEvent`); where docs 17–31 and 34 disagree, 34 wins; 13 stays canonical for everything Part 1 bound | Database Architect; Principal Software Architect at Stripe; Financial Systems Architect |
 | [35-part2-open-decisions-and-confirmations.md](./35-part2-open-decisions-and-confirmations.md) | Part 2 risks, open decisions needing a product/owner call before Part 3, and the Part 2 compliance confirmations (deliverables 19 and 20) | Head of Product; Flight School Owner; Reliability/SRE Engineer |
 
-Docs 32, 33, and 35 are part of this design set and are being finalized in the same Part 2 pass; their filenames are fixed by this index (several Part 2 docs reference them by number and defer exact filenames here) so cross-references stay stable when they land.
+### Part 3 (UI, permissions, reporting, implementation plan)
+
+| Document | Covers | Lead roles |
+|---|---|---|
+| [36-permissions-and-visibility.md](./36-permissions-and-visibility.md) | The definitive Revenue Engine RBAC + visibility matrix — every capability × role, new `SECTION_PERMISSIONS` keys, student/payer own-data-only rules, instructor own-compensation-only, platform-staff-only controls, server-side separation-of-duties, and the audit/constitution additions | Security Engineer at Cloudflare; Head of Product; Database Architect |
+| [37-ui-workflows.md](./37-ui-workflows.md) | Screen-by-screen UI spec — check-in Hobbs/Tach capture, the Revenue Review screen and approval control, the operations queue, ramp-friendly instructor time entry, settings editors, payer/method/consent, failure/refund flows, Connect onboarding, and student/payer views (design-system components, states, light/dark, responsive) | Financial UX Designer; Head of Human Interface Design at Apple; Aviation UX Lead at Boeing Digital Aviation; Dispatcher |
+| [38-reports-and-exports.md](./38-reports-and-exports.md) | Report catalog (financial + instructor compensation), Excel export via the existing `exceljs` dependency, and the accounting-export adapter foundation (`AccountingMapping`, `FinancialExportJob`, generic-CSV + QuickBooks-shaped), with export security and honest labeling | Aviation Accounting Specialist; SaaS Revenue Operations Architect; Documentation Engineer |
+| [39-implementation-plan.md](./39-implementation-plan.md) | The phased build playbook — the eight fixed implementation phases, each with exact model/engine/route/UI scope, dependency ordering, test gates, the `PaymentProvider` abstraction + env matrix, seed plan, and per-phase "done" criteria | Head of Software Engineering at Meta; Principal Software Architect at Stripe; QA/Test Engineer; Reliability/SRE Engineer |
 
 ## Deliverables map
 
@@ -135,6 +142,15 @@ The Phase 8 Part 2 spec requires 20 deliverables before Part 3 implementation be
 
 Docs [17-two-financial-systems.md](./17-two-financial-systems.md) (spec Part N — the SaaS-billing/Revenue-Engine separation) and [34-part2-database-additions.md](./34-part2-database-additions.md) (binding for all NEW Part 2 schema shapes) cut across the numbered deliverables; they are required reading even though no single deliverable number maps to them.
 
+### Part 3 (UI, permissions, reporting, implementation plan)
+
+| # | Deliverable | Document |
+|---|---|---|
+| 1 | Permissions & visibility matrix | [36-permissions-and-visibility.md](./36-permissions-and-visibility.md) |
+| 2 | UI workflows (screen specs) | [37-ui-workflows.md](./37-ui-workflows.md) |
+| 3 | Reports, Excel & accounting exports | [38-reports-and-exports.md](./38-reports-and-exports.md) |
+| 4 | Phased implementation plan (8 phases) | [39-implementation-plan.md](./39-implementation-plan.md) |
+
 ## Conventions that hold across every doc
 
 - Money is Prisma `Decimal` — never float. New financial models carry an explicit ISO 4217 currency column; the default recommendation is `Decimal(12,2)` + currency, with the binding per-field call made in [13-database-model.md](./13-database-model.md).
@@ -143,4 +159,4 @@ Docs [17-two-financial-systems.md](./17-two-financial-systems.md) (spec Part N �
 
 ## What happens next
 
-Part 2 is now **designed** — like Part 1, on paper only: no schema, code, migration, deploy, Stripe object, or live charge exists. **Owner approval of the Stripe Connect ADR ([18-stripe-connect-decision.md](./18-stripe-connect-decision.md), ADR-037) and the security threat assessment ([32-financial-security-threat-assessment.md](./32-financial-security-threat-assessment.md)) gates Part 3 implementation** — no payment code is written before that sign-off. On approval, the ADRs proposed in [15-adr-proposals.md](./15-adr-proposals.md) and [18-stripe-connect-decision.md](./18-stripe-connect-decision.md) merge into DECISIONS.md, and Part 3 implements the [13-database-model.md](./13-database-model.md) schema plus the [34-part2-database-additions.md](./34-part2-database-additions.md) additions in the sequence set by [14-migration-plan.md](./14-migration-plan.md), against Stripe **test mode only**, behind env flags that default off. Before any **live** launch, the selected Connect posture (merchant of record, tax reporting, dispute and negative-balance liability) must be reviewed by qualified **legal and accounting professionals** (spec Part O; [18](./18-stripe-connect-decision.md) review requirements).
+All three design parts (1–3) are now complete. Implementation follows the eight-phase sequence in [39-implementation-plan.md](./39-implementation-plan.md), building the [13-database-model.md](./13-database-model.md) schema plus the [34-part2-database-additions.md](./34-part2-database-additions.md) additions in the order set by [14-migration-plan.md](./14-migration-plan.md), against Stripe **test mode only**, behind env flags that default off — no live charge, no production email, no deploy. The ADRs proposed in [15-adr-proposals.md](./15-adr-proposals.md) and [18-stripe-connect-decision.md](./18-stripe-connect-decision.md) (ADR-037) merge into DECISIONS.md as the corresponding phases land. Before any **live** launch, the selected Connect posture (merchant of record, tax reporting, dispute and negative-balance liability) must be reviewed by qualified **legal and accounting professionals** (spec Part O; [18](./18-stripe-connect-decision.md) review requirements).
