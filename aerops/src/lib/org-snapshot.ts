@@ -135,6 +135,12 @@ export async function wipeOrganizationData(organizationId: string, tx: Prisma.Tr
   await tx.user.deleteMany({ where: { organizationId } }); // cascades students/instructors/availability
   await tx.orgRole.deleteMany({ where: { organizationId } });
   await tx.department.deleteMany({ where: { organizationId } });
+  // Revenue Engine config singletons (RevenueSettings, RevenueWorkflowPolicy,
+  // DispatchPolicy, OrgPaymentPolicy, CheckoutRestrictionPolicy, AccountingMapping,
+  // OrgSequence) are onDelete:Cascade children of Organization — full org
+  // deletion removes them automatically. They are org SETTINGS, not operational
+  // snapshot data, so (like AircraftType) they are intentionally not captured and
+  // survive an operational snapshot restore untouched.
 }
 
 export async function restoreSnapshot(snapshotId: string) {

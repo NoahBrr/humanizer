@@ -62,6 +62,21 @@ const STATUS_TONE: Record<string, StatusTone> = {
   OVERDUE: "red",
   DRAFT: "gray",
   VOID: "gray",
+  // Revenue Engine — review & payment lifecycle (doc 30 §13). DRAFT/APPROVED/PAID
+  // above are reused (compatible meanings, never changed — single-source rule).
+  AWAITING_INSTRUCTOR_REVIEW: "amber",
+  AWAITING_OPERATIONS_REVIEW: "blue",
+  CHANGES_REQUESTED: "orange",
+  PAYMENT_SCHEDULED: "blue",
+  PAYMENT_PROCESSING: "purple",
+  CARD_PAID: "green",
+  ACH_PENDING: "cyan",
+  PAYMENT_FAILED: "red",
+  PARTIALLY_REFUNDED: "amber",
+  REFUNDED: "gray",
+  VOIDED: "gray",
+  DISPUTED: "darkred",
+  WRITTEN_OFF: "black",
   // Training / org
   PASSED: "green",
   FAILED: "red",

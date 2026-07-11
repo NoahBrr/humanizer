@@ -77,7 +77,13 @@ describe("tenant-scoped uniqueness", () => {
   // Legitimately global on an org-owned model: credential hashes, and the
   // cross-org login identity (User.email — one person, one account; org
   // membership is a nullable FK). DATABASE_STANDARDS documents these.
-  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email"]);
+  // `organizationId` is also allowed: `organizationId @unique` is the canonical
+  // per-org 1:1 config-singleton pattern (Revenue Engine config rows —
+  // RevenueWorkflowPolicy, DispatchPolicy, OrgPaymentPolicy, RevenueSettings,
+  // etc.). It is tenant-safe by construction (the unique key IS the tenant), and
+  // is the opposite of the natural-key-reverted-to-bare-@unique this rule guards
+  // against. Contract expanded here when the Revenue Engine introduced singletons.
+  const GLOBAL_UNIQUE_OK = new Set(["keyHash", "tokenHash", "email", "organizationId"]);
   it("no org-owned model declares a single-field @unique on a non-global field", () => {
     const offenders: string[] = [];
     for (const m of orgOwned()) {

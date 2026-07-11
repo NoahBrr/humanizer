@@ -261,13 +261,45 @@ export async function authorize(permission: Permission | null, opts: { mutating?
   // access is enforced here, not just hidden in navigation.
   if (permission) {
     const MODULE_BY_PREFIX: Record<string, ModuleKey> = {
-      billing: "billing", maintenance: "maintenance", reports: "reports", documents: "documents",
+      billing: "billing", revenue: "billing", maintenance: "maintenance", reports: "reports", documents: "documents",
     };
     const mod = MODULE_BY_PREFIX[permission.split(".")[0]];
     if (mod && !session.modules.has(mod)) {
       return { error: NextResponse.json({ error: "This module isn't enabled for your organization. An owner can activate it in Settings → Business Profiles." }, { status: 403 }) };
     }
   }
+  return { session };
+}
+
+/**
+ * Self-service authorization boundary for `/api/payer/*` (doc 36 §5.2, doc 11
+ * §7.2). A third gate beside `authorize()`/`authorizePlatform()` — the single
+ * session-resolution rule is preserved. Responsible payers are Users linked via
+ * StudentPayerRelationship; they hold NO org permission, so no permission is
+ * consulted. Scope derives entirely from the caller's own payer rows, never an
+ * `organizationId` from the client, so a missing filter fails closed to nothing.
+ *
+ * Phase 1: the gate + its constitution-suite catalog entry land now; the
+ * ResponsiblePayer/StudentPayerRelationship models arrive in Phase 4, so payer
+ * scope resolution is stubbed until then (no `/api/payer/*` route exists yet).
+ */
+export async function authorizePayer(opts: { mutating?: boolean } = {}): Promise<AuthorizeOk | AuthorizeErr> {
+  const session = await getSession();
+  if (!session || (session.kind !== "org" && session.kind !== "individual")) {
+    return { error: NextResponse.json({ error: "Sign in to view your payments." }, { status: 401 }) };
+  }
+  // Fail closed on a suspended org, mirroring authorize(). Scoped to org-kind
+  // sessions so genuine no-org individual payers are unaffected.
+  if (session.kind === "org" && session.orgStatus !== "ACTIVE") {
+    return { error: NextResponse.json({ error: "This organization is suspended. Contact AeroOps support." }, { status: 403 }) };
+  }
+  // Impersonation semantics identical to authorize(): read-only impersonation
+  // may never fire an off-session charge or any payer mutation.
+  if (opts.mutating && session.impersonation?.readOnly) {
+    return { error: NextResponse.json({ error: "Impersonation is read-only — changes are disabled." }, { status: 403 }) };
+  }
+  // Phase 4 wires payer-scope resolution (ACTIVE ResponsiblePayer rows +
+  // StudentPayerRelationships + capability flags) here once those models exist.
   return { session };
 }
 
