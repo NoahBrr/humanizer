@@ -7,11 +7,15 @@ import { logger } from "@/lib/logger";
 import { emitDomainEvent } from "@/lib/events";
 import { APPROVABLE, requiredApprovalKinds, type ApprovalSnapshot } from "@/lib/revenue-review";
 import { computeTax, type TaxableLine, type TaxRuleInput } from "@/lib/tax";
-import { postJournal, debit, credit, nonZero, type JournalLine } from "@/lib/ledger";
+import { postJournal } from "@/lib/ledger";
 import { categorizeLines, buildApprovalAllocationRows, postAllocationSet } from "@/lib/revenue-allocation";
+import { buildApprovalJournalLines } from "@/lib/revenue-journals";
 import { resolvePlatformFeePolicy, feeBaseAmount, computePlatformFee, accruePlatformFee } from "@/lib/platform-fee";
 import { birthEarnings } from "@/lib/instructor-compensation";
-import type { AllocationCategory, LedgerAccount } from "@prisma/client";
+import { chargingEnabled } from "@/lib/payment-config";
+import { accountReadyForCharge } from "@/lib/connected-account";
+import { decideScheduling, buildScheduledChargeData } from "@/lib/payment-scheduling";
+import { canTransition } from "@/lib/revenue-review";
 
 /**
  * Approve a Revenue Review (doc 03 §2). Records the actor's approval signature;
@@ -219,18 +223,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
       // 3. Balanced approval journal J1 (revenue recognized; A/R + comp accrual).
       const catAmounts = categorizeLines(review.invoice.lines);
-      const revenueLines: JournalLine[] = [];
-      for (const [cat, amt] of catAmounts) {
-        if (amt.greaterThan(0)) revenueLines.push(credit(ledgerAccountForCategory(cat), amt));
-        else if (amt.lessThan(0)) revenueLines.push(debit("CONTRA_REVENUE_DISCOUNTS", amt.abs()));
-      }
-      const j1: JournalLine[] = nonZero([
-        debit("ACCOUNTS_RECEIVABLE", total),
-        ...(compTotal.greaterThan(0) ? [debit("INSTRUCTOR_COMP_EXPENSE", compTotal)] : []),
-        ...revenueLines,
-        ...(taxComputation.totalTax.greaterThan(0) ? [credit("TAX_PAYABLE", taxComputation.totalTax)] : []),
-        ...(compTotal.greaterThan(0) ? [credit("INSTRUCTOR_COMP_PAYABLE", compTotal)] : []),
-      ]);
+      const j1 = buildApprovalJournalLines({ total, compTotal, categoryAmounts: catAmounts, taxAmount: taxComputation.totalTax });
       await postJournal(tx, {
         organizationId: session.organizationId, journalId: `jrnl_${review.id}_approved`,
         event: "revenue_review.approved", sourceType: "RevenueReview", sourceId: review.id,
@@ -245,7 +238,39 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         effectiveAt: approvedAt, amount: total, rows,
       });
 
-      return { status: "APPROVED" as const, approved: true };
+      // 5. Payment outbox (doc 28/39, ADR-037). Write the ScheduledCharge INSIDE
+      // this tx (atomic with approval) but call NO provider here — the runner
+      // does that. When charging is off, or the policy is manual-invoice, no row
+      // is created and the school bills offline. Its revenueReviewId/invoiceId
+      // uniqueness makes a duplicate outbox row impossible on a retried approval.
+      const charging = chargingEnabled();
+      let account = null as Awaited<ReturnType<typeof tx.connectedAccount.findUnique>> | null;
+      if (charging) account = await tx.connectedAccount.findUnique({ where: { organizationId: session.organizationId } });
+      const accountReady = !!account && accountReadyForCharge({
+        providerAccountId: account.providerAccountId, chargesEnabled: account.chargesEnabled, payoutsEnabled: account.payoutsEnabled,
+        detailsSubmitted: account.detailsSubmitted, requirementsDue: account.requirementsDue as never,
+        suspendedAt: account.suspendedAt, deauthorizedAt: account.deauthorizedAt,
+      });
+      const decision = decideScheduling({
+        policy: paymentPolicy, chargingEnabled: charging,
+        hasPaymentMethod: !!review.paymentMethodRefId, accountReady, approvedAt,
+      });
+      if (decision.schedule) {
+        await tx.scheduledCharge.create({
+          data: buildScheduledChargeData({
+            organizationId: session.organizationId, revenueReviewId: review.id, invoiceId: review.invoiceId,
+            policy: paymentPolicy, amount: total, currency: review.currency,
+            paymentMethodReferenceId: review.paymentMethodRefId, decision,
+          }),
+        });
+        // APPROVED → PAYMENT_SCHEDULED (guarded; only when an outbox row exists).
+        if (canTransition("APPROVED", "PAYMENT_SCHEDULED")) {
+          await tx.revenueReview.update({ where: { id: review.id }, data: { status: "PAYMENT_SCHEDULED" } });
+        }
+      }
+
+      const finalStatus: "PAYMENT_SCHEDULED" | "APPROVED" = decision.schedule ? "PAYMENT_SCHEDULED" : "APPROVED";
+      return { status: finalStatus, approved: true, scheduled: decision.schedule };
     });
 
     await recordAudit({
@@ -269,17 +294,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 class AlreadyResolved extends Error {}
-
-/** Revenue allocation category → its ledger revenue account (doc 28 taxonomy). */
-function ledgerAccountForCategory(cat: AllocationCategory): LedgerAccount {
-  switch (cat) {
-    case "AIRCRAFT_REVENUE": return "REVENUE_AIRCRAFT";
-    case "INSTRUCTOR_SERVICE_REVENUE": return "REVENUE_INSTRUCTION";
-    case "AIRPORT_LANDING_FEES": return "REVENUE_AIRPORT_FEES";
-    case "FUEL_REVENUE": return "REVENUE_FUEL";
-    default: return "REVENUE_OTHER";
-  }
-}
 
 // Invoice-line kind → tax charge-class + taxability (doc 07). Conservative
 // defaults; per-org Revenue Item taxability refines this in a later phase.

@@ -67,10 +67,26 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
               </div>
             ))}
           </div>
+          <div className="mt-6 rounded-2xl border border-border bg-muted/30 p-5">
+            <p className="text-sm font-semibold text-brand-navy dark:text-foreground">Relevant modules</p>
+            <p className="mt-2 text-sm text-muted-foreground">{s.modules.join(" · ")}</p>
+            <p className="mt-4 text-sm font-semibold text-brand-navy dark:text-foreground">Typical workflow</p>
+            <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+              {s.workflow.map((step) => (
+                <li key={step} className="flex items-start gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-sky" />{step}</li>
+              ))}
+            </ul>
+            <p className="mt-4 text-sm font-semibold text-brand-navy dark:text-foreground">Customer journey</p>
+            <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+              {s.journey.map((step) => (
+                <li key={step} className="flex items-start gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-sky" />{step}</li>
+              ))}
+            </ul>
+          </div>
         </div>
       </Section>
 
-      <CtaBand title={`Bring ${s.label.toLowerCase()} onto AeroOps`} />
+      <CtaBand title={s.status === "coming-soon" ? `AeroOps is on the way for ${s.label.toLowerCase()}` : `Bring ${s.label.toLowerCase()} onto AeroOps`} />
     </>
   );
 }

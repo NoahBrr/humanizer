@@ -35,14 +35,31 @@ export interface ProviderRefund {
   rawStatus: string;
 }
 
+/**
+ * Requirement KEYS + deadline only — never submitted values. The past-due vs
+ * currently-due split drives the ENABLED / REQUIREMENTS_DUE / RESTRICTED
+ * derivation in connected-account.ts, so the adapter must surface it structured.
+ */
+export interface ProviderAccountRequirements {
+  currentlyDue: string[];
+  eventuallyDue: string[];
+  pastDue: string[];
+  currentDeadline: string | null;
+}
+
 export interface ProviderConnectedAccount {
   accountRef: ProviderRef;
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
-  requirementsDue: string[];
+  detailsSubmitted: boolean;
+  requirements: ProviderAccountRequirements;
   disabledReason: string | null;
   country: string;
   defaultCurrency: string;
+  businessType: string | null;
+  capabilities: Record<string, string> | null;
+  /** Provider-clock watermark for out-of-order webhook ordering; null if unknown. */
+  providerStateAsOf: Date | null;
 }
 
 export interface ProviderSetupSession {

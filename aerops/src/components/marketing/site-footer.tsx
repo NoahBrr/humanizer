@@ -5,21 +5,20 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
     title: "Product",
     links: [
-      ["/features", "Features"], ["/pricing", "Pricing"], ["/demo", "Request a Demo"], ["/sign-up", "Create Account"],
+      ["/features", "Product"], ["/pricing", "Pricing"], ["/demo", "Request a Demo"], ["/sign-up", "Create Account"],
     ],
   },
   {
     title: "Solutions",
     links: [
       ["/solutions/flight-schools", "Flight Schools"], ["/solutions/flying-clubs", "Flying Clubs"],
-      ["/solutions/aircraft-rental", "Aircraft Rental"], ["/solutions/fbos", "FBOs"],
-      ["/solutions/maintenance", "Maintenance"], ["/solutions/corporate-flight-departments", "Corporate Flight"],
+      ["/solutions/university-aviation-programs", "University Aviation Programs"], ["/solutions/corporate-aviation", "Corporate Aviation"],
     ],
   },
   {
     title: "Company",
     links: [
-      ["/about", "About"], ["/contact", "Contact"], ["/sign-in", "Sign in"],
+      ["/about", "About"], ["/contact", "Contact"], ["/sign-in", "Log In"],
     ],
   },
 ];
@@ -34,8 +33,7 @@ export function SiteFooter() {
             <span className="text-[15px] font-bold tracking-[0.07em]">AERO<span className="text-brand-sky">OPS</span></span>
           </div>
           <p className="mt-3 max-w-xs text-xs leading-relaxed text-white/60">
-            The Operating System for Aviation. Scheduling, dispatch, maintenance, training, billing,
-            CRM, and analytics — one system for your whole operation.
+            The modern operating system for flight schools and aviation organizations that value calm, professional operations.
           </p>
         </div>
         {COLUMNS.map((c) => (
@@ -54,7 +52,7 @@ export function SiteFooter() {
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-[11px] text-white/45 lg:px-6">
           <p>© {new Date().getFullYear()} AeroOps. All rights reserved.</p>
-          <p>Built for flight schools, clubs, FBOs, charter, corporate, university, and maintenance operations.</p>
+          <p>Built for flight schools, flying clubs, university aviation programs, and growing aviation organizations.</p>
         </div>
       </div>
     </footer>

@@ -4,14 +4,14 @@ import { Section, Eyebrow, Heading, Lead, CtaBand } from "@/components/marketing
 
 export const metadata: Metadata = {
   title: "About",
-  description: "Why AeroOps exists: aviation operations deserve modern software.",
+  description: "AeroOps exists to bring modern, dependable software to flight schools and aviation organizations that deserve better tools.",
 };
 
 const PRINCIPLES = [
-  ["Operational first", "AeroOps is built around how flight lines actually run — dispatch discipline, airworthiness gates, and meter-accurate billing — not around a generic calendar."],
-  ["One system of record", "Scheduling, maintenance, training, and money share the same aircraft, the same people, and the same audit trail. No sync jobs, no swivel-chair."],
-  ["Trust is a feature", "Tenant isolation, data-driven permissions, MFA, and an immutable audit log are core product, not enterprise add-ons."],
-  ["Reasons, not just numbers", "Every computed answer in AeroOps — health scores, forecasts, AI recommendations — carries the factors behind it, so you can check the work."],
+  ["Built for aviation operations", "AeroOps is designed around how flight schools and other aviation organizations actually run — with scheduling discipline, airworthiness awareness, and billing that closes the loop."],
+  ["One system of record", "Scheduling, maintenance, training, and money share the same aircraft, the same people, and the same audit trail."],
+  ["Professional by default", "The experience is designed to feel calm, credible, and modern — from the first login to the busiest day of the season."],
+  ["Grow without replatforming", "AeroOps starts with the flight school core and expands naturally as an organization grows in complexity."],
 ];
 
 export default function AboutPage() {
@@ -20,11 +20,9 @@ export default function AboutPage() {
       <Section className="pb-8">
         <div className="mx-auto max-w-3xl text-center">
           <Eyebrow>About AeroOps</Eyebrow>
-          <Heading className="text-4xl">Aviation runs on discipline. Its software should too.</Heading>
+          <Heading className="text-4xl">Aviation deserves software that feels as professional as the work itself</Heading>
           <Lead className="mx-auto">
-            Flight schools, clubs, FBOs, and flight departments run some of the most safety-critical small businesses
-            in the world — on whiteboards, binders, and spreadsheets. AeroOps exists to give those operations the same
-            quality of software that airlines and modern SaaS companies take for granted.
+            AeroOps was built to give flight schools and aviation organizations a modern way to operate with clarity. The goal is simple: fewer manual workarounds, better visibility, and a calmer experience for the teams running the operation.
           </Lead>
         </div>
       </Section>
@@ -42,14 +40,12 @@ export default function AboutPage() {
 
       <Section className="pt-0">
         <div className="rounded-2xl bg-brand-navy p-8 text-white lg:p-12">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-sky">The name</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-sky">The vision</p>
           <h3 className="mt-2 max-w-2xl text-2xl font-semibold tracking-tight">
-            “Ops” is where aviation businesses are won and lost.
+            We are building the operating system for aviation organizations that want to grow with confidence.
           </h3>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/70">
-            Not in the logo, not in the lobby — in operations: the schedule that holds, the squawk that gets fixed
-            before it grounds a lesson, the invoice that goes out the moment the prop stops. AeroOps is named for the
-            part of the business we obsess over.
+            AeroOps is designed to support the day-to-day needs of flight schools today while giving them a strong foundation for the broader aviation organizations they may become tomorrow.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href="/demo" className="inline-flex h-10 items-center rounded-lg bg-white px-5 text-sm font-semibold text-brand-navy hover:bg-brand-silver">Request a Demo</Link>

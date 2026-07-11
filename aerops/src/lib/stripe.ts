@@ -74,14 +74,29 @@ function mapAccount(
   accountRef: ProviderRef,
   account: import("stripe").Stripe.Account,
 ): ProviderConnectedAccount {
+  const req = account.requirements;
+  const capabilities = account.capabilities
+    ? Object.fromEntries(Object.entries(account.capabilities).map(([k, v]) => [k, String(v)]))
+    : null;
   return {
     accountRef,
     chargesEnabled: account.charges_enabled ?? false,
     payoutsEnabled: account.payouts_enabled ?? false,
-    requirementsDue: account.requirements?.currently_due ?? [],
-    disabledReason: account.requirements?.disabled_reason ?? null,
+    detailsSubmitted: account.details_submitted ?? false,
+    requirements: {
+      currentlyDue: req?.currently_due ?? [],
+      eventuallyDue: req?.eventually_due ?? [],
+      pastDue: req?.past_due ?? [],
+      currentDeadline: req?.current_deadline ? new Date(req.current_deadline * 1000).toISOString() : null,
+    },
+    disabledReason: req?.disabled_reason ?? null,
     country: account.country ?? "US",
     defaultCurrency: account.default_currency ?? "usd",
+    businessType: account.business_type ?? null,
+    capabilities,
+    // Stripe Account carries no single mutation timestamp; the webhook envelope's
+    // `created` is the provider-clock watermark — supplied by the caller there.
+    providerStateAsOf: null,
   };
 }
 

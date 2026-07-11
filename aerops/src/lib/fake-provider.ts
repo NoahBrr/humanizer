@@ -181,10 +181,14 @@ export class FakePaymentProvider implements PaymentProvider {
       accountRef: input.accountRef,
       chargesEnabled: true,
       payoutsEnabled: true,
-      requirementsDue: [],
+      detailsSubmitted: true,
+      requirements: { currentlyDue: [], eventuallyDue: [], pastDue: [], currentDeadline: null },
       disabledReason: null,
       country: "US",
       defaultCurrency: "usd",
+      businessType: "individual",
+      capabilities: { card_payments: "active", transfers: "active", us_bank_account_ach_payments: "active" },
+      providerStateAsOf: null,
     };
     return { ...base, ...(this.accountScripts.get(input.accountRef) ?? {}) };
   }
