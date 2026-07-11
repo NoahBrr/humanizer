@@ -63,3 +63,59 @@ export const APPROVED_OR_LATER: RevenueReviewStatus[] = [
   "PAID", "PAYMENT_FAILED", "PARTIALLY_REFUNDED", "REFUNDED", "DISPUTED", "WRITTEN_OFF",
 ];
 export const isFrozen = (status: RevenueReviewStatus) => APPROVED_OR_LATER.includes(status);
+
+/** Statuses an instructor may submit from (→ Awaiting Operations Review). */
+export const SUBMITTABLE: RevenueReviewStatus[] = ["DRAFT", "AWAITING_INSTRUCTOR_REVIEW", "CHANGES_REQUESTED"];
+/** Statuses Operations may approve / request changes / void from. */
+export const APPROVABLE: RevenueReviewStatus[] = ["AWAITING_OPERATIONS_REVIEW"];
+/** Statuses a review may still be voided from (pre-payment only). */
+export const VOIDABLE: RevenueReviewStatus[] = ["DRAFT", "AWAITING_INSTRUCTOR_REVIEW", "AWAITING_OPERATIONS_REVIEW", "CHANGES_REQUESTED", "APPROVED"];
+
+type PolicyInputs = {
+  operationsApprovalRequired: boolean;
+  secondApprovalAmountThreshold: unknown | null; // Prisma.Decimal | null
+  financeApprovalRequired: boolean;
+};
+
+/**
+ * The approval kinds a review needs before it can reach APPROVED (doc 03 §2).
+ * OPERATIONS is always required; SECOND when the total crosses the org's
+ * threshold or the review was flagged for a second approval (manual item,
+ * damage fee, discount over policy); FINANCE when the org requires it.
+ */
+export function requiredApprovalKinds(
+  policy: PolicyInputs,
+  total: number,
+  reviewSecondApprovalRequired: boolean,
+): ("OPERATIONS" | "SECOND" | "FINANCE")[] {
+  const kinds: ("OPERATIONS" | "SECOND" | "FINANCE")[] = [];
+  if (policy.operationsApprovalRequired) kinds.push("OPERATIONS");
+  const threshold = policy.secondApprovalAmountThreshold == null ? null : Number(policy.secondApprovalAmountThreshold);
+  // Strict greater-than: OVER_THRESHOLD means total EXCEEDS the threshold (doc 03 §2.5).
+  if (reviewSecondApprovalRequired || (threshold != null && total > threshold)) kinds.push("SECOND");
+  if (policy.financeApprovalRequired) kinds.push("FINANCE");
+  // A review must always have at least one approvable path — a zero-approver
+  // policy (operationsApprovalRequired=false, no threshold/flag/finance) would
+  // otherwise be permanently unapprovable (doc 03 §3 refuses zero-approver configs).
+  if (kinds.length === 0) kinds.push("OPERATIONS");
+  return kinds;
+}
+
+/**
+ * The immutable snapshot frozen at approval (doc 03 §2.7, principle 5). A
+ * point-in-time financial fact — never recomputed. Stored on
+ * RevenueReview.approvalSnapshot (JSON) alongside totalAtApproval and
+ * paymentPolicyAtApproval. Contains NO payment-provider state.
+ */
+export type ApprovalSnapshot = {
+  version: 1;
+  frozenAt: string;
+  currency: string;
+  lines: { kind: string; description: string; quantity: string; unitPrice: string; lineTotal: string }[];
+  subtotal: string;
+  tax: { total: string; perRule: { ruleKey: string; jurisdiction: string; tax: string }[] };
+  total: string;
+  paymentPolicy: string;
+  platformFee: null; // placeholder only — computed/collected in Parts 2–3 (no value frozen yet)
+  approvals: { kind: string; approverLabel: string; at: string }[];
+};

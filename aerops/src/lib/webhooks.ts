@@ -9,6 +9,7 @@ export const WEBHOOK_EVENTS = [
   "invoice.paid",
   "schedule.cancelled",
   "maintenance.completed",
+  "revenue_review.approved",
 ] as const;
 
 /**

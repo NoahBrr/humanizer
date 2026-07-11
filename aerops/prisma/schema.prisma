@@ -2638,13 +2638,20 @@ model RevenueReviewApproval {
   approverUserId  String?
   approverLabel   String
   note            String?
+  /// Set when a subsequent Changes Requested (or line/adjustment edit)
+  /// invalidates this signature (doc 03 §2.7): the approver is no longer bound
+  /// to numbers that have since moved, so a fresh approval is required. Only
+  /// non-superseded rows count toward "provided" approvals. The uniqueness of
+  /// one active approval per (review, kind) is a partial index (raw SQL) —
+  /// WHERE "supersededAt" IS NULL — so re-approval after supersession is allowed.
+  supersededAt    DateTime?
   createdAt       DateTime            @default(now())
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   review       RevenueReview @relation(fields: [revenueReviewId], references: [id], onDelete: Cascade)
   approver     User?         @relation(fields: [approverUserId], references: [id], onDelete: SetNull)
 
-  @@unique([revenueReviewId, kind])
+  @@index([revenueReviewId, kind])
   @@index([organizationId, createdAt])
 }
 

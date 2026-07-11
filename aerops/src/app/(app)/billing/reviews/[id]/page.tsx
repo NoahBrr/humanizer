@@ -5,12 +5,14 @@ import { Plane, User, GraduationCap, MapPin, Radio, Gauge } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { reviewViewFilter } from "@/lib/revenue-access";
+import { isFrozen, type ApprovalSnapshot } from "@/lib/revenue-review";
 import { PageHeader } from "@/components/ui/misc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
-import { formatCurrency, formatDate, fullName } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDateTime, fullName } from "@/lib/utils";
 import { ReviewTimeEntry, type TimeEntryRow } from "./review-time-entry";
+import { ReviewApproval } from "./review-approval";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Revenue Review" };
@@ -31,6 +33,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   CUSTOM: "Custom",
 };
 
+const APPROVAL_KIND_LABELS: Record<string, string> = {
+  OPERATIONS: "Operations",
+  SECOND: "Second",
+  FINANCE: "Finance",
+};
+
 export default async function RevenueReviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   // UI hiding is not authorization — the page enforces the permission itself.
@@ -48,6 +56,7 @@ export default async function RevenueReviewDetailPage({ params }: { params: Prom
       instructor: { include: { user: { select: { firstName: true, lastName: true } } } },
       location: { select: { name: true } },
       dispatch: { select: { id: true } },
+      approvals: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!review) notFound();
@@ -83,6 +92,34 @@ export default async function RevenueReviewDetailPage({ params }: { params: Prom
   const canEnterTime = session.permissions.has("revenue.time_entry") && !!review.instructorId;
   const showTimeForm = editable && canEnterTime;
 
+  // Approval capability flags. These only control visibility — every route
+  // re-checks the permission, own-scope, and the legal transition server-side
+  // (UI hiding is never the boundary). Read-only impersonation hides all of it.
+  const readOnly = !!session.impersonation?.readOnly;
+  const canSubmit = !readOnly && session.permissions.has("revenue.review_submit");
+  const canApprove = !readOnly && session.permissions.has("revenue.approve");
+  const canVoid = !readOnly && session.permissions.has("revenue.void");
+
+  // Approval timeline, oldest first (chronological). Derived from lifecycle
+  // actor fields + the recorded approval signatures — read-only, no recompute.
+  const timeline: { at: Date; label: string; detail?: string }[] = [];
+  if (review.submittedAt) timeline.push({ at: review.submittedAt, label: "Submitted for operations review" });
+  for (const a of review.approvals) {
+    timeline.push({
+      at: a.createdAt,
+      label: `${APPROVAL_KIND_LABELS[a.kind] ?? a.kind} approval recorded`,
+      detail: `by ${a.approverLabel}`,
+    });
+  }
+  if (review.changesRequestedAt) timeline.push({ at: review.changesRequestedAt, label: "Changes requested", detail: review.changesRequestedReason ?? undefined });
+  if (review.approvedAt) timeline.push({ at: review.approvedAt, label: "Approved — snapshot frozen" });
+  if (review.voidedAt) timeline.push({ at: review.voidedAt, label: "Voided", detail: review.voidReason ?? undefined });
+  timeline.sort((a, b) => a.at.getTime() - b.at.getTime());
+
+  const snapshot = isFrozen(review.status) && review.approvalSnapshot
+    ? (review.approvalSnapshot as unknown as ApprovalSnapshot)
+    : null;
+
   const facts: { icon: React.ReactNode; label: string; value: React.ReactNode }[] = [
     { icon: <Plane className="h-3.5 w-3.5" />, label: "Aircraft", value: review.aircraft?.tailNumber ?? "—" },
     { icon: <GraduationCap className="h-3.5 w-3.5" />, label: "Student", value: fullName(review.student?.user) || "—" },
@@ -108,6 +145,22 @@ export default async function RevenueReviewDetailPage({ params }: { params: Prom
             </p>
           </div>
           <p className="text-sm font-semibold tabular-nums">Draft total {formatCurrency(total)}</p>
+        </CardContent>
+      </Card>
+
+      {/* Approval actions */}
+      <Card className="mb-4">
+        <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
+        <CardContent>
+          <ReviewApproval
+            reviewId={review.id}
+            status={review.status}
+            canSubmit={canSubmit}
+            canApprove={canApprove}
+            canVoid={canVoid}
+            expectedTotal={total.toFixed(2)}
+            updatedAt={review.updatedAt.toISOString()}
+          />
         </CardContent>
       </Card>
 
@@ -207,7 +260,53 @@ export default async function RevenueReviewDetailPage({ params }: { params: Prom
         </div>
 
         {/* Instructor time entry sidebar */}
-        <div className="lg:col-span-1">
+        <div className="space-y-4 lg:col-span-1">
+          {snapshot && (
+            <Card>
+              <CardHeader><CardTitle>Approved totals (frozen)</CardTitle></CardHeader>
+              <CardContent>
+                <p className="mb-3 text-[11px] text-muted-foreground">
+                  A point-in-time snapshot frozen at approval. These figures never recompute.
+                </p>
+                <dl className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted-foreground">Total</dt>
+                    <dd className="font-semibold tabular-nums">{formatCurrency(review.totalAtApproval ?? snapshot.total)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted-foreground">Tax total</dt>
+                    <dd className="tabular-nums">{formatCurrency(snapshot.tax.total)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted-foreground">Payment policy</dt>
+                    <dd className="font-medium">{(review.paymentPolicyAtApproval ?? snapshot.paymentPolicy).replaceAll("_", " ").toLowerCase()}</dd>
+                  </div>
+                </dl>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader><CardTitle>Approval history</CardTitle></CardHeader>
+            <CardContent>
+              {timeline.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No approval activity yet.</p>
+              ) : (
+                <ol className="space-y-3">
+                  {timeline.map((ev, i) => (
+                    <li key={i} className="relative pl-4">
+                      <span className="absolute left-0 top-1.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/50" aria-hidden />
+                      <p className="text-xs font-medium">{ev.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{formatDateTime(ev.at)}</p>
+                      {ev.detail && <p className="mt-0.5 text-[11px] text-muted-foreground">{ev.detail}</p>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <p className="mt-3 border-t border-border pt-2 text-[10px] text-muted-foreground">Oldest first.</p>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader><CardTitle>Instructor time</CardTitle></CardHeader>
             <CardContent>
